@@ -3,38 +3,38 @@
 const { copyProperties, } = require('./object.js');
 
 
-export function inIframe() {
+const inIframe = exports.inIframe = function inIframe() {
 	try { return (window.self !== window.top); } catch (e) { return true; }
-}
+};
 
-export function createElement(tagName, properties, childList) {
+const createElement = exports.createElement = function createElement(tagName, properties, childList) {
 	let element = document.createElement(tagName);
 	copyProperties(element, properties);
 	for (let i = 0, child; childList && (child = childList[i]); ++i) {
 		element.appendChild(child);
 	}
 	return element;
-}
+};
 
-export function createStyleElement(css) {
+const createStyleElement = exports.createStyleElement = function createStyleElement(css) {
 	let element = document.createElement("style");
 	element.type = "text/css";
 	element.innerHTML = css;
 	return element;
-}
+};
 
-export function addStyle(css) {
+const addStyle = exports.addStyle = function addStyle(css) {
 	return document.querySelector("head").appendChild(createStyleElement(css));
-}
+};
 
-export function clickElement(element) {
+const clickElement = exports.clickElement = function clickElement(element) {
 	let evt = document.createEvent("MouseEvents");
 	evt.initEvent("click", true, true);
 	element.dispatchEvent(evt);
 	return evt;
-}
+};
 
-export function saveAs(content, name, win = window) {
+const saveAs = exports.saveAs = function saveAs(content, name, win = window) {
 
 	if (typeof content.generate === 'function') {
 		try { // gen blob if zip
@@ -53,17 +53,17 @@ export function saveAs(content, name, win = window) {
 	clickElement(link, win);
 
 	setTimeout(() => win.URL.revokeObjectURL(link.href), 1000);
-}
+};
 
-export function once(element, event, callback, capture) {
+const once = exports.once = function once(element, event, callback, capture) {
 	const handler = event => {
 		element.removeEventListener(event, handler, capture);
 		callback(event);
 	};
 	element.addEventListener(event, handler);
-}
+};
 
-export function getSelector(element, prev = '') {
+const getSelector = exports.getSelector = function getSelector(element, prev = '') {
 	if (!element || element === document) { return prev.slice(1); }
 	return getSelector(
 		element.parentNode, '>'+ element.tagName
@@ -71,9 +71,9 @@ export function getSelector(element, prev = '') {
 		+ (element.className ? '.'+ element.className.replace(/ +/g, '.') : '')
 		+ prev
 	);
-}
+};
 
-export function onElementChanged(element, attributeFilter, callback) {
+const onElementChanged = exports.onElementChanged = function onElementChanged(element, attributeFilter, callback) {
 	return new MutationObserver(function(mutations, observer) {
 		mutations.forEach(function(mutation) {
 			if (mutation.target.getAttribute(mutation.attributeName) != mutation.oldValue) {
@@ -82,10 +82,10 @@ export function onElementChanged(element, attributeFilter, callback) {
 		});
 		observer.takeRecords();
 	}).observe(element, { subtree: false, attributes: true, attributeOldValue: true, attributeFilter: attributeFilter });
-}
+};
 
 const Self = new WeakMap();
-export function CreationObserver(element) {
+const CreationObserver = exports.CreationObserver = function CreationObserver(element) {
 	const listeners = [/*{ callback: function(){}, selector: string [, single: true] }*/];
 	const observer = new MutationObserver((mutations, observer) => {
 		for (let mutation of mutations) {
@@ -104,7 +104,7 @@ export function CreationObserver(element) {
 	observer.listeners = listeners;
 	observer.element = element || document;
 	Self.set(this, observer);
-}
+};
 function elementCreated(listeners, element) {
 	element.matches && listeners.forEach((listener, index) => {
 		if (element.matches(listener.selector)) {
@@ -145,7 +145,7 @@ CreationObserver.prototype.all = function(selector, callback) {
 	}
 };
 
-export function notify(options) {
+const notify = exports.notify = function notify(options) {
 	return new Promise((resolve, reject) => {
 		let doIt = () => {
 			let self = new Notification(options.title, options);
@@ -169,5 +169,5 @@ export function notify(options) {
 			reject("permission denied");
 		}
 	});
-}
+};
 

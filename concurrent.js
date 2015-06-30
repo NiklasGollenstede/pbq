@@ -1,6 +1,6 @@
 'use strict';
 
-exports.promisify = function promisify(async, thisArg) {
+const promisify = exports.promisify = function promisify(async, thisArg) {
 	return function() {
 		var args = Array.prototype.slice.call(arguments);
 		return new Promise(function(resolve, reject) {
@@ -10,7 +10,7 @@ exports.promisify = function promisify(async, thisArg) {
 	};
 };
 
-exports.spawn = function spawn(generator) {
+const spawn = exports.spawn = function spawn(generator) {
 	const iterator = generator();
 	const onFulfilled = iterate.bind(null, 'next');
 	const onRejected = iterate.bind(null, 'throw');
@@ -31,6 +31,6 @@ exports.spawn = function spawn(generator) {
 	return iterate('next');
 };
 
-export function sleep(ms) {
+const sleep = exports.sleep = function sleep(ms) {
 	return new Promise(done => setTimeout(done, ms));
-}
+};

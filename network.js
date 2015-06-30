@@ -6,7 +6,7 @@ if (typeof setTimeout === 'undefined') {
 	var setTimeout = require("sdk/timers").setTimeout;
 }*/
 
-export function HttpRequest(url, options = { }) {
+const HttpRequest = exports.HttpRequest = function HttpRequest(url, options = { }) {
 	if (url instanceof Object && !(url instanceof Sting)) { options = url; url = options.url; }
 	const { method, user, password, header, body, responseType, } = options;
 	let request, cancel;
@@ -31,4 +31,4 @@ export function HttpRequest(url, options = { }) {
 			cancel({ error: new Error('Request canceled'), request, });
 		},
 	});
-}
+};

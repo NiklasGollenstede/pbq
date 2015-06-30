@@ -1,6 +1,6 @@
 'use strict';
 
-export function NameSpace() {
+const NameSpace = exports.NameSpace = function NameSpace() {
 	const map = new WeakMap();
 	return function(key) {
 		let value = map.get(key);
@@ -9,9 +9,9 @@ export function NameSpace() {
 		}
 		return value;
 	};
-}
+};
 
-export function IterableNameSpace() {
+const IterableNameSpace = exports.IterableNameSpace = function IterableNameSpace() {
 	const map = new Map();
 	return Object.assign(key => {
 		let value = map.get(key);
@@ -22,13 +22,13 @@ export function IterableNameSpace() {
 	}, {
 		forEach: map.forEach.bind(map),
 	});
-}
+};
 
-export function Marker() {
+const Marker = exports.Marker = function Marker() {
 	const map = new WeakMap();
 	return (key, ...now) => {
 		const old = map.get(key);
 		now.length && map.set(key, now[0]);
 		return old;
 	};
-}
+};

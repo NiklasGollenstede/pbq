@@ -1,6 +1,6 @@
 'use strict';
 
-export function arraySpliceSequence(before, after) {
+const arraySpliceSequence = exports.arraySpliceSequence = function arraySpliceSequence(before, after) {
 	before = before.slice(); after = after.slice();
 	let changes = [];
 	for (let i = 0; i < before.length; i++) { // remove
@@ -42,12 +42,12 @@ export function arraySpliceSequence(before, after) {
 		changes.push(reverse[i]);
 	}
 	return changes;
-}
+};
 
-export function applySpliceSequence(array, sequence) {
+const applySpliceSequence = exports.applySpliceSequence = function applySpliceSequence(array, sequence) {
 	sequence.forEach(array.splice.apply.bind(array.splice, array));
 	return array;
-}
+};
 
 const testSpliceSequence = function(turns, size, removes, inserts, moves) {
 	let uniqueValue = function(array, value) { return ((value +1) && array.indexOf(value) == -1) ? value : uniqueValue(array, Math.floor(Math.random() * size * 2)); };

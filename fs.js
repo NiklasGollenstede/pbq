@@ -3,7 +3,7 @@
 const { promisify, } = require('./concurrent.js');
 const fs = require('fs');
 
-export const Path = require('path');
+const Path = exports.Path = require('path');
 
 var walk = function(dir, done) {
 	var results = [];
@@ -28,7 +28,7 @@ var walk = function(dir, done) {
 	});
 };
 
-export const FS = (function() {
+const FS = exports.FS = (function() {
 	const FS = Object.assign({ }, fs);
 	FS.makeDir = promisify(require('mkdirp'));
 	FS.listDir = promisify(walk);

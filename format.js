@@ -51,7 +51,11 @@ const numberToRoundString = exports.numberToRoundString = function numberToRound
 
 const QueryObject = exports.QueryObject = function QueryObject(query, key, value = '=') {
 	if (!(this instanceof QueryObject)) { return new QueryObject(query, key, value); }
-	query.split(key || /[&#?]+/).map(s => s.split(value)).forEach(p => (p[0] && (this[p[0]] = p[1])));
+
+	query.split(key || /[&#?]+/)
+	.map(function(string) { return string.split(value); })
+	.forEach(function(pair) { pair[0] && (this[pair[0]] = pair[1]); });
+
 	// Self.set(this, copyProperties({ }, this));
 };
 /*QueryObject.prototype.hasChanged = function() {

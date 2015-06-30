@@ -15,7 +15,7 @@ const HttpRequest = exports.HttpRequest = function HttpRequest(url, options = { 
 		request = new XMLHttpRequest();
 		request.open(method || "get", url, true, user, password);
 		responseType && (request.responseType = responseType);
-		header && Object.keys(header).forEach(key => request.setRequestHeader(key, header[key]));
+		header && Object.keys(header).forEach(function(key) { request.setRequestHeader(key, header[key]); });
 		request.onerror = error => reject({ error, request, });
 		request.onload = event => {
 			if (request.status == 200) {

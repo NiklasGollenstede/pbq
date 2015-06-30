@@ -32,5 +32,5 @@ const spawn = exports.spawn = function spawn(generator) {
 };
 
 const sleep = exports.sleep = function sleep(ms) {
-	return new Promise(done => setTimeout(done, ms));
+	return new Promise(function(done) { setTimeout(done, ms); });
 };

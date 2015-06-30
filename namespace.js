@@ -13,7 +13,7 @@ const NameSpace = exports.NameSpace = function NameSpace() {
 
 const IterableNameSpace = exports.IterableNameSpace = function IterableNameSpace() {
 	const map = new Map();
-	return Object.assign(key => {
+	return Object.assign(function(key) {
 		let value = map.get(key);
 		if (value === undefined) {
 			map.set(key, value = { });
@@ -26,9 +26,9 @@ const IterableNameSpace = exports.IterableNameSpace = function IterableNameSpace
 
 const Marker = exports.Marker = function Marker() {
 	const map = new WeakMap();
-	return (key, ...now) => {
+	return function(key, now) {
 		const old = map.get(key);
-		now.length && map.set(key, now[0]);
+		arguments.length > 1 && map.set(key, now);
 		return old;
 	};
 };

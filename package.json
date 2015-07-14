@@ -4,6 +4,11 @@
   "description": "lib",
   "repository": {
     "type": "git",
-    "url": ""
+    "url": "https://github.com/NiklasGollenstede/es6lib"
+  },
+  "devDependencies": {
+    "mkdirp": "latest",
+    "babel": "latest",
+    "traceur": "latest"
   }
 }

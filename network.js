@@ -6,7 +6,7 @@ if (typeof setTimeout === 'undefined') {
 	var setTimeout = require("sdk/timers").setTimeout;
 }*/
 
-export function HttpRequest(url, options = { }) {
+const HttpRequest = exports.HttpRequest = function HttpRequest(url, options = { }) {
 	let request, cancel;
 	return Object.assign(new Promise(function(resolve, reject) {
 		if (url instanceof Object && !(url instanceof String)) { options = url; url = options.url; }
@@ -16,6 +16,7 @@ export function HttpRequest(url, options = { }) {
 		cancel = cancelWith.bind(request, reject);
 
 		request.open(method || "get", url, true, user, password);
+
 		responseType && (request.responseType = responseType);
 		timeout && (request.timeout = timeout);
 		overrideMimeType && request.overrideMimeType(overrideMimeType);
@@ -37,7 +38,7 @@ export function HttpRequest(url, options = { }) {
 			cancel('canceled');
 		},
 	});
-}
+};
 function cancelWith(reject, reason) {
 	const error = new ProgressEvent(reason);
 	this.dispatchEvent(error); // side effects ??

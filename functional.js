@@ -1,35 +1,35 @@
 'use strict';
 
-export const noop = ((self = new Proxy(() => self, { get: () => self, set() { }, })) => self)();
+const noop = exports.noop = ((self = new Proxy(() => self, { get: () => self, set() { }, })) => self)();
 
-export function debugLog() {
+const debugLog = exports.debugLog = function debugLog() {
 	console.log.apply(console, arguments);
 	return arguments[arguments.length - 1];
-}
+};
 
 const now = (typeof performance !== 'undefined')
 ? performance.now.bind(performance) // browser
 : require("chrome").Cu.now; // firefox
 // node: ([s, ns] = process.hrtime()) => s * 1e9 + ns
 
-export function Timer(start = now()) {
+const Timer = exports.Timer = function Timer(start = now()) {
 	return (end = now()) => (end - start);
-}
+};
 
-export function Counter(c = 0) {
+const Counter = exports.Counter = function Counter(c = 0) {
 	return Object.assign(() => ++c, { get: () => c, });
-}
+};
 
-export function Logger(...outer) {
+const Logger = exports.Logger = function Logger(...outer) {
 	return (...inner) => console.log(...outer, ...inner);
-}
+};
 
-export function blockEvent(event) {
+const blockEvent = exports.blockEvent = function blockEvent(event) {
 	event.preventDefault();
 	event.stopPropagation && event.stopPropagation();
-}
+};
 
-export function fuzzyMatch(s1, s2, n) {
+const fuzzyMatch = exports.fuzzyMatch = function fuzzyMatch(s1, s2, n) {
 	// algorythm: http://www.catalysoft.com/articles/StrikeAMatch.html
 	n = (n>2) ? n : 2;
 	var l1 = s1.length - n + 1;
@@ -48,11 +48,11 @@ export function fuzzyMatch(s1, s2, n) {
 		}
 	}
 	return 2 * total / (l1 + l2);
-}
+};
 
 
 // untested
-export function Cache(compute, options) {
+const Cache = exports.Cache = function Cache(compute, options) {
 	if (typeof compute !== 'function') {
 		options = compute;
 		compute = options.compute;
@@ -119,7 +119,7 @@ export function Cache(compute, options) {
 		}
 		return cache.value = compute.apply(this, args);
 	}, { hit, compute, put, miss, });
-}
+};
 
 // alternative aproach (hash): map each arg value to a random and us their sum as the map key
 // drawback: may collide, results won't be collected if all their args are

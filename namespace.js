@@ -21,6 +21,7 @@ export function IterableNameSpace() {
 		return value;
 	}, {
 		forEach: map.forEach.bind(map),
+		destroy: map.clear.bind(map),
 	});
 }
 

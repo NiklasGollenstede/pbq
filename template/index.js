@@ -1,4 +1,4 @@
 'use strict';
 /* global module */
 
-module.exports = require('./engine.js');
+Object.assign(module.exports, require('./engine.js'), { escape: Object.assign({ }, require('./escape.js')), });

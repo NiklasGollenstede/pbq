@@ -11,7 +11,7 @@ const promisify = exports.promisify = function promisify(async, thisArg) {
 };
 
 const spawn = exports.spawn = function spawn(generator) {
-	const iterator = generator();
+	const iterator = generator(); // .call(thisArg); ??
 	const onFulfilled = iterate.bind(null, 'next');
 	const onRejected = iterate.bind(null, 'throw');
 
@@ -30,6 +30,8 @@ const spawn = exports.spawn = function spawn(generator) {
 	}
 	return iterate('next');
 };
+
+if (typeof setTimeout === 'undefined') { var setTimeout = require("sdk/timers").setTimeout; }
 
 const sleep = exports.sleep = function sleep(ms) {
 	return new Promise(function(done) { setTimeout(done, ms); });

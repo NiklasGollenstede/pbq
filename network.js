@@ -1,10 +1,6 @@
 'use strict';
 
-/*const { XMLHttpRequest, } = require('sdk/net/xhr');
-
-if (typeof setTimeout === 'undefined') {
-	var setTimeout = require("sdk/timers").setTimeout;
-}*/
+if (typeof XMLHttpRequest === 'undefined') { var XMLHttpRequest = require('sdk/net/xhr').XMLHttpRequest; }
 
 const HttpRequest = exports.HttpRequest = function HttpRequest(url, options = { }) {
 	let request, cancel;

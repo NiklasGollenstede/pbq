@@ -65,6 +65,7 @@ TemplateEngine.prototype = {
 			}
 		}
 
+		(/front/).test(trim) && (this.parts[0] = this.parts[0].replace(/^[ \t]*\n/, ''));
 		(/parts/).test(trim) && this.trim(trim);
 
 		toBeMapped.forEach(index => index in parts && (parts[index] = mapper(parts[index])));
@@ -250,5 +251,5 @@ TemplateEngine.prototype = {
 	},
 };
 
-return exports;
+return Object.freeze(exports);
 })((typeof exports !== 'undefined') ? exports : ((typeof window !== 'undefined') ? window.TemplateEngine = { } : { }));

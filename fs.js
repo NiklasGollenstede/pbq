@@ -6,7 +6,7 @@ const fs = require('fs');
 const Path = exports.Path = require('path');
 
 var walk = function(dir, done) {
-	var results = [];
+	var results = [ ];
 	fs.readdir(dir, function(err, list) {
 		if (err) { return done(err); }
 		var pending = list.length;
@@ -38,6 +38,6 @@ const FS = exports.FS = (function() {
 		key = key.slice(0, -4);
 		FS[key] = promisify(FS[key]);
 	});
-	FS.exists = function(path) { return new Promise(done => exists(path, done)); };
+	FS.exists = function(path) { return new Promise(function (done) { exists(path, done); }); };
 	return Object.freeze(FS);
 })();

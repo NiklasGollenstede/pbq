@@ -24,6 +24,11 @@ const Logger = exports.Logger = function Logger(...outer) {
 	return (...inner) => console.log(...outer, ...inner);
 };
 
+const log = exports.log = function log(args) {
+	console.log.apply(console, arguments);
+	return arguments[arguments.length - 1];
+};
+
 const blockEvent = exports.blockEvent = function blockEvent(event) {
 	event.preventDefault();
 	event.stopPropagation && event.stopPropagation();
@@ -48,6 +53,19 @@ const fuzzyMatch = exports.fuzzyMatch = function fuzzyMatch(s1, s2, n) {
 		}
 	}
 	return 2 * total / (l1 + l2);
+};
+
+const toFixedLength = exports.toFixedLength = (string, length, fill = '0') =>
+	length > (string += '').length
+	? fill.repeat(length - string.length) + string
+	: string.slice(string.length - length);
+
+/// @param lenth max value: 13
+const randomHex = length => toFixedLength(Math.floor(Math.random() * Number.MAX_SAFE_INTEGER).toString(16), length);
+
+// e.g.: 6f2e78a1-c4f3-4895-b58b-347f92fb2d14
+const Guid = exports.Guid = function Guid() {
+	return [ randomHex(8), randomHex(4), randomHex(4), randomHex(4), randomHex(8) + randomHex(8), ].join('-');
 };
 
 

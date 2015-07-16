@@ -41,8 +41,13 @@ const spawn = exports.spawn = function spawn(generator) {
 	return iterate('next');
 };
 
-if (typeof setTimeout === 'undefined') { var setTimeout = require("sdk/timers").setTimeout; }
+/* global setTimeout */
+const timeout = (typeof setTimeout !== 'undefined') ? setTimeout : require("sdk/timers").setTimeout;
 
+/**
+ * @param  {uint}    ms  time to "sleep"
+ * @return {Promise}     resolves to undefined after ms ms
+ */
 const sleep = exports.sleep = function sleep(ms) {
-	return new Promise(function(done) { setTimeout(done, ms); });
+	return new Promise(function(done) { timeout(done, ms); });
 };

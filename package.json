@@ -6,8 +6,10 @@
     "type": "git",
     "url": "https://github.com/NiklasGollenstede/es6lib"
   },
+  "dependencies": {
+    "mkdirp": "latest"
+  },
   "devDependencies": {
-    "mkdirp": "latest",
     "babel": "latest",
     "traceur": "latest"
   }

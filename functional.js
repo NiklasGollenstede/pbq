@@ -1,42 +1,78 @@
 'use strict';
+/* global performance */
 
+/**
+ * Object/Function that returns itself on execution and every property access. Stateless
+ */
 const noop = exports.noop = ((self = new Proxy(() => self, { get: () => self, set() { }, })) => self)();
 
-const debugLog = exports.debugLog = function debugLog() {
+/**
+ * console.log's it's arguments
+ * @return {any} the last argument
+ */
+const log = exports.log = exports.debugLog = function log() {
 	console.log.apply(console, arguments);
 	return arguments[arguments.length - 1];
 };
 
-const now = (typeof performance !== 'undefined')
-? performance.now.bind(performance) // browser
-: require("chrome").Cu.now; // firefox
-// node: ([s, ns] = process.hrtime()) => s * 1e9 + ns
+/**
+ * Systems non-absolute but continuous high resolution time
+ * @return {uint}   hrtime (in ns (?))
+ */
+const hrtime = exports.hrtime =
+/* if */(typeof performance !== 'undefined') ?
+	performance.now.bind(performance) // browser
+:/* else if */((typeof process !== 'undefined' && typeof process.hrtime === 'function') ?
+	([s, ns] = process.hrtime()) => s * 1e9 + ns // node
+: /* else */
+	require("chrome").Cu.now // firefox
+);
 
-const Timer = exports.Timer = function Timer(start = now()) {
-	return (end = now()) => (end - start);
+/**
+ * Timer that saves a high resolution time upon creation
+ * @param    {uint}     start  start time can (but shouldn't) be passed to overwrite the start time
+ * @return   {function}        function that returns the time difference between Timer creation an it's call
+ * @example  timer = new Timer; doStuff(); diff1 = timer(); doMore(); diff2 = timer();
+ */
+const Timer = exports.Timer = function Timer(start = hrtime()) {
+	return (end = hrtime()) => (end - start);
 };
 
-const Counter = exports.Counter = function Counter(c = 0) {
-	return Object.assign(() => ++c, { get: () => c, });
+/**
+ * Counter
+ * @param  {Number}   start initial counter value
+ * @return {function}       a function that increments start by one at each call and returns the implemented value
+ * @method {Number}   get   returns the current value (without incrementing it)
+ */
+const Counter = exports.Counter = function Counter(start = 0) {
+	return Object.assign(() => ++start, { get: () => start, });
 };
 
+/**
+ * Logger
+ * @param {...[type]} outer first args
+ */
 const Logger = exports.Logger = function Logger(...outer) {
 	return (...inner) => console.log(...outer, ...inner);
 };
 
-const log = exports.log = function log(args) {
-	console.log.apply(console, arguments);
-	return arguments[arguments.length - 1];
-};
-
+/**
+ * callback that blocks an events propagation and default action
+ */
 const blockEvent = exports.blockEvent = function blockEvent(event) {
 	event.preventDefault();
 	event.stopPropagation && event.stopPropagation();
 };
 
+/**
+ * string similarity norm, inspired by http://www.catalysoft.com/articles/StrikeAMatch.html
+ * @param  {[type]} s1 input, commutative
+ * @param  {[type]} s2 input, commutative
+ * @param  {[type]} n  length of sequences to match
+ * @return {float}     similarity of s1 and s1. Between 1 for two equal strings and 0 if there is no substeing s of s1 and length n that is also substring of s2
+ */
 const fuzzyMatch = exports.fuzzyMatch = function fuzzyMatch(s1, s2, n) {
-	// algorythm: http://www.catalysoft.com/articles/StrikeAMatch.html
-	n = (n>2) ? n : 2;
+	n = n > 2 && Number.parseInt(n) || 2;
 	var l1 = s1.length - n + 1;
 	var l2 = s2.length - n + 1;
 	var used = new Array(l2);
@@ -52,20 +88,7 @@ const fuzzyMatch = exports.fuzzyMatch = function fuzzyMatch(s1, s2, n) {
 			used[j] = true;
 		}
 	}
-	return 2 * total / (l1 + l2);
-};
-
-const toFixedLength = exports.toFixedLength = (string, length, fill = '0') =>
-	length > (string += '').length
-	? fill.repeat(length - string.length) + string
-	: string.slice(string.length - length);
-
-/// @param lenth max value: 13
-const randomHex = length => toFixedLength(Math.floor(Math.random() * Number.MAX_SAFE_INTEGER).toString(16), length);
-
-// e.g.: 6f2e78a1-c4f3-4895-b58b-347f92fb2d14
-const Guid = exports.Guid = function Guid() {
-	return [ randomHex(8), randomHex(4), randomHex(4), randomHex(4), randomHex(8) + randomHex(8), ].join('-');
+	return (l1 + l2) ? 2 * total / (l1 + l2) : 0;
 };
 
 

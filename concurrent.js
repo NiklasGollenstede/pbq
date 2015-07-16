@@ -1,15 +1,25 @@
 'use strict';
 
-const promisify = exports.promisify = function promisify(async, thisArg) {
+/**
+ * turns an asynchronous callback function into one that returns a promise
+ * @param  {function} async function that takes an callback(error, value) as last argument
+ * @return {function}       function that returns a Promise to it's asyncronous value
+ */
+const promisify = exports.promisify = function promisify(async) {
 	return function() {
-		var args = Array.prototype.slice.call(arguments);
+		var self = this, args = Array.prototype.slice.call(arguments);
 		return new Promise(function(resolve, reject) {
 			args.push(function(err, res) { err ? reject(err) : resolve(res); });
-			async.apply(thisArg, args);
+			async.apply(self, args);
 		});
 	};
 };
 
+/**
+ * asynchronous task spawner
+ * @param  {function*}  generator  generator function that yields promises to asynchronous values which are returned to the generator once the promises are fullfilled
+ * @return {Promise}               Promise of the return value of the generator
+ */
 const spawn = exports.spawn = function spawn(generator) {
 	const iterator = generator(); // .call(thisArg); ??
 	const onFulfilled = iterate.bind(null, 'next');

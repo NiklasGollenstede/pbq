@@ -2,6 +2,22 @@
 
 if (typeof XMLHttpRequest === 'undefined') { var XMLHttpRequest = require('sdk/net/xhr').XMLHttpRequest; }
 
+/**
+ * Constructs an XMLHttpRequest from the given url and options and returns a Promise
+ * that is fulfilled with the request once the result is loaded or canceld with an ProgressEvent if an error occurs
+ * @param {string} url     destination url, may be property of options
+ * @param {Object} options optional object of:
+ *                         @attribute {string}  method            HTTP request method
+ *                         @attribute {string}  user              HTTP user name
+ *                         @attribute {string}  password          HTTP password
+ *                         @attribute {object}  header            HTTP header key/value-pairs (strings)
+ *                         @attribute {string}  responseType      XHR response type, influences the type of the promisedrequest.response
+ *                         @attribute {uint}    timeout           requests timeout
+ *                         @attribute {string}  overrideMimeType  overwrites the mime type of the requests body
+ *                         @attribute {any}     body              body to send with the request
+ *                         @attribute {bool}    mozAnon           mozilla privileged code only, don't send any session/login data
+ *                         @attribute {bool}    mozAnon           mozilla privileged code only, allow cross side request
+ */
 const HttpRequest = exports.HttpRequest = function HttpRequest(url, options = { }) {
 	let request, cancel;
 	return Object.assign(new Promise(function(resolve, reject) {

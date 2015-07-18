@@ -1,8 +1,15 @@
 'use strict';
 
-const deepFreeze = exports.deepFreeze = function deepFreeze(object) { // TODO handle cyclic
-	Object.keys.forEach(key => deepFreeze(object[key]));
-	return Object.freeze(object);
+const deepFreeze = exports.deepFreeze = function deepFreeze(object) {
+	const done = new WeakSet();
+	function doIt(object) {
+		if (typeof object !== 'object' || object === null || done.has(object)) { return; }
+		done.add(object);
+		Object.freeze(object);
+		Object.keys(object).forEach(key => doIt(object[key]));
+	}
+	doIt(object);
+	return object;
 };
 
 const checkNativeType = exports.checkNativeType = function checkNativeType(object, constructorName) {

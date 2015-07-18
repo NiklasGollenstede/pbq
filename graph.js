@@ -1,5 +1,32 @@
 'use strict';
 
+const Marker = exports.Marker = require('./namespace.js').Marker;
+
+const inWidth = exports.inWidth = function inWidth(node, cb, mark) {
+	mark = mark || new Marker();
+	let queue = [ node ];
+	const used = function(node) { !mark(node); };
+	let i = 0; do {
+		!mark(queue[i], true) && (queue = queue.concat(queue[i].filter(used)));
+	} while (++i < queue.length);
+	queue.forEach(cb);
+};
+
+const inDepth = exports.inDepth = function inDepth(node, cb, mark) {
+	mark = mark || new Marker();
+	!mark(node, true) && cb(node) === node.forEach(function(node) { inDepth(node, cb, mark); });
+};
+
+const inDepthAsync = (node, cb, mark) => new Promise(function(resolve, reject) {
+	mark = mark || new Marker();
+	const doIt = node => { try { (!mark(node, true)) && cb(node) === node.forEach(
+		node => process.nextTick(doIt.bind(null, node))
+	); } catch (e) { reject(e); } };
+	process.nextTick(doIt.bind(null, node));
+	setImmediate(resolve);
+});
+
+
 const arraySpliceSequence = exports.arraySpliceSequence = function arraySpliceSequence(before, after) {
 	before = before.slice(); after = after.slice();
 	let changes = [];

@@ -93,7 +93,7 @@ module.exports = function polyfill(global, options) {
 			'some',
 			'sort',
 			'splice',
-			'unshift	',
+			'unshift',
 		].forEach(function(name) {
 			if (!Array[name] && Array.prototype[name]) {
 				extend(Array, name, Function.prototype.call.bind(Array.prototype[name]));
@@ -110,7 +110,7 @@ module.exports = function polyfill(global, options) {
 				if (target == null) { throw new TypeError('can\'t convert null to object'); }
 
 				target = Object(target);
-				for (var i = 1; i < arguments.length; i++) {
+				for (var i = 1; i < arguments.length; ++i) {
 					if (arguments[i] == null) { continue; }
 					var source = Object(arguments[i]);
 					var keys = Object.keys(source);

@@ -8,6 +8,9 @@ module.exports = {
 	get dom() {
 		return require('./dom.js');
 	},
+	get firefox() {
+		return require('./firefox.js');
+	},
 	get format() {
 		return require('./format.js');
 	},

@@ -1,5 +1,9 @@
 'use strict';
 
+/* global setTimeout */ /* global clearTimeout */
+const timeout = (typeof setTimeout !== 'undefined') ? setTimeout : require("sdk/timers").setTimeout;
+const unTimeout = (typeof clearTimeout !== 'undefined') ? clearTimeout : require("sdk/timers").clearTimeout;
+
 const { copyProperties, } = require('./object.js');
 
 
@@ -27,9 +31,9 @@ const addStyle = exports.addStyle = function addStyle(css) {
 	return document.querySelector("head").appendChild(createStyleElement(css));
 };
 
-const clickElement = exports.clickElement = function clickElement(element) {
-	let evt = document.createEvent("MouseEvents");
-	evt.initEvent("click", true, true);
+const clickElement = exports.clickElement = function clickElement(element, win) {
+	const evt = (win || window).document.createEvent('MouseEvents');
+	evt.initEvent('click', true, true);
 	element.dispatchEvent(evt);
 	return evt;
 };
@@ -152,7 +156,7 @@ const notify = exports.notify = function notify(options) {
 			self.onclick = resolve;
 			self.onerror = reject;
 			self.onclose = reject;
-			self.onshow = clearTimeout.bind(null, setTimeout(reject, options.timeout || 1500));
+			self.onshow = unTimeout.bind(null, setTimeout(reject, options.timeout || 1500));
 		};
 
 		if (Notification.permission === "granted") {

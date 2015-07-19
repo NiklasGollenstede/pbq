@@ -15,18 +15,20 @@ const log = exports.log = exports.debugLog = function log() {
 	return arguments[arguments.length - 1];
 };
 
+
 /**
  * Systems non-absolute but continuous high resolution time
- * @return {uint}   hrtime (in ns (?))
+ * @return {uint}   hrtime in ms, accuracy ~µs
  */
-const hrtime = exports.hrtime =
-/* if */(typeof performance !== 'undefined') ?
-	performance.now.bind(performance) // browser
-:/* else if */((typeof process !== 'undefined' && typeof process.hrtime === 'function') ?
-	([s, ns] = process.hrtime()) => s * 1e9 + ns // node
-: /* else */
-	require("chrome").Cu.now // firefox
-);
+const hrtime = exports.hrtime = (function() {
+	if (typeof performance !== 'undefined') {
+		return performance.now.bind(performance); // browser
+	} else if (typeof process !== 'undefined' && typeof process.hrtime === 'function') {
+		return function () { const pair = process.hrtime(); return pair[0] * 1e3 + pair[1] / 1e6; }; // node
+	} else {
+		return require("chrome").Cu.now; // firefox
+	}
+})();
 
 /**
  * Timer that saves a high resolution time upon creation

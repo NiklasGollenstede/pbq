@@ -56,7 +56,7 @@ const saveAs = exports.saveAs = function saveAs(content, name, win = window) {
 
 	clickElement(link, win);
 
-	setTimeout(() => win.URL.revokeObjectURL(link.href), 1000);
+	timeout(() => win.URL.revokeObjectURL(link.href), 1000);
 };
 
 const once = exports.once = function once(element, event, callback, capture) {
@@ -112,7 +112,7 @@ const CreationObserver = exports.CreationObserver = function CreationObserver(el
 function elementCreated(listeners, element) {
 	element.matches && listeners.forEach((listener, index) => {
 		if (element.matches(listener.selector)) {
-			setTimeout(listener.callback, 0, element);
+			timeout(listener.callback, 0, element);
 			if (listener.single) {
 				delete listeners[index];
 			}
@@ -135,7 +135,7 @@ CreationObserver.prototype.remove = function(selector, callback, single) {
 CreationObserver.prototype.single = function(selector, callback) {
 	let element;
 	if ((element = Self.get(this).element.querySelector(selector))) {
-		setTimeout(callback.bind(undefined, element), 0);
+		timeout(callback.bind(undefined, element), 0);
 	} else {
 		this.add(selector, callback, true);
 	}
@@ -145,7 +145,7 @@ CreationObserver.prototype.all = function(selector, callback) {
 	this.add(selector, callback, false);
 
 	for (let element, i = 0; (element = alreadyExisting[i]); i++) {
-		setTimeout(callback.bind(undefined, element), 0);
+		timeout(callback.bind(undefined, element), 0);
 	}
 };
 
@@ -156,7 +156,7 @@ const notify = exports.notify = function notify(options) {
 			self.onclick = resolve;
 			self.onerror = reject;
 			self.onclose = reject;
-			self.onshow = unTimeout.bind(null, setTimeout(reject, options.timeout || 1500));
+			self.onshow = unTimeout.bind(null, timeout(reject, options.timeout || 1500));
 		};
 
 		if (Notification.permission === "granted") {

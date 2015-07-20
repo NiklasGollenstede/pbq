@@ -1,4 +1,4 @@
-'use strict'; (function firefox(exports) {
+(function firefox(exports) { 'use strict';
 
 const escape = require('./template/escape.js');
 const escapeString = escape.escapeString;
@@ -45,5 +45,4 @@ try {
 	});
 };
 
-return exports;
-})((typeof exports !== 'undefined') ? exports : ((typeof window !== 'undefined') ? window.firefox = { } : { }));
+const moduleName = 'es6lib/firefox'; if (typeof module !== 'undefined') { module.exports = exports; } else if (typeof define === 'function') { define(moduleName, exports); } else if (typeof window !== 'undefined' && typeof module === 'undefined') { window[moduleName] = exports; } return exports; })({ });

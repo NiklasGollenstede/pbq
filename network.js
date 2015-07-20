@@ -1,7 +1,6 @@
-(function(exports) {
-'use strict';
+(function(exports) { 'use strict';
 
-if (typeof XMLHttpRequest === 'undefined') { var XMLHttpRequest = require('sdk/net/xhr').XMLHttpRequest; }
+const XHR = (typeof XMLHttpRequest !== 'undefined') ? XMLHttpRequest : require('sdk/net/xhr').XMLHttpRequest;
 
 /**
  * Constructs an XMLHttpRequest from the given url and options and returns a Promise
@@ -25,7 +24,7 @@ const HttpRequest = exports.HttpRequest = function HttpRequest(url, options = { 
 		if (url instanceof Object && !(url instanceof String)) { options = url; url = options.url; }
 		const { method, user, password, header, timeout, responseType, overrideMimeType, mozAnon, mozSystem, } = options;
 
-		request = (mozAnon || mozSystem) ? new XMLHttpRequest({ mozAnon, mozSystem, }) : new XMLHttpRequest();
+		request = (mozAnon || mozSystem) ? new XHR({ mozAnon, mozSystem, }) : new XHR();
 		cancel = cancelWith.bind(request, reject);
 
 		request.open(method || "get", url, true, user, password);

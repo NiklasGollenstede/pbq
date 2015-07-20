@@ -1,4 +1,4 @@
-'use strict';
+(function(exports) { 'use strict';
 
 const child_process = require('child_process');
 
@@ -23,3 +23,5 @@ const execute = exports.execute = function(/*...args*/) {
 		].apply(child_process, args);
 	});
 };
+
+const moduleName = 'es6lib/process'; if (typeof module !== 'undefined') { module.exports = exports; } else if (typeof define === 'function') { define(moduleName, exports); } else if (typeof window !== 'undefined' && typeof module === 'undefined') { window[moduleName] = exports; } return exports; })({ });

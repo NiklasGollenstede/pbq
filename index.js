@@ -1,48 +1,43 @@
-console.log('1');
 (function(exports) {
 'use strict';
 /* global module */
-console.log('2');
-const transform = typeof module === 'undefined'
-? function(name) { return 'es6lib/'+ name; }
-: function(name) { return './'+ name +'.js'; };
 
 exports = {
 	get concurrent() {
-		return require(transform('concurrent'));
+		return require('es6lib/concurrent');
 	},
 	get dom() {
-		return require(transform('dom'));
+		return require('es6lib/dom');
 	},
 	get firefox() {
-		return require(transform('firefox'));
+		return require('es6lib/firefox');
 	},
 	get format() {
-		return require(transform('format'));
+		return require('es6lib/format');
 	},
 	get functional() {
-		return require(transform('functional'));
+		return require('es6lib/functional');
 	},
 	get graph() {
-		return require(transform('graph'));
+		return require('es6lib/graph');
 	},
 	get namespace() {
-		return require(transform('namespace'));
+		return require('es6lib/namespace');
 	},
 	get network() {
-		return require(transform('network'));
+		return require('es6lib/network');
 	},
 	get object() {
-		return require(transform('object'));
+		return require('es6lib/object');
 	},
 	get polyfill() {
-		return require(transform('polyfill'));
+		return require('es6lib/polyfill');
 	},
 	get process() {
-		return require(transform('process'));
+		return require('es6lib/process');
 	},
 	get fs() {
-		return require(transform('fs'));
+		return require('es6lib/fs');
 	},
 };
 

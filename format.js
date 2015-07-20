@@ -1,4 +1,4 @@
-'use strict';
+(function(exports) { 'use strict';
 
 /**
  * fills of thuncates a string so that it has .length of length
@@ -117,3 +117,5 @@ QueryObject.prototype.toString = function(keySep = '&', valueSep = '=') {
 		return ret + keySep + key + ((this[key] !== null) ? (valueSep + this[key]) : '');
 	}, '').substring(1);
 };
+
+const moduleName = 'es6lib/format'; if (typeof module !== 'undefined') { module.exports = exports; } else if (typeof define === 'function') { define(moduleName, exports); } else if (typeof window !== 'undefined' && typeof module === 'undefined') { window[moduleName] = exports; } return exports; })({ });

@@ -1,5 +1,4 @@
-(function(exports) {
-'use strict';
+(function(exports) { 'use strict';
 
 /**
  * turns an asynchronous callback function into one that returns a promise

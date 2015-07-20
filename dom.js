@@ -1,11 +1,10 @@
-(function(exports) {
-'use strict';
+(function(exports) { 'use strict';
 
 /* global setTimeout */ /* global clearTimeout */
 const timeout = (typeof setTimeout !== 'undefined') ? setTimeout : require("sdk/timers").setTimeout;
 const unTimeout = (typeof clearTimeout !== 'undefined') ? clearTimeout : require("sdk/timers").clearTimeout;
 
-const { copyProperties, } = require('./object.js');
+const copyProperties = require('es6lib/object').copyProperties;
 
 
 const inIframe = exports.inIframe = function inIframe() {

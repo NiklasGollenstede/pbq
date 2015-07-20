@@ -1,5 +1,4 @@
-'use strict';
-/* global module */
+(function(exports) { 'use strict';
 
 function extend(object, key, value) {
 	Object.defineProperty(object, key, {
@@ -9,7 +8,7 @@ function extend(object, key, value) {
 	return value;
 }
 
-module.exports = function polyfill(global, options) {
+exports = function polyfill(global, options) {
 
 	const String = global.String;
 	if (typeof String === 'function') {
@@ -131,3 +130,5 @@ module.exports = function polyfill(global, options) {
 	}
 
 };
+
+const moduleName = 'es6lib/polyfill'; if (typeof module !== 'undefined') { module.exports = exports; } else if (typeof define === 'function') { define(moduleName, exports); } else if (typeof window !== 'undefined' && typeof module === 'undefined') { window[moduleName] = exports; } return exports; })({ });

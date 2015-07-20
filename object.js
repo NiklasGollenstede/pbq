@@ -1,3 +1,4 @@
+(function(exports) {
 'use strict';
 
 const deepFreeze = exports.deepFreeze = function deepFreeze(object) {
@@ -55,3 +56,5 @@ const tryCopyProperties = exports.tryCopyProperties = function tryCopyProperties
 	}
 	return target;
 };
+
+const moduleName = 'es6lib/object'; if (typeof module !== 'undefined') { module.exports = exports; } else if (typeof define === 'function') { define(moduleName, exports); } else if (typeof window !== 'undefined' && typeof module === 'undefined') { window[moduleName] = exports; } return exports; })({ });

@@ -1,3 +1,4 @@
+(function(exports) {
 'use strict';
 /* global performance */
 
@@ -190,3 +191,5 @@ function Cache2(compute) {
 		return result;
 	};
 }
+
+const moduleName = 'es6lib/functional'; if (typeof module !== 'undefined') { module.exports = exports; } else if (typeof define === 'function') { define(moduleName, exports); } else if (typeof window !== 'undefined' && typeof module === 'undefined') { window[moduleName] = exports; } return exports; })({ });

@@ -1,3 +1,4 @@
+(function(exports) {
 'use strict';
 
 const Marker = exports.Marker = require('./namespace.js').Marker;
@@ -104,3 +105,5 @@ const testSpliceSequence = function(turns, size, removes, inserts, moves) {
 	fails.length && console.error("Errors", fails);
 	return results;
 };
+
+const moduleName = 'es6lib/graph'; if (typeof module !== 'undefined') { module.exports = exports; } else if (typeof define === 'function') { define(moduleName, exports); } else if (typeof window !== 'undefined' && typeof module === 'undefined') { window[moduleName] = exports; } return exports; })({ });

@@ -1,38 +1,49 @@
+console.log('1');
+(function(exports) {
 'use strict';
 /* global module */
+console.log('2');
+const transform = typeof module === 'undefined'
+? function(name) { return 'es6lib/'+ name; }
+: function(name) { return './'+ name +'.js'; };
 
-module.exports = {
+exports = {
 	get concurrent() {
-		return require('./concurrent.js');
+		return require(transform('concurrent'));
 	},
 	get dom() {
-		return require('./dom.js');
+		return require(transform('dom'));
 	},
 	get firefox() {
-		return require('./firefox.js');
+		return require(transform('firefox'));
 	},
 	get format() {
-		return require('./format.js');
+		return require(transform('format'));
 	},
 	get functional() {
-		return require('./functional.js');
+		return require(transform('functional'));
+	},
+	get graph() {
+		return require(transform('graph'));
 	},
 	get namespace() {
-		return require('./namespace.js');
+		return require(transform('namespace'));
 	},
 	get network() {
-		return require('./network.js');
+		return require(transform('network'));
 	},
 	get object() {
-		return require('./object.js');
+		return require(transform('object'));
 	},
 	get polyfill() {
-		return require('./polyfill.js');
+		return require(transform('polyfill'));
 	},
 	get process() {
-		return require('./process.js');
+		return require(transform('process'));
 	},
 	get fs() {
-		return require('./fs.js');
+		return require(transform('fs'));
 	},
 };
+
+const moduleName = 'es6lib'; if (typeof module !== 'undefined') { module.exports = exports; } else if (typeof define === 'function') { define(moduleName, exports); } else if (typeof window !== 'undefined' && typeof module === 'undefined') { window[moduleName] = exports; } return exports; })({ });

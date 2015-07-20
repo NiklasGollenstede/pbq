@@ -1,3 +1,4 @@
+(function(exports) {
 'use strict';
 
 if (typeof XMLHttpRequest === 'undefined') { var XMLHttpRequest = require('sdk/net/xhr').XMLHttpRequest; }
@@ -56,3 +57,5 @@ function cancelWith(reject, reason) {
 	this.dispatchEvent(error); // side effects ??
 	reject(error);
 }
+
+const moduleName = 'es6lib/network'; if (typeof module !== 'undefined') { module.exports = exports; } else if (typeof define === 'function') { define(moduleName, exports); } else if (typeof window !== 'undefined' && typeof module === 'undefined') { window[moduleName] = exports; } return exports; })({ });

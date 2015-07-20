@@ -1,3 +1,4 @@
+(function(exports) {
 'use strict';
 
 /**
@@ -51,3 +52,5 @@ const timeout = (typeof setTimeout !== 'undefined') ? setTimeout : require("sdk/
 const sleep = exports.sleep = function sleep(ms) {
 	return new Promise(function(done) { timeout(done, ms); });
 };
+
+const moduleName = 'es6lib/concurrent'; if (typeof module !== 'undefined') { module.exports = exports; } else if (typeof define === 'function') { define(moduleName, exports); } else if (typeof window !== 'undefined' && typeof module === 'undefined') { window[moduleName] = exports; } return exports; })({ });

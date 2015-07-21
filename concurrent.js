@@ -20,8 +20,8 @@ const promisify = exports.promisify = function promisify(async) {
  * @param  {function*}  generator  generator function that yields promises to asynchronous values which are returned to the generator once the promises are fullfilled
  * @return {Promise}               Promise of the return value of the generator
  */
-const spawn = exports.spawn = function spawn(generator) {
-	const iterator = generator(); // .call(thisArg); ??
+const spawn = exports.spawn = function spawn(generator, thisArg) {
+	const iterator = generator.call(thisArg);
 	const onFulfilled = iterate.bind(null, 'next');
 	const onRejected = iterate.bind(null, 'throw');
 

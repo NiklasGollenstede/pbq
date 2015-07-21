@@ -5,7 +5,7 @@ const XHR = (typeof XMLHttpRequest !== 'undefined') ? XMLHttpRequest : require('
 /**
  * Constructs an XMLHttpRequest from the given url and options and returns a Promise
  * that is fulfilled with the request once the result is loaded or canceld with an ProgressEvent if an error occurs
- * @param {string} url     destination url, may be property of options
+ * @param {string} url     destination url, may be property of options (url or src)
  * @param {Object} options optional object of:
  *                         @attribute {string}  method            HTTP request method
  *                         @attribute {string}  user              HTTP user name
@@ -16,12 +16,12 @@ const XHR = (typeof XMLHttpRequest !== 'undefined') ? XMLHttpRequest : require('
  *                         @attribute {string}  overrideMimeType  overwrites the mime type of the requests body
  *                         @attribute {any}     body              body to send with the request
  *                         @attribute {bool}    mozAnon           mozilla privileged code only, don't send any session/login data
- *                         @attribute {bool}    mozAnon           mozilla privileged code only, allow cross side request
+ *                         @attribute {bool}    mozSystem         mozilla privileged code only, allow cross side request
  */
 const HttpRequest = exports.HttpRequest = function HttpRequest(url, options = { }) {
 	let request, cancel;
 	return Object.assign(new Promise(function(resolve, reject) {
-		if (url instanceof Object && !(url instanceof String)) { options = url; url = options.url; }
+		if (typeof url === 'object' && !(url instanceof String)) { options = url; url = options.url || options.src; }
 		const { method, user, password, header, timeout, responseType, overrideMimeType, mozAnon, mozSystem, } = options;
 
 		request = (mozAnon || mozSystem) ? new XHR({ mozAnon, mozSystem, }) : new XHR();

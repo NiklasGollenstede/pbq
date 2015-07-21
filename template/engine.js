@@ -1,18 +1,82 @@
-'use strict';
-(function(exports) {
+(function(exports) { 'use strict';
 
+/**
+ * ForEach control flow element, repeats all elements between this value and the corresponding
+ * End value will be repeated as often as often as 'arrays' .forEach function will call a callback
+ * @param {any}       name   identifier that can be used to get the right @see Index or @see Value in nested loops
+ * @param {arraylike} array  the array or array like structure to iterate over, uses its .forEach function
+ *                           while iterating, the forEach-callbacks first value will be the @see Index
+ * @return {ControlFlowElement}  Object that starts the loop
+ */
 const ForEach = exports.ForEach = function ForEach(name, array) { return { command: ForEach, array: array || name, name }; };
+
+/**
+ * Same as @see ForEach, only that it uses Object.keys(object) to get ist's @see Index'es
+ * @param {any}     name    identifier that can be used to get the right @see Index or @see Value in nested loops
+ * @param {object}  object  Object that will be iterated over for every key in Object.keys(object)
+ * @return {ControlFlowElement}  Object that starts the loop
+ */
 const ForOf = exports.ForOf = function ForOf(name, object) { return { command: ForOf, object: object || name, name }; };
+
+/**
+ * Loop while 'generator' yields values
+ * @param {function*}  generator  generator function that will be iterated over
+ *                                @see Index will be incremented at each call to the generator
+ * @return {ControlFlowElement}  Object that starts the loop
+ */
 const While = exports.While = function While(generator) { return { command: While, generator, }; };
+
+/**
+ * If control flow element, include all elements between this and the corresponding End only if 'value' is true
+ * or returns true, in case it's a function
+ * @param {any|function|Predicate}   value  Block will be included if and only if value is trueisch.
+ *                     If value is a function, it will be considered truisch if it returns a truisch value.
+ *                     It will be called with (index, value, array) of the current iteration.
+ *                     Same for Predicate, it will be called as specified, @see Predicate
+ *                     Otherwise the value will be considered thueisch if !!value === true.
+ * @return {ControlFlowElement}  Object that starts the if branch
+ */
 const If = exports.If = function If(value) { return { command: If, value, }; };
 
+/**
+ * Gets the value of ether the innermost or a named iteration
+ * @param {any}  name  name specified in the opening iteration value (which defaults to the array/object iterated over)
+ * @return {ControlFlowElement}  Object that will be replaced by the value
+ */
 const Value = exports.Value = function Value(name) { return { command: Value, name, }; };
+
+/**
+ * Gets the index (or key) of ether the innermost or a named iteration
+ * @param {any}  name  name specified in the opening iteration value (which defaults to the array/object iterated over)
+ * @return {ControlFlowElement}  Object that will be replaced by the index
+ */
 const Index = exports.Index = function Index(name) { return { command: Index, name, }; };
+
+/**
+ * Alias for Index
+ */
 const Key = exports.Key = Index;
 
-const Call = exports.Call = callback => ({ command: Call, callback, });
-const Predicate = exports.Predicate = (values, callback) => ({ command: Predicate, values, callback, });
+/**
+ * Callback will be called with (index, value, array) of the current iteration.
+ * @param  {Function} callback the callback function
+ * @return {ControlFlowElement}  Object that will be replaced by callback's return value
+ */
+const Call = exports.Call = function Call(callback) { return { command: Call, callback, }; };
 
+/**
+ * [description]
+ * @param  {array of Value|Index}   values    will be mapped to values and indices according to @see Value and @see Index
+ * @param  {Function}               callback  function that will be called with the mapped valued array as arguments
+ * @return {ControlFlowElement}   Object that will be replaced by callback's return value
+ */
+const Predicate = exports.Predicate = function Predicate(values, callback) { return { command: Predicate, values, callback, }; };
+
+/**
+ * Ends a ControlFlowElement's branch
+ * Using End's properties (ForEach/ForOf/While/If) introduces type safety and is encouraged.
+ * @return {ControlFlowElement}  Object that ends the current branch
+ */
 const End = exports.End = ((End = { }) => Object.freeze(Object.assign(End, {
 	ForEach: { command: End, value: ForEach, },
 	ForOf: { command: End, value: ForOf, },
@@ -20,6 +84,24 @@ const End = exports.End = ((End = { }) => Object.freeze(Object.assign(End, {
 	If: { command: End, value: If, },
 })))();
 
+/**
+ * Creates a new template engine instance that can ether be called
+ * as TemplateEngine(options) with (additional) Options
+ * or as a template string processor (TemplateEngine`template${string}`).
+ * So calling TemplateEngine(options)`template${string}` will process the string with the given options
+ * @param {object|Function}   options   Object containing
+ *                            @attribute {string}    trim    trimming options, may contain
+ *                                             front     remove any whitespaces at the front of the result
+ *                                             parts     remove many whritspaces before and after inserted values
+ *                                             strong    remove more whritspaces before and after inserted values
+ *                                             empty     remove any empty lines
+ *                                             all       reduce all whitespaces to single ' ' (space) characters
+ *                            @attribute {function}  mapper  function that all value parts of the result will b passed through
+ *                                                           may receive any (single) value and shpould return a string
+ * @param {Array, ...any}     strings, ...vars  arguments when called via TemplateEngine`template${string}`
+ * @return {Function|string}  if called with options (with or without 'new') the same function with bound options
+ *                            if called as template string function, the processed string
+ */
 const TemplateEngine = exports.TemplateEngine = function TemplateEngine(strings, ...vars) {
 	const self = (this instanceof TemplateEngine) ? this : Object.create(TemplateEngine.prototype);
 
@@ -66,7 +148,7 @@ TemplateEngine.prototype = {
 		}
 
 		(/front/).test(trim) && (this.parts[0] = this.parts[0].replace(/^[ \t]*\n/, ''));
-		(/parts/).test(trim) && this.trim(trim);
+		(/(parts|strong)/).test(trim) && this.trim(trim);
 
 		toBeMapped.forEach(index => index in parts && (parts[index] = mapper(parts[index])));
 
@@ -251,5 +333,4 @@ TemplateEngine.prototype = {
 	},
 };
 
-return Object.freeze(exports);
-})((typeof exports !== 'undefined') ? exports : ((typeof window !== 'undefined') ? window.TemplateEngine = { } : { }));
+const moduleName = 'es6lib/template/engine'; if (typeof module !== 'undefined') { module.exports = exports; } else if (typeof define === 'function') { define(moduleName, exports); } else if (typeof window !== 'undefined' && typeof module === 'undefined') { window[moduleName] = exports; } return exports; })({ });

@@ -25,6 +25,7 @@ ${ While(function*(){
 	yield 1;
 	yield 2;
 	yield 3;
+	return 'not iterated';
 }) }
 	${ Index }: ${ Value }
 	${ If((v, i, a) => a[i-1]) }

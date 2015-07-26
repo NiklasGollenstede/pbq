@@ -38,7 +38,8 @@ const clickElement = exports.clickElement = function clickElement(element, win) 
 	return evt;
 };
 
-const saveAs = exports.saveAs = function saveAs(content, name, win = window) {
+const saveAs = exports.saveAs = function saveAs(content, name, win) {
+	win = win || window;
 
 	if (typeof content.generate === 'function') {
 		try { // gen blob if zip
@@ -56,18 +57,19 @@ const saveAs = exports.saveAs = function saveAs(content, name, win = window) {
 
 	clickElement(link, win);
 
-	timeout(() => win.URL.revokeObjectURL(link.href), 1000);
+	timeout(function() { win.URL.revokeObjectURL(link.href); }, 1000);
 };
 
 const once = exports.once = function once(element, event, callback, capture) {
-	const handler = event => {
+	function handler() {
 		element.removeEventListener(event, handler, capture);
-		callback(event);
-	};
-	element.addEventListener(event, handler);
+		callback.apply(null, arguments);
+	}
+	element.addEventListener(event, handler, capture);
 };
 
-const getSelector = exports.getSelector = function getSelector(element, prev = '') {
+const getSelector = exports.getSelector = function getSelector(element, prev) {
+	prev = prev || '';
 	if (!element || element === document) { return prev.slice(1); }
 	return getSelector(
 		element.parentNode, '>'+ element.tagName
@@ -91,7 +93,7 @@ const onElementChanged = exports.onElementChanged = function onElementChanged(el
 const Self = new WeakMap();
 const CreationObserver = exports.CreationObserver = function CreationObserver(element) {
 	const listeners = [/*{ callback: function(){}, selector: string [, single: true] }*/];
-	const observer = new MutationObserver((mutations, observer) => {
+	const observer = new MutationObserver(function(mutations, observer) {
 		for (let mutation of mutations) {
 			for (let j = 0, element; (element = mutation.addedNodes[j]); j++) {
 				elementCreated(listeners, element);
@@ -110,7 +112,7 @@ const CreationObserver = exports.CreationObserver = function CreationObserver(el
 	Self.set(this, observer);
 };
 function elementCreated(listeners, element) {
-	element.matches && listeners.forEach((listener, index) => {
+	element.matches && listeners.forEach(function(listener, index) {
 		if (element.matches(listener.selector)) {
 			timeout(listener.callback, 0, element);
 			if (listener.single) {
@@ -121,14 +123,14 @@ function elementCreated(listeners, element) {
 }
 CreationObserver.prototype.add = function(selector, callback, single) {
 	let self = Self.get(this);
-	if (self.listeners.find(item => item.selector == selector && item.callback == callback && !item.single === !single)) { return; }
+	if (self.listeners.find(function(item) { return item.selector == selector && item.callback == callback && !item.single === !single; })) { return; }
 	self.listeners.push({ selector: selector, callback: callback, single: single });
 	self.listeners.length == 1 && self.observe(self.element, { subtree: true, childList: true });
 };
 CreationObserver.prototype.remove = function(selector, callback, single) {
 	let self = Self.get(this);
 	let length = self.listeners.length;
-	self.listeners.filter(item => !(item.selector == selector && item.callback == callback && !item.single == !single));
+	self.listeners.filter(function(item) { return !item.selector == selector && item.callback == callback && !item.single == !single; });
 	self.listeners.length === 0 && self.disconnect();
 	return length - self.listeners.length;
 };
@@ -150,19 +152,19 @@ CreationObserver.prototype.all = function(selector, callback) {
 };
 
 const notify = exports.notify = function notify(options) {
-	return new Promise((resolve, reject) => {
-		let doIt = () => {
+	return new Promise(function(resolve, reject) {
+		function doIt() {
 			let self = new Notification(options.title, options);
 			self.onclick = resolve;
 			self.onerror = reject;
 			self.onclose = reject;
 			self.onshow = unTimeout.bind(null, timeout(reject, options.timeout || 1500));
-		};
+		}
 
 		if (Notification.permission === "granted") {
 			doIt();
 		} else if (Notification.permission !== 'denied') {
-			Notification.requestPermission(permission => {
+			Notification.requestPermission(function(permission) {
 				if (permission === "granted") {
 					doIt();
 				} else {

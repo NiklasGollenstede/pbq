@@ -73,6 +73,28 @@ exports = function polyfill(global, options) {
 			});
 		}
 
+		if (!Array.prototype.fill) {
+			Array.prototype.fill = function fill(value, start, end) {
+				if (this == null) { throw new TypeError('this is null or not defined'); }
+
+				const self = Object(this);
+				const length = self.length >>> 0;
+				start = start >> 0;
+				end === undefined && (end = length)
+				|| (end = end < 0 ?
+					Math.max(length + end, 0) :
+					Math.min(end, length));
+				var k = start < 0 ?
+					Math.max(length + start, 0) :
+					Math.min(start, length);
+				while (k < end) {
+					self[k] = value;
+					++k;
+				}
+				return self;
+			};
+		}
+
 		[
 			'concat',
 			'every',

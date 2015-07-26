@@ -1,4 +1,4 @@
-(function(exports) { 'use strict';
+(function(exports) { // 'use strict'; // TODO: fund a better substitution for destructive assignment than 'with' and reenamle strict mode
 
 const XHR = (typeof XMLHttpRequest !== 'undefined') ? XMLHttpRequest : require('sdk/net/xhr').XMLHttpRequest;
 
@@ -18,32 +18,35 @@ const XHR = (typeof XMLHttpRequest !== 'undefined') ? XMLHttpRequest : require('
  *                         @attribute {bool}    mozAnon           mozilla privileged code only, don't send any session/login data
  *                         @attribute {bool}    mozSystem         mozilla privileged code only, allow cross side request
  */
-const HttpRequest = exports.HttpRequest = function HttpRequest(url, options = { }) {
-	let request, cancel;
+const HttpRequest = exports.HttpRequest = function HttpRequest(url, options) {
+	var request, cancel;
 	return Object.assign(new Promise(function(resolve, reject) {
 		if (typeof url === 'object' && !(url instanceof String)) { options = url; url = options.url || options.src; }
-		const { method, user, password, header, timeout, responseType, overrideMimeType, mozAnon, mozSystem, } = options;
+		else if (!options) { options = { }; }
+		// const { method, user, password, header, timeout, responseType, overrideMimeType, mozAnon, mozSystem, body, } = options; {
+		with ([ 'method', 'user', 'password', 'header', 'timeout', 'responseType', 'overrideMimeType', 'mozAnon', 'mozSystem', 'body', ].reduce(function(scope, key) { scope[key] = options[key]; return scope; }, Object.create(null))) {
 
-		request = (mozAnon || mozSystem) ? new XHR({ mozAnon, mozSystem, }) : new XHR();
-		cancel = cancelWith.bind(request, reject);
+			request = (mozAnon || mozSystem) ? new XHR({ mozAnon, mozSystem, }) : new XHR();
+			cancel = cancelWith.bind(request, reject);
 
-		request.open(method || "get", url, true, user, password);
+			request.open(method || "get", url, true, user, password);
 
-		responseType && (request.responseType = responseType);
-		timeout && (request.timeout = timeout);
-		overrideMimeType && request.overrideMimeType(overrideMimeType);
-		header && Object.keys(header).forEach(function(key) { request.setRequestHeader(key, header[key]); });
+			responseType && (request.responseType = responseType);
+			timeout && (request.timeout = timeout);
+			overrideMimeType && request.overrideMimeType(overrideMimeType);
+			header && Object.keys(header).forEach(function(key) { request.setRequestHeader(key, header[key]); });
 
-		request.onerror = reject;
-		request.ontimeout = reject;
-		request.onload = function(event) {
-			if (request.status == 200) {
-				resolve(request);
-			} else {
-				cancel('bad status');
-			}
-		};
-		request.send(options.body);
+			request.onerror = reject;
+			request.ontimeout = reject;
+			request.onload = function(event) {
+				if (request.status == 200) {
+					resolve(request);
+				} else {
+					cancel('bad status');
+				}
+			};
+			request.send(body);
+		}
 	}), {
 		abort() {
 			request.abort();

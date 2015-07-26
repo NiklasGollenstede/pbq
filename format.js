@@ -100,7 +100,8 @@ const numberToRoundString = exports.numberToRoundString = function numberToRound
  * @param {string || RegExp} value sequence used to seperate keys from values, defaults to '=', value may be optional (in the query)
  * @param {QueryObject}      instance of QueryObject that has properties as read from the query
  */
-const QueryObject = exports.QueryObject = function QueryObject(query, key, value = '=') {
+const QueryObject = exports.QueryObject = function QueryObject(query, key, value) {
+	value = value || '=';
 	const self = (this instanceof QueryObject) ? this : Object.create(QueryObject.prototype);
 	query.split(key || /[&#?]+/)
 	.map(function(string) { return string.split(value); })
@@ -112,7 +113,8 @@ const QueryObject = exports.QueryObject = function QueryObject(query, key, value
  * @param  {string} valueSep seperator between key and value, defaults to '='
  * @return {string}          the query string representation of this
  */
-QueryObject.prototype.toString = function(keySep = '&', valueSep = '=') {
+QueryObject.prototype.toString = function(keySep, valueSep) {
+	keySep = keySep || '&'; valueSep = valueSep || '=';
 	return Object.keys(this).reduce(function(ret, key) {
 		return ret + keySep + key + ((this[key] !== null) ? (valueSep + this[key]) : '');
 	}, '').substring(1);

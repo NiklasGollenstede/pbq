@@ -5,7 +5,7 @@
  * End value will be repeated as often as often as 'arrays' .forEach function will call a callback
  * @param {any}       name   identifier that can be used to get the right @see Index or @see Value in nested loops
  * @param {arraylike} array  the array or array like structure to iterate over, uses its .forEach function
- *                           while iterating, the forEach-callbacks first value will be the @see Index
+ *                           while iterating, the forEach-callbacks second value will be the @see Index
  * @return {ControlFlowElement}  Object that starts the loop
  */
 const ForEach = exports.ForEach = function ForEach(name, array) { return { command: ForEach, array: array || name, name }; };
@@ -31,7 +31,7 @@ const While = exports.While = function While(generator) { return { command: Whil
  * or returns true, in case it's a function
  * @param {any|function|Predicate}   value  Block will be included if and only if value is trueisch.
  *                     If value is a function, it will be considered truisch if it returns a truisch value.
- *                     It will be called with (index, value, array) of the current iteration.
+ *                     It will be called with (value, index, array) of the current iteration.
  *                     Same for Predicate, it will be called as specified, @see Predicate
  *                     Otherwise the value will be considered thueisch if !!value === true.
  * @return {ControlFlowElement}  Object that starts the if branch
@@ -40,14 +40,14 @@ const If = exports.If = function If(value) { return { command: If, value, }; };
 
 /**
  * Gets the value of ether the innermost or a named iteration
- * @param {any}  name  name specified in the opening iteration value (which defaults to the array/object iterated over)
+ * @param {any}  name  optional, name specified in the opening iteration value (which defaults to the array/object iterated over)
  * @return {ControlFlowElement}  Object that will be replaced by the value
  */
 const Value = exports.Value = function Value(name) { return { command: Value, name, }; };
 
 /**
  * Gets the index (or key) of ether the innermost or a named iteration
- * @param {any}  name  name specified in the opening iteration value (which defaults to the array/object iterated over)
+ * @param {any}  name  optional, name specified in the opening iteration value (which defaults to the array/object iterated over)
  * @return {ControlFlowElement}  Object that will be replaced by the index
  */
 const Index = exports.Index = function Index(name) { return { command: Index, name, }; };
@@ -58,7 +58,7 @@ const Index = exports.Index = function Index(name) { return { command: Index, na
 const Key = exports.Key = Index;
 
 /**
- * Callback will be called with (index, value, array) of the current iteration.
+ * Callback will be called with (value, index, array) of the current iteration.
  * @param  {Function} callback the callback function
  * @return {ControlFlowElement}  Object that will be replaced by callback's return value
  */
@@ -127,10 +127,10 @@ const TemplateEngine = exports.TemplateEngine = function TemplateEngine(strings,
 	self.stack = [ self.stackBase, ];
 
 	self.findBrackets();
-	Object.freeze(self);
+
 	self.processRange(0, vars.length);
 
-	return self.result; // string + new problem ??
+	return self.result;
 };
 TemplateEngine.prototype = {
 	stackBase: Object.freeze({ array: Object.freeze([ ]), index: -1, name: undefined, }),

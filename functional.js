@@ -2,10 +2,15 @@
 'use strict';
 /* global performance */
 
+if (typeof Proxy !== 'undefined') {
 /**
  * Object/Function that returns itself on execution and every property access. Stateless
  */
-const noop = exports.noop = ((self = new Proxy(() => self, { get: () => self, set() { }, })) => self)();
+const noop = exports.noop = (function(self) {
+	return self = new Proxy(function() { return self; }, { get() { return self; }, set() { }, });
+})();
+// { valueOf() { return NaN; }, toString() { return ''; }, } ??
+}
 
 /**
  * console.log's it's arguments
@@ -15,7 +20,6 @@ const log = exports.log = exports.debugLog = function log() {
 	console.log.apply(console, arguments);
 	return arguments[arguments.length - 1];
 };
-
 
 /**
  * Systems non-absolute but continuous high resolution time
@@ -37,8 +41,9 @@ const hrtime = exports.hrtime = (function() {
  * @return   {function}        function that returns the time difference between Timer creation an it's call
  * @example  timer = new Timer; doStuff(); diff1 = timer(); doMore(); diff2 = timer();
  */
-const Timer = exports.Timer = function Timer(start = hrtime()) {
-	return (end = hrtime()) => (end - start);
+const Timer = exports.Timer = function Timer() {
+	const start = hrtime();
+	return function() { return hrtime() - start; };
 };
 
 /**
@@ -47,16 +52,24 @@ const Timer = exports.Timer = function Timer(start = hrtime()) {
  * @return {function}       a function that increments start by one at each call and returns the implemented value
  * @method {Number}   get   returns the current value (without incrementing it)
  */
-const Counter = exports.Counter = function Counter(start = 0) {
-	return Object.assign(() => ++start, { get: () => start, });
+const Counter = exports.Counter = function Counter(start) {
+	start = +start || 0;
+	return Object.assign(function() { return ++start; }, { get() { return start; }, });
 };
 
 /**
  * Logger
  * @param {...[type]} outer first args
  */
-const Logger = exports.Logger = function Logger(...outer) {
-	return (...inner) => console.log(...outer, ...inner);
+// (...outer) => (...inner) => console.log(...outer, ...inner);
+const Logger = exports.Logger = function Logger() {
+	const outer = arguments;
+	return function() {
+		const args = [];
+		args.push.apply(args, outer);
+		args.push.apply(args, arguments);
+		console.log.apply(console, args);
+	};
 };
 
 /**
@@ -94,7 +107,7 @@ const fuzzyMatch = exports.fuzzyMatch = function fuzzyMatch(s1, s2, n) {
 	return (l1 + l2) ? 2 * total / (l1 + l2) : 0;
 };
 
-
+/*
 // untested
 const Cache = exports.Cache = function Cache(compute, options) {
 	if (typeof compute !== 'function') {
@@ -191,5 +204,5 @@ function Cache2(compute) {
 		return result;
 	};
 }
-
+*/
 const moduleName = 'es6lib/functional'; if (typeof module !== 'undefined') { module.exports = exports; } else if (typeof define === 'function') { define(moduleName, exports); } else if (typeof window !== 'undefined' && typeof module === 'undefined') { window[moduleName] = exports; } return exports; })({ });

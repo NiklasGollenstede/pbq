@@ -1,5 +1,12 @@
 (function(exports) { 'use strict';
 
+// find/filter helper
+function hasProperty(key, value) {
+	return function(object) {
+		return object[key] === value;
+	};
+}
+
 /**
  * ForEach control flow element, repeats all elements between this value and the corresponding
  * End value will be repeated as often as often as 'arrays' .forEach function will call a callback
@@ -102,32 +109,37 @@ const End = exports.End = ((End = { }) => Object.freeze(Object.assign(End, {
  * @return {Function|string}  if called with options (with or without 'new') the same function with bound options
  *                            if called as template string function, the processed string
  */
-const TemplateEngine = exports.TemplateEngine = function TemplateEngine(strings, ...vars) {
+const TemplateEngine = exports.TemplateEngine = function TemplateEngine(options) {
 	const self = (this instanceof TemplateEngine) ? this : Object.create(TemplateEngine.prototype);
 
 	// not called as template string processor (yet)
-	if (!(Array.isArray(strings) && vars.length === strings.length - 1)) {
+	if (!(Array.isArray(options) && arguments.length === options.length)) {
 		// called with options
-		if (typeof strings === 'object') {
-			self.options = Object.assign(self.options || { }, strings);
+		if (typeof options === 'object') {
+			self.options = Object.assign(self.options || { }, options);
 		}
 		// called with mapper function
-		else if (typeof strings === 'function') {
-			self.options && (self.options.mapper = strings) || (self.options = { mapper: strings, });
+		else if (typeof options === 'function') {
+			self.options && (self.options.mapper = options) || (self.options = { mapper: options, });
 		}
 		else {
-			throw new TypeError('Invalid arguments for TemplateEngine: '+ strings +', '+ vars.join(', '));
+			throw new TypeError('Invalid arguments for TemplateEngine: '+ options +', and '+ (arguments.length - 1) +' more');
 		}
 		return TemplateEngine.bind(self);
 	}
 
-	self.strings = strings;
+	const vars = new Array(arguments.length - 1);
+	for (let i = 0, length = arguments.length - 1; i < length; ++i) {
+		vars[i] = arguments[i + 1];
+	}
+
+	self.strings = options;
 	self.vars = vars;
 	self.parts = [ ];
 	self.stack = [ self.stackBase, ];
 
 	self.findBrackets();
-
+	Object.freeze(self);
 	self.processRange(0, vars.length);
 
 	return self.result;
@@ -136,7 +148,7 @@ TemplateEngine.prototype = {
 	stackBase: Object.freeze({ array: Object.freeze([ ]), index: -1, name: undefined, }),
 
 	get result() {
-		const { parts, options: { mapper, trim, }, } = this;
+		const parts = this.parts, mapper = this.options.mapper, trim = this.options.trim;
 		parts.pop();
 
 		const toBeMapped = [];
@@ -150,7 +162,9 @@ TemplateEngine.prototype = {
 		(/front/).test(trim) && (this.parts[0] = this.parts[0].replace(/^[ \t]*\n/, ''));
 		(/(parts|strong)/).test(trim) && this.trim(trim);
 
-		toBeMapped.forEach(index => index in parts && (parts[index] = mapper(parts[index])));
+		toBeMapped.forEach(function(index) {
+			index in parts && (parts[index] = mapper(parts[index]));
+		});
 
 		let result = this.parts.join('');
 
@@ -173,7 +187,7 @@ TemplateEngine.prototype = {
 				parts[i] = parts[i].replace(trimFront, '');
 			}
 		}
-		(/strong/).test(level) && parts.forEach((part, index) => {
+		(/strong/).test(level) && parts.forEach(function(part, index) {
 			if ((part === '' || whitespace.test(part)) && atBack.test(parts[index - 1]) && atFront.test(parts[index + 1])) {
 				parts[index + 1] = parts[index + 1].replace(trimFront, '');
 				delete parts[index];
@@ -186,7 +200,7 @@ TemplateEngine.prototype = {
 	},
 
 	find(name) {
-		return this.stack.find(tupel => tupel.name === name);
+		return this.stack.find(hasProperty('name', name));
 	},
 
 	processRange(startIndex, endIndex) {
@@ -251,33 +265,36 @@ TemplateEngine.prototype = {
 		} while (++loopIndex <= endIndex);
 	},
 
-	forEach(startIndex, { array, name, closing: stopIndex, }) {
+	forEach(startIndex, element) {
+		const array = element.array, name = element.name, stopIndex = element.closing;
 		// console.log('_forEach', startIndex, array, stopIndex);
 
 		const tupel = { array, name };
 		this.stack.push(tupel);
-		array.forEach((item, index) => {
+		array.forEach(function(item, index) {
 			tupel.index = index;
 			this.processRange(startIndex + 1, stopIndex);
-		});
+		}.bind(this));
 		this.stack.pop();
 		return stopIndex;
 	},
 
-	forOf(startIndex, { object, name, closing: stopIndex, }) {
+	forOf(startIndex, element) {
+		const object = element.object, name = element.name, stopIndex = element.closing;
 		// console.log('_forOf', startIndex, array, stopIndex);
 
 		const tupel = { array: object, name };
 		this.stack.push(tupel);
-		Object.keys(object).forEach((index) => {
+		Object.keys(object).forEach(function(index) {
 			tupel.index = index;
 			this.processRange(startIndex + 1, stopIndex);
-		});
+		}.bind(this));
 		this.stack.pop();
 		return stopIndex;
 	},
 
-	While(startIndex, { generator, name, closing: stopIndex, }) {
+	While(startIndex, element) {
+		const generator = element.generator, name = element.name, stopIndex = element.closing;
 		// console.log('_while', startIndex, generator, stopIndex);
 
 		const top = this.top();
@@ -295,7 +312,7 @@ TemplateEngine.prototype = {
 
 	findBrackets() {
 		const stack = [];
-		this.vars.forEach((value, index) => {
+		this.vars.forEach(function(value, index) {
 			if (!value) { return; }
 			if (~[ ForEach, ForOf, While, If, ].indexOf(value.command)) {
 				stack.push(value);
@@ -318,10 +335,11 @@ TemplateEngine.prototype = {
 		if (stack.length) { throw Error('expected End: for '+ stack.pop().command.name +' saw <nothing>'); }
 	},
 
-	callPredicate({callback, values, }) {
+	callPredicate(element) {
+		const callback = element.callback, values = element.values, thisArg = element.thisArg;
 		// console.log('stack', this.stack);
-		return callback(...values.map(value => {
-			const tupel = this.stack.find(tupel => tupel.name === value.name);
+		return callback.apply(thisArg, values.map(function(value) {
+			const tupel = this.stack.find(hasProperty('name', value.name));
 			// console.log('tupel', tupel, value);
 			if (value.command === Value) {
 				return tupel.array[tupel.index];
@@ -329,7 +347,7 @@ TemplateEngine.prototype = {
 				return tupel.index;
 			}
 			throw 'Predicats arguments must be Value or Index';
-		}));
+		}.bind(this)));
 	},
 };
 

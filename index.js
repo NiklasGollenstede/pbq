@@ -18,6 +18,9 @@ exports = {
 	get functional() {
 		return require('es6lib/functional');
 	},
+	get fs() {
+		return require('es6lib/fs');
+	},
 	get graph() {
 		return require('es6lib/graph');
 	},
@@ -36,8 +39,8 @@ exports = {
 	get process() {
 		return require('es6lib/process');
 	},
-	get fs() {
-		return require('es6lib/fs');
+	get template() {
+		return require('es6lib/template');
 	},
 };
 

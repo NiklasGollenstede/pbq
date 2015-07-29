@@ -1,12 +1,5 @@
 (function(exports) { 'use strict';
 
-// find/filter helper
-function hasProperty(key, value) {
-	return function(object) {
-		return object[key] === value;
-	};
-}
-
 /**
  * ForEach control flow element, repeats all elements between this value and the corresponding
  * End value will be repeated as often as often as 'arrays' .forEach function will call a callback
@@ -72,24 +65,31 @@ const Key = exports.Key = Index;
 const Call = exports.Call = function Call(callback) { return { command: Call, callback, }; };
 
 /**
- * [description]
- * @param  {array of Value|Index}   values    will be mapped to values and indices according to @see Value and @see Index
+ * Specifies a (predicate) function that will be called with custom arguments
+ * @param  {array of Value|Index}   args      will be mapped to values and indices according to @see Value and @see Index
  * @param  {Function}               callback  function that will be called with the mapped valued array as arguments
+ * @param  {any}                    thisArg   this in callback
  * @return {ControlFlowElement}   Object that will be replaced by callback's return value
  */
-const Predicate = exports.Predicate = function Predicate(values, callback) { return { command: Predicate, values, callback, }; };
+const Predicate = exports.Predicate = function Predicate(args, callback, thisArg) { return { command: Predicate, values: args, callback, thisArg, }; };
 
 /**
  * Ends a ControlFlowElement's branch
  * Using End's properties (ForEach/ForOf/While/If) introduces type safety and is encouraged.
  * @return {ControlFlowElement}  Object that ends the current branch
  */
-const End = exports.End = ((End = { }) => Object.freeze(Object.assign(End, {
+const End = exports.End = (function(End) { return Object.freeze(Object.assign(End, {
 	ForEach: { command: End, value: ForEach, },
 	ForOf: { command: End, value: ForOf, },
 	While: { command: End, value: While, },
 	If: { command: End, value: If, },
-})))();
+})); })({ });
+
+/**
+ * Excludes a value from the mapping
+ * @param {any}  value  value that will be directly used instead of beeing mapped
+ */
+const NoMap = exports.NoMap = function NoMap(value) { return { command: NoMap, value, }; };
 
 /**
  * Creates a new template engine instance that can ether be called
@@ -102,7 +102,7 @@ const End = exports.End = ((End = { }) => Object.freeze(Object.assign(End, {
  *                                             parts     remove many whritspaces before and after inserted values
  *                                             strong    remove more whritspaces before and after inserted values
  *                                             empty     remove any empty lines
- *                                             all       reduce all whitespaces to single ' ' (space) characters
+ *                                             all       reduce all whitespace sequences to single ' ' (space) characters
  *                            @attribute {function}  mapper  function that all value parts of the result will b passed through
  *                                                           may receive any (single) value and shpould return a string
  * @param {Array, ...any}     strings, ...vars  arguments when called via TemplateEngine`template${string}`
@@ -163,7 +163,12 @@ TemplateEngine.prototype = {
 		(/(parts|strong)/).test(trim) && this.trim(trim);
 
 		toBeMapped.forEach(function(index) {
-			index in parts && (parts[index] = mapper(parts[index]));
+			if (!(index in parts)) { return; }
+			if (parts[index] && parts[index].command === NoMap) {
+				parts[index] = parts[index].value;
+			} else {
+				parts[index] = mapper(parts[index]);
+			}
 		});
 
 		let result = this.parts.join('');
@@ -350,5 +355,12 @@ TemplateEngine.prototype = {
 		}.bind(this)));
 	},
 };
+
+// find/filter helper
+function hasProperty(key, value) {
+	return function(object) {
+		return object[key] === value;
+	};
+}
 
 const moduleName = 'es6lib/template/engine'; if (typeof module !== 'undefined') { module.exports = exports; } else if (typeof define === 'function') { define(moduleName, exports); } else if (typeof window !== 'undefined' && typeof module === 'undefined') { window[moduleName] = exports; } return exports; })({ });

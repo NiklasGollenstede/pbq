@@ -1,7 +1,7 @@
 'use strict';
 /* global requireEs6 */
 
-const { TemplateEngine, ForEach, ForOf, While, If, Value, Index, Key, Call, Predicate, End, } = require('./../../template/engine.js');
+const { TemplateEngine, ForEach, ForOf, While, If, Value, Index, Key, Call, Predicate, End, NoMap, } = require('./../../template/engine.js');
 
 
 const test = exports.test = () => new TemplateEngine(s => '['+ s +']')({ trim: 'empty', })`
@@ -32,4 +32,5 @@ ${ While(function*(){
 		(prev: ${ Call((v, i, a) => a[i-1]) })
 	${ End.If }
 ${ End.While }
+<!-- ${ NoMap('just a unmapped value') } -->
 docEnd ${ 'varylast' } afterend`;

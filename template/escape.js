@@ -35,4 +35,15 @@ const toString = exports.toString = function toString(any) {
 	}
 };
 
+const removeTags = exports.removeTags = function removeTags(html) {
+	const newLine = this && this.newLine || '\n';
+	const space = this && this.space || '';
+	return String.replace(html, /(<\/?.*?>)+/g, function(match) {
+		if (/<(br|\/div)>/.test(match)) {
+			return newLine;
+		}
+		return space;
+	});
+};
+
 const moduleName = 'es6lib/template/escape'; if (typeof module !== 'undefined') { module.exports = exports; } else if (typeof define === 'function') { define(moduleName, exports); } else if (typeof window !== 'undefined' && typeof module === 'undefined') { window[moduleName] = exports; } return exports; })({ });

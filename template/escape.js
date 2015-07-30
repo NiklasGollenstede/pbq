@@ -11,7 +11,7 @@ const escapeString = exports.escapeString = function escapeString(string) {
 };
 
 const trim = exports.trim = function trim(string) {
-	return String.prototype.replace.call(string != null ? string : '', (/[ \t\v\n\s]+/g), ' ');
+	return String.prototype.replace.call(string != null ? string : '', (/[ \t\v\n\r\s]+/g), ' ');
 };
 
 const unescapeUrl = exports.unescapeUrl = function unescapeUrl(string) {
@@ -44,6 +44,10 @@ const removeTags = exports.removeTags = function removeTags(html) {
 		}
 		return space;
 	});
+};
+
+const removeEmptyLines = exports.removeEmptyLines = function removeEmptyLines(string) { // TODO: test
+	String.prototype.replace.call(string != null ? string : '', (/(\n|\r|\r\n)([ \t]*(\n|\r|\r\n))+/g), '$1');
 };
 
 const moduleName = 'es6lib/template/escape'; if (typeof module !== 'undefined') { module.exports = exports; } else if (typeof define === 'function') { define(moduleName, exports); } else if (typeof window !== 'undefined' && typeof module === 'undefined') { window[moduleName] = exports; } return exports; })({ });

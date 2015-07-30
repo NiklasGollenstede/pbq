@@ -324,20 +324,20 @@ TemplateEngine.prototype = {
 			} else
 			if (value === End) {
 				let top = stack.pop();
-				if (!top) { throw Error('unexpected End: value '+ index); }
+				if (!top) { throw Error('Unexpected End at value '+ index); }
 				top.closing = index;
 			} else
 			if (value.command === End) {
 				let top = stack.pop();
-				if (!top) { throw Error('unexpected End: value '+ index +' saw '+ value.value.name); }
+				if (!top) { throw Error('Unexpected End.'+ value.value.name +' at value '+ index); }
 				if (value.value === top.command) {
 					top.closing = index;
 				} else {
-					throw Error('End mismatch: value '+ index +' expected '+ top.command.name +' saw '+ value.value.name);
+					throw Error('End mismatch at value '+ index +'. Expected '+ top.command.name +' saw '+ value.value.name);
 				}
 			}
 		});
-		if (stack.length) { throw Error('expected End: for '+ stack.pop().command.name +' saw <nothing>'); }
+		if (stack.length) { throw Error('Expected End for '+ stack.pop().command.name +' saw <end of string>'); }
 	},
 
 	callPredicate(element) {

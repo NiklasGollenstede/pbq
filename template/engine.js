@@ -3,8 +3,8 @@
 /**
  * ForEach control flow element, repeats all elements between this value and the corresponding
  * End value will be repeated as often as often as 'arrays' .forEach function will call a callback
- * @param {any}       name   identifier that can be used to get the right @see Index or @see Value in nested loops
- * @param {arraylike} array  the array or array like structure to iterate over, uses its .forEach function
+ * @param  {any}       name   identifier that can be used to get the right @see Index or @see Value in nested loops
+ * @param  {arraylike} array  the array or array like structure to iterate over, uses its .forEach function
  *                           while iterating, the forEach-callbacks second value will be the @see Index
  * @return {ControlFlowElement}  Object that starts the loop
  */
@@ -12,17 +12,17 @@ const ForEach = exports.ForEach = function ForEach(name, array) { return { comma
 
 /**
  * Same as @see ForEach, only that it uses Object.keys(object) to get ist's @see Index'es
- * @param {any}     name    identifier that can be used to get the right @see Index or @see Value in nested loops
- * @param {object}  object  Object that will be iterated over for every key in Object.keys(object)
+ * @param  {any}     name    identifier that can be used to get the right @see Index or @see Value in nested loops
+ * @param  {object}  object  Object that will be iterated over for every key in Object.keys(object)
  * @return {ControlFlowElement}  Object that starts the loop
  */
 const ForOf = exports.ForOf = function ForOf(name, object) { return { command: ForOf, object: object || name, name }; };
 
 /**
  * Loop while 'generator' yields values
- * @param {function*}  generator  generator function that will be iterated over
- *                                @see Index will be incremented at each call to the generator
- * @return {ControlFlowElement}  Object that starts the loop
+ * @param  {function*}  generator  generator function that will be iterated over
+ *                                 @see Index will be incremented at each call to the generator
+ * @return {ControlFlowElement}    Object that starts the loop
  */
 const While = exports.While = function While(generator) { return { command: While, generator, }; };
 
@@ -39,15 +39,15 @@ const While = exports.While = function While(generator) { return { command: Whil
 const If = exports.If = function If(value) { return { command: If, value, }; };
 
 /**
- * Gets the value of ether the innermost or a named iteration
- * @param {any}  name  optional, name specified in the opening iteration value (which defaults to the array/object iterated over)
+ * Gets the value of ether the innermost or a named iteration, may be used without calling for the current iteration
+ * @param  {any}  name  optional, name specified in the opening iteration value to retrieve from an outer iteration
  * @return {ControlFlowElement}  Object that will be replaced by the value
  */
 const Value = exports.Value = function Value(name) { return { command: Value, name, }; };
 
 /**
- * Gets the index (or key) of ether the innermost or a named iteration
- * @param {any}  name  optional, name specified in the opening iteration value (which defaults to the array/object iterated over)
+ * Gets the index (or key) of ether the innermost or a named iteration, may be used without calling for the current iteration
+ * @param  {any}  name  optional, name specified in the opening iteration value to retrieve from an outer iteration
  * @return {ControlFlowElement}  Object that will be replaced by the index
  */
 const Index = exports.Index = function Index(name) { return { command: Index, name, }; };
@@ -58,20 +58,24 @@ const Index = exports.Index = function Index(name) { return { command: Index, na
 const Key = exports.Key = Index;
 
 /**
- * Callback will be called with (value, index, array) of the current iteration.
- * @param  {Function} callback the callback function
- * @return {ControlFlowElement}  Object that will be replaced by callback's return value
+ * Gets the array or object currently iterated over, or an array of all values yielded so far, in case of a generator, may be used without calling for the current iteration
+ * @param  {any}  name  optional, name specified in the opening iteration value to retrieve from an outer iteration
+ * @return {ControlFlowElement}  Object that will be replaced by the array/object
  */
-const Call = exports.Call = function Call(callback) { return { command: Call, callback, }; };
+const Iterated = exports.Iterated = function Iterated(name) { return { command: Iterated, name, }; };
 
 /**
- * Specifies a (predicate) function that will be called with custom arguments
- * @param  {array of Value|Index}   args      will be mapped to values and indices according to @see Value and @see Index
- * @param  {Function}               callback  function that will be called with the mapped valued array as arguments
+ * Specifies a function that will be called with custom arguments args or (value, index, array) of the current iteration
+ * @param  {array of Value|Index}   args      optional, will be mapped to values and indices according to @see Value
+ *                                            and @see Index. defaults to [ Value, Index, Iterated, ]
+ * @param  {Function}               callback  the callback function
  * @param  {any}                    thisArg   this in callback
- * @return {ControlFlowElement}   Object that will be replaced by callback's return value
+ * @return {ControlFlowElement}     Object that will be replaced by callback's return value
  */
-const Predicate = exports.Predicate = function Predicate(args, callback, thisArg) { return { command: Predicate, values: args, callback, thisArg, }; };
+const Call = exports.Call = function Call(args, callback, thisArg) {
+	if (!Array.isArray(args)) { thisArg = callback; callback = args; args = null; }
+	return { command: Call, args, callback, thisArg, };
+};
 
 /**
  * Ends a ControlFlowElement's branch
@@ -105,12 +109,16 @@ const NoMap = exports.NoMap = function NoMap(value) { return { command: NoMap, v
  *                                             all       reduce all whitespace sequences to single ' ' (space) characters
  *                            @attribute {function}  mapper  function that all value parts of the result will b passed through
  *                                                           may receive any (single) value and shpould return a string
- * @param {Array, ...any}     strings, ...vars  arguments when called via TemplateEngine`template${string}`
+ * @param  {Array, ...any}    strings, ...vars  arguments when called via TemplateEngine`template${string}`
  * @return {Function|string}  if called with options (with or without 'new') the same function with bound options
  *                            if called as template string function, the processed string
  */
 const TemplateEngine = exports.TemplateEngine = function TemplateEngine(options) {
 	const self = (this instanceof TemplateEngine) ? this : Object.create(TemplateEngine.prototype);
+
+	if (self._processing) {
+		throw new Error('This TemplateEngine instance is currently (asynchronously) processing. Create multiple instances for parallel processing.');
+	}
 
 	// not called as template string processor (yet)
 	if (!(Array.isArray(options) && arguments.length === options.length)) {
@@ -128,29 +136,52 @@ const TemplateEngine = exports.TemplateEngine = function TemplateEngine(options)
 		return TemplateEngine.bind(self);
 	}
 
+	// safeguard to allow (future ?) asynchronous processing
+	self._processing = true;
+
 	const vars = new Array(arguments.length - 1);
 	for (let i = 0, length = arguments.length - 1; i < length; ++i) {
 		vars[i] = arguments[i + 1];
 	}
 
+	// all string parts of the template string
 	self.strings = options;
+	// all value parts that are ether ControlFlowElements or values to be mapped and concatted into the result string
 	self.vars = vars;
+	// the result stack, mix of string and processed value parts
 	self.parts = [ ];
+	// iteration stack of { array, index, name, }
 	self.stack = [ self.stackBase, ];
 
 	self.findBrackets();
-	Object.freeze(self);
+
+	// start processing recursively
 	self.processRange(0, vars.length);
 
-	return self.result;
+	// map and concat result
+	const result = self.result();
+	self._processing = false;
+	return result;
 };
+/**
+ * All methods are implicitly private since TemplateEngine never returns an instance.
+ */
 TemplateEngine.prototype = {
+	cunstructor: TemplateEngine,
+	/// Base element of each instances iteration stack so that Value, Index and Iterated return appropriate values when called outside iterations.
 	stackBase: Object.freeze({ array: Object.freeze([ ]), index: -1, name: undefined, }),
 
-	get result() {
+	/**
+	 * Primarily concats all processed parts and values to the final string result.
+	 * Also performs mapping of values and whitespace trimming according to this.options.
+	 * @return {string}  the final result of a call like TemplateEngine(options)`template${string}`
+	 */
+	result() {
 		const parts = this.parts, mapper = this.options.mapper, trim = this.options.trim;
-		parts.pop();
+		parts.pop(); // since vars.length < strings.length, processRange pushes one var === undefined to much
 
+		// mark all those parts that are not in strings for mapping, do so before trimming
+		// TODO: fix: may incorrectly skip values that incidentally happen to be === some string
 		const toBeMapped = [];
 		if (typeof mapper === 'function') {
 			const strings = new Set(this.strings);
@@ -159,11 +190,12 @@ TemplateEngine.prototype = {
 			}
 		}
 
+		// trim parts
 		(/front/).test(trim) && (this.parts[0] = this.parts[0].replace(/^[ \t]*\n/, ''));
 		(/(parts|strong)/).test(trim) && this.trim(trim);
 
 		toBeMapped.forEach(function(index) {
-			if (!(index in parts)) { return; }
+			if (!(index in parts)) { return; } // part was deleted by this.trim()
 			if (parts[index] && parts[index].command === NoMap) {
 				parts[index] = parts[index].value;
 			} else {
@@ -173,12 +205,18 @@ TemplateEngine.prototype = {
 
 		let result = this.parts.join('');
 
+		// trim result
 		((/empty/).test(trim) && (result = result.replace(/\n([ \t]*\n)+/g, '\n')))
 		|| ((/all/).test(trim) && (result = result.replace(/[ \t\n]+/g, ' ')));
 
 		return result;
 	},
 
+	/**
+	 * Removes whitespace lines between parts.
+	 * @param  {string}  level  If it contains 'strong', parts that are only whitespaces will be deleted.
+	 * @modifies  [ parts, ]
+	 */
 	trim(level) {
 		let parts = this.parts;
 		let trimFront = (/^[ \t]*\n/);
@@ -200,11 +238,19 @@ TemplateEngine.prototype = {
 		});
 	},
 
+	/**
+	 * @return {object} The topmost iteration stack entry
+	 */
 	top() {
 		return this.stack[this.stack.length - 1];
 	},
 
-	find(name) {
+	/**
+	 * @param  {any} name The iterations name
+	 * @return {object} The topmost iteration stack entry with name === name
+	 * @throws {TypeError} If name is not defined, i.e. there is no entry with name === name in this.stack
+	 */
+	find(name) { // TODO: search from top to bottom, throw if not found
 		return this.stack.find(hasProperty('name', name));
 	},
 
@@ -215,12 +261,13 @@ TemplateEngine.prototype = {
 		do {
 			// console.log('loop', loopIndex, this.vars[loopIndex]);
 
+			// push string part no matter what
 			this.parts.push(this.strings[loopIndex]);
 
 			const current = this.vars[loopIndex];
 			const top = this.top();
 
-			if (!current) {
+			if (!current || !(/(object|function)/).test(typeof current)) {
 				this.parts.push(current);
 			} else
 			if (current.command === End) {
@@ -231,6 +278,9 @@ TemplateEngine.prototype = {
 			} else
 			if (current === Index) {
 				this.parts.push(top.index);
+			} else
+			if (current === Iterated) {
+				this.parts.push(top);
 			} else {
 				if (current.command === ForEach) {
 					loopIndex = this.forEach(loopIndex, current);
@@ -248,21 +298,21 @@ TemplateEngine.prototype = {
 							(typeof current.value === 'function')
 							&& !current.value(top.array[top.index], top.index, top.array)
 						) || (
-							current.value && current.value.command === Predicate
-							&& !this.callPredicate(current.value)
+							current.value && current.value.command === Call
+							&& !this.executeCall(current.value)
 						)
 					) { // skip ...
 						loopIndex = current.closing;
 					}
 				} else if (current.command === Call) {
-					this.parts.push(current.callback(top.array[top.index], top.index, top.array));
-				} else if (current.command === Predicate) {
-					this.parts.push(this.callPredicate(current));
+					this.parts.push(this.executeCall(current));
 				} else if (current.command === Value) {
 					const tupel = this.find(current.name);
 					this.parts.push(tupel.array[tupel.index]);
 				} else if (current.command === Index) {
 					this.parts.push(this.find(current.name).index);
+				} else if (current.command === Iterated) {
+					this.parts.push(this.find(current.name).array);
 				} else {
 					this.parts.push(current);
 				}
@@ -340,16 +390,22 @@ TemplateEngine.prototype = {
 		if (stack.length) { throw Error('Expected End for '+ stack.pop().command.name +' saw <end of string>'); }
 	},
 
-	callPredicate(element) {
-		const callback = element.callback, values = element.values, thisArg = element.thisArg;
+	executeCall(element) {
+		const callback = element.callback, args = element.args, thisArg = element.thisArg;
 		// console.log('stack', this.stack);
-		return callback.apply(thisArg, values.map(function(value) {
-			const tupel = this.stack.find(hasProperty('name', value.name));
+		if (!args) {
+			const top = this.top();
+			return callback.call(thisArg, top.array[top.index], top.index, top.array);
+		}
+		return callback.apply(thisArg, args.map(function(value) {
+			const tupel = this.find(value.name);
 			// console.log('tupel', tupel, value);
 			if (value.command === Value) {
 				return tupel.array[tupel.index];
 			} else if (value.command === Index) {
 				return tupel.index;
+			} else if (value.command === Iterated) {
+				return tupel.array;
 			}
 			throw 'Predicats arguments must be Value or Index';
 		}.bind(this)));

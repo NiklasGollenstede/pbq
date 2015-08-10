@@ -60,4 +60,23 @@ function cancelWith(reject, reason) {
 	reject(error);
 }
 
+const mimeTypes = exports.mimeTypes = {
+	bmp: 'image/bmp',
+	css: 'text/css',
+	html: 'text/html',
+	ico: 'image/png',
+	jpeg: 'image/jpeg',
+	jpg: 'image/jpeg',
+	js: 'text/javascript',
+	json: 'application/json',
+	mp4: 'video/mp4',
+	pdf: 'application/pdf',
+	png: 'image/png',
+	ttf: 'application/octet-stream',
+	webm: 'video/webm',
+	woff2: 'application/font-woff2',
+	woff: 'application/font-woff',
+	xhtml: 'application/xhtml+xml',
+};
+
 const moduleName = 'es6lib/network'; if (typeof module !== 'undefined') { module.exports = exports; } else if (typeof define === 'function') { define(moduleName, exports); } else if (typeof window !== 'undefined' && typeof module === 'undefined') { window[moduleName] = exports; } return exports; })({ });

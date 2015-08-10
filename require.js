@@ -15,7 +15,6 @@ window.define = function define(name, module) {
 		throw new Error(`Module "${ name }" is already defined`);
 	}
 	modules.set(name, module);
-	console.log('defined module', name/*, module*/);
 	return module;
 };
 

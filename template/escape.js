@@ -1,6 +1,6 @@
 (function(exports) { 'use strict';
 
-const htmlEscapeObject = { '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;', '': '&#47', };
+const htmlEscapeObject = { '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;', '': '&#47', }; // TODO: escape -- (comments) (?)
 const htmlEscapeRegExp = new RegExp('['+ Object.keys(htmlEscapeObject).join('') +']', 'g');
 const escapeHtml = exports.escapeHtml = function escapeHtml(string) {
 	return String.prototype.replace.call(string != null ? string : '', htmlEscapeRegExp, function(c) { return htmlEscapeObject[c]; });

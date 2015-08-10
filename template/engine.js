@@ -171,7 +171,7 @@ TemplateEngine.prototype = {
 
 	/**
 	 * Iterates over all value parts (odd entries in this.parts) and
-	 * replaces them with their value it tey are a NoMap-object
+	 * replaces them with their value it they are a NoMap-object
 	 * replaces them with '' if they are emptyValueNoStrip
 	 * replaces them with options.map(value) if options.map is a function
 	 */

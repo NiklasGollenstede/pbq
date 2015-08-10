@@ -117,7 +117,7 @@ QueryObject.prototype.toString = function(keySep, valueSep) {
 	keySep = keySep || '&'; valueSep = valueSep || '=';
 	return Object.keys(this).reduce(function(ret, key) {
 		return ret + keySep + key + ((this[key] !== null) ? (valueSep + this[key]) : '');
-	}, '').substring(1);
+	}.bind(this), '').substring(1);
 };
 
 const moduleName = 'es6lib/format'; if (typeof module !== 'undefined') { module.exports = exports; } else if (typeof define === 'function') { define(moduleName, exports); } else if (typeof window !== 'undefined' && typeof module === 'undefined') { window[moduleName] = exports; } return exports; })({ });

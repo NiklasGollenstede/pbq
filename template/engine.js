@@ -425,5 +425,6 @@ TemplateEngine.prototype = {
  */
 function emptyValue() { }
 function emptyValueNoStrip() { }
+emptyValue.toString = emptyValueNoStrip.toString = function() { return ''; };
 
 const moduleName = 'es6lib/template/engine'; if (typeof module !== 'undefined') { module.exports = exports; } else if (typeof define === 'function') { define(moduleName, exports); } else if (typeof window !== 'undefined' && typeof module === 'undefined') { window[moduleName] = exports; } return exports; })({ });

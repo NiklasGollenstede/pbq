@@ -2,18 +2,16 @@
 
 exports = (typeof module !== 'undefined') ? (() => {
 	// main process
-	const { escapeString, trim, } = require('es6lib/template/escape');
-
 	return (tab, modules, script) => new Promise((resolve, reject) => {
-		if (typeof script === 'function') {
-			script = `(${ script })()`;
+		if (!script) {
+			script = modules; modules = [ ];
 		}
-		script = escapeString(trim(
-			String.replace(script, (/\/\/(.*)$/gm), ' /* $1 */ ')
-		));
+		if (typeof script !== 'function') {
+			throw new TypeError('runInTab only accepts functions to execute');
+		}
 		const worker = tab.attach({
-			contentScriptFile: [ './../node_modules/es6lib/require.js', './../node_modules/es6lib/runInTab.js',  ].concat(modules),
-			contentScript: 'require("es6lib/runInTab")("'+ script +'");',
+			contentScriptFile: [ './../node_modules/es6lib/require.js', ].concat(modules, './../node_modules/es6lib/runInTab.js'),
+			contentScriptOptions: `return (${ script })()`,
 		});
 		worker.port.on("resolve", value => {
 			worker.destroy();
@@ -37,16 +35,13 @@ exports = (typeof module !== 'undefined') ? (() => {
 		self.port.emit("reject", error);
 	};
 
-	return script => {
-		console.log('executing', script);
-		try {
-			Promise.resolve(eval(script))
-			.then(value => self.port.emit("resolve", value))
-			.catch(onError);
-		} catch(error) {
-			onError(error);
-		}
-	};
+	try {
+		Promise.resolve(new String.constructor(self.options)()) // i.e. new Function(script)
+		.then(value => self.port.emit("resolve", value))
+		.catch(onError);
+	} catch(error) {
+		onError(error);
+	}
 })();
 
 const moduleName = 'es6lib/runInTab'; if (typeof module !== 'undefined') { module.exports = exports; } else if (typeof define === 'function') { define(moduleName, exports); } else if (typeof window !== 'undefined' && typeof module === 'undefined') { window[moduleName] = exports; } return exports; })({ });

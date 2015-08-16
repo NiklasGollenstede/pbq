@@ -96,7 +96,8 @@ const End = exports.End = (function(End) { return Object.freeze(Object.assign(En
  * Excludes a value from the mapping.
  * @param {any}  value  Value that will be directly used instead of beeing mapped.
  */
-const NoMap = exports.NoMap = function NoMap(value) { return { command: NoMap, value, }; };
+const NoMap = exports.NoMap = function NoMap(value) { return { command: NoMap, value, toString: noMaptoString }; };
+function noMaptoString() { return this && this.value || ''; }
 
 /**
  * Creates a new template engine instance that can ether be called
@@ -154,7 +155,7 @@ const TemplateEngine = exports.TemplateEngine = function TemplateEngine(options)
 	// start processing recursively
 	self.processRange(0, vars.length);
 
-	console.log('self', self);
+	// console.log('self', self);
 
 	// map, trim and concat result
 	self.map();

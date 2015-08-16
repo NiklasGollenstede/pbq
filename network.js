@@ -73,6 +73,7 @@ const mimeTypes = exports.mimeTypes = {
 	pdf: 'application/pdf',
 	png: 'image/png',
 	ttf: 'application/octet-stream',
+	txt: 'text/plain',
 	webm: 'video/webm',
 	woff2: 'application/font-woff2',
 	woff: 'application/font-woff',

@@ -80,6 +80,9 @@ const Call = exports.Call = function Call(args, callback, thisArg) {
 	return { command: Call, args, callback, thisArg, };
 };
 
+// read-only-assign 'command' properties to each ControlFlowElement function, so that they can be used like their return values
+Object.keys(exports).forEach(key => Object.defineProperty(exports[key], 'command', { value: exports[key], }));
+
 /**
  * Ends a ControlFlowElement's branch
  * Using End's properties (ForEach/ForOf/While/If) introduces type safety and is encouraged.
@@ -90,6 +93,7 @@ const End = exports.End = (function(End) { return Object.freeze(Object.assign(En
 	ForOf: { command: End, value: ForOf, },
 	While: { command: End, value: While, },
 	If: { command: End, value: If, },
+	command: End,
 })); })({ });
 
 /**
@@ -154,6 +158,7 @@ const TemplateEngine = exports.TemplateEngine = function TemplateEngine(options)
 
 	// start processing recursively
 	self.processRange(0, vars.length);
+	self.parts.pop();
 
 	// console.log('self', self);
 
@@ -178,15 +183,10 @@ TemplateEngine.prototype = {
 	 */
 	map() {
 		const parts = this.parts, mapper = this.options.mapper;
-		const map = typeof mapper === 'function';
 
 		// forEch odd indexed part of parts, i.e. all value parts
 		for (var index = 1, length = parts.length, part = parts[index]; index < length; part = parts[index += 2]) {
-			if (part && part.command === NoMap) {
-				parts[index] = part.value;
-			} else if (part === emptyValueNoStrip) {
-				parts[index] = '';
-			} else if (map && part !== emptyValue) {
+			if (!(part && (part.command === NoMap || part === emptyValueNoStrip || part === emptyValue))) {
 				parts[index] = mapper(part);
 			}
 		}
@@ -225,12 +225,6 @@ TemplateEngine.prototype = {
 					}
 				}
 			}
-		} else {
-			for (let index = 1, length = parts.length; index < length; index += 2) {
-				if (parts[index] === emptyValue) {
-					delete parts[index];
-				}
-			}
 		}
 	},
 
@@ -266,36 +260,21 @@ TemplateEngine.prototype = {
 			this.parts.push(this.strings[loopIndex]);
 
 			const current = this.vars[loopIndex];
-			const top = this.top();
 
-			if (!current || !(/(object|function)/).test(typeof current)) {
+			if (!current || !(/object|function/).test(typeof current) || !current.command) {
 				this.parts.push(current);
-			} else
-			if (current === End || current.command === End) {
-				this.parts.push(emptyValue);
-			} else
-			if (current === Value) {
-				this.parts.push(top.array[top.index]);
-			} else
-			if (current === Index) {
-				this.parts.push(top.index);
-			} else
-			if (current === Iterated) {
-				this.parts.push(top);
-			} else {
-				if (current.command === ForEach) {
+			}
+			else
+			switch (current.command) {
+				case Value: {
+					const tupel = (current === Value ? this.top() : this.find(current.name));
+					this.parts.push(tupel.array[tupel.index]);
+				} break;
+				case End: {
 					this.parts.push(emptyValue);
-					loopIndex = this.forEach(loopIndex, current);
-				} else
-				if (current.command === ForOf) {
-					this.parts.push(emptyValue);
-					loopIndex = this.forOf(loopIndex, current);
-				} else
-				if (current.command === While) {
-					this.parts.push(emptyValue);
-					loopIndex = this.While(loopIndex, current);
-				} else
-				if (current.command === If) {
+				} break;
+				case If: {
+					const top = this.top();
 					if ((
 							!current.value
 						) || (
@@ -311,16 +290,29 @@ TemplateEngine.prototype = {
 					} else {
 						this.parts.push(emptyValue);
 					}
-				} else if (current.command === Call) {
+				} break;
+				case ForEach: {
+					this.parts.push(emptyValue);
+					loopIndex = this.forEach(loopIndex, current);
+				} break;
+				case Index: {
+					this.parts.push((current === Index ? this.top() : this.find(current.name)).index);
+				} break;
+				case ForOf: {
+					this.parts.push(emptyValue);
+					loopIndex = this.forOf(loopIndex, current);
+				} break;
+				case Call: {
 					this.parts.push(this.executeCall(current));
-				} else if (current.command === Value) {
-					const tupel = this.find(current.name);
-					this.parts.push(tupel.array[tupel.index]);
-				} else if (current.command === Index) {
-					this.parts.push(this.find(current.name).index);
-				} else if (current.command === Iterated) {
-					this.parts.push(this.find(current.name).array);
-				} else {
+				} break;
+				case While: {
+					this.parts.push(emptyValue);
+					loopIndex = this.While(loopIndex, current);
+				} break;
+				case Iterated: {
+					this.parts.push((current === Iterated ? this.top() : this.find(current.name)).array);
+				} break;
+				default: {
 					this.parts.push(current);
 				}
 			}
@@ -374,24 +366,20 @@ TemplateEngine.prototype = {
 
 	findBrackets() {
 		const stack = [];
+		const opening = [ ForEach, ForOf, While, If, ];
 		this.vars.forEach(function(value, index) {
 			if (!value) { return; }
-			if (~[ ForEach, ForOf, While, If, ].indexOf(value.command)) {
-				stack.push(value);
-			} else
-			if (value === End) {
-				let top = stack.pop();
-				if (!top) { throw Error('Unexpected End at value '+ index); }
-				top.closing = index;
-			} else
 			if (value.command === End) {
 				let top = stack.pop();
-				if (!top) { throw Error('Unexpected End.'+ value.value.name +' at value '+ index); }
-				if (value.value === top.command) {
+				if (!top) { throw Error('Unexpected End'+ (value.value ? ('.'+ value.value.name) : '') +' at value '+ index); }
+				if (value.value === undefined || value.value === top.command) {
 					top.closing = index;
 				} else {
 					throw Error('End mismatch at value '+ index +'. Expected '+ top.command.name +' saw '+ value.value.name);
 				}
+			} else
+			if (~opening.indexOf(value.command)) {
+				stack.push(value);
 			}
 		});
 		if (stack.length) { throw Error('Expected End for '+ stack.pop().command.name +' saw <end of string>'); }
@@ -414,7 +402,7 @@ TemplateEngine.prototype = {
 			} else if (value.command === Iterated) {
 				return tupel.array;
 			}
-			throw 'Predicats arguments must be Value or Index';
+			throw 'Call\'s arguments must be Value or Index';
 		}.bind(this)));
 	},
 };

@@ -4,13 +4,18 @@
 const { TemplateEngine, ForEach, ForOf, While, If, Value, Index, Key, Call, End, NoMap, } = require('./../../template/engine.js');
 
 
-const test = exports.test = () => (new TemplateEngine(s => '['+ s +']')({ trim: 'parts', }))`
+const test = exports.test = arg => (new TemplateEngine(
+	arg && new String.constructor('return '+ arg)()
+	|| { trim: 'parts', mapper: s => '['+ s +']', }
+))`
 beforestart ${ 'veryfirst' } docStart
 ${ ForEach('outer', ['first', 'second', 'third']) }
 	1stLine ${ Value }
 	${ ForEach('inner', ['alpa', 'betha', 'gamma']) }
 		${ If(Call([Index('outer'), Index('inner')], (a, b) => (a == b))) }
 			2ndLine ${ Value } 2ndEnd (${ Index('outer') })
+
+			newLine
 		${ End.If }
 		${ Call([Value('outer'), Value('inner')], (o, i) => o+i) }
 		${ ForOf('reverse', { first: 'tsrif', second: 'dnoces', third: 'driht', }) }
@@ -21,6 +26,7 @@ ${ ForEach('outer', ['first', 'second', 'third']) }
 	${ End.ForEach }
 	1stEnd
 ${ End.ForEach }
+
 ${ While(function*(){
 	yield 1;
 	yield 2;
@@ -30,7 +36,7 @@ ${ While(function*(){
 	${ Index }: ${ Value }
 	${ If((v, i, a) => a[i-1]) }
 		(prev: ${ Call((v, i, a) => a[i-1]) })
-	${ End.If }
-${ End.While }
+	${ End }
+${ End }
 <!-- ${ NoMap('just a unmapped value') } -->
 docEnd ${ 'varylast' } afterend`;

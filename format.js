@@ -1,7 +1,44 @@
 (function(exports) { 'use strict';
 
 /**
- * fills of thuncates a string so that it has .length of length
+ * Turns a template string containing an extended RegExp, which may contain uninterpreted whitespaces
+ * and # comments, into a regular RegExp object.
+ * Must be called as a template string tagging function.
+ * Since it uses the template strings '.raw' property, no additional escaping compared to regular RegExp,
+ * expressions is required, except that whitespaces and '#' characters that are not to be removed need to be escaped.
+ * Note: The sequence '${' needs to be escaped to '\${' and will then appear as '\${' in the resulting RegExp.
+ * The usual flags 'gim' may follow the RegExp itself after a closing '/'.
+ * Example:
+ *     RegExpX`a` <= same as => /a/
+ *     RegExpX`a/i` <= same as => /a/i
+ *     RegExpX`[\n\ ] # newline or space
+ *             \/ # an escaped slash
+ *             \# not a comment
+ *             /g` <= same as => /[\n ]\/#notacomment/g
+ * As a plus, you can also use variables in your RegExp's, e.g.:
+ * var newLine = '[\\n\\r]';
+ * var sentence = '[\\w\\.\\ 0-9]';
+ * RegExpX`(${sentence}(<br><\/br>)+${newLine})+` <= same as => /([\w\.\ 0-9](<br><\/br>)+[\n\r])+/
+ */
+function RegExpX() {
+	// get the string exactly as typed ==> no further escaping necessary
+	const raw = String.raw.apply(String, arguments)
+	// remove all '#'+string which are not escaped, i.e. preceded my an odd number of '\'
+	.replace(/(\\*)#.*/g, (m, bs) => bs.length % 2 ? m.slice(1) : bs)
+	// do the same for all whitespaces afterwards, so that sections behind escaped '#' are processed
+	.replace(/(\\*)\s/g, (m, bs) => bs.length % 2 ? m.slice(1) : bs);
+
+	// flags may optionally be appended after a (not escaped) closing '/'. (The opening '/' is implicit)
+	const end = /(\\*)\/(.*)/g;
+	let mods; do {
+		mods = end.exec(raw); // find slash
+	} while (mods && mods[1].length % 2 !== 0 && (end.lastIndex -= mods[2].length)); // repeat if slash was escaped
+
+	return mods ? new RegExp(raw.slice(0, -(mods[2].length + 1)), mods[2]) : new RegExp(raw);
+}
+
+/**
+ * Fills or truncates a string so that 'string'.length === 'length'
  * @param  {string} string input, will be casted to string
  * @param  {uint}   length length the output will have, defaults to string.length
  * @param  {char}   fill   char used to add padding, defaults to '0'
@@ -25,10 +62,10 @@ const randomHex = exports.randomHex = function randomHex(length) {
 };
 
 /**
- * generste a GUID, e.g.: 6f2e78a1-c4f3-4895-b58b-347f92fb2d14
+ * generste a GUID, e.g.: 6f2e78a1-c4f3-4895-858b-347f92fb2d14
  */
 const Guid = exports.Guid = function Guid() {
-	return [ randomHex(8), randomHex(4), randomHex(4), randomHex(4), randomHex(8) + randomHex(8), ].join('-');
+	return [ randomHex(8), randomHex(4), '4'+ randomHex(3), '8'+ randomHex(3), randomHex(8) + randomHex(8), ].join('-');
 };
 
 /**

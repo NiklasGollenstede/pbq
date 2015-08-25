@@ -15,18 +15,24 @@
  *             \/ # an escaped slash
  *             \# not a comment
  *             /g` <= same as => /[\n ]\/#notacomment/g
+ *     RegExpX`^ . * ? x / g i m` <= smae as => /^.*?x/gim
  * As a plus, you can also use variables in your RegExp's, e.g.:
- * var newLine = '[\\n\\r]';
- * var sentence = '[\\w\\.\\ 0-9]';
- * RegExpX`(${sentence}(<br><\/br>)+${newLine})+` <= same as => /([\w\.\ 0-9](<br><\/br>)+[\n\r])+/
+ *     var newLine = '[\\n\\r]'; // string
+ *     var sentence = /[\w\.\ 0-9]/; // RegExp (modifiers ignored)
+ *     RegExpX`(${sentence}(<br><\/br>)+${newLine})+` <= same as => /([\w\. 0-9](<br><\/br>)+[\n\r])+/
  */
 function RegExpX() {
+	// use '.source' property if variable is a RegExp
+	for (let i = 1, l = arguments.length; i < l; ++i) {
+		arguments[i] && arguments[i].source && (arguments[i] = arguments[i].source);
+	}
 	// get the string exactly as typed ==> no further escaping necessary
 	const raw = String.raw.apply(String, arguments)
 	// remove all '#'+string which are not escaped, i.e. preceded my an odd number of '\'
-	.replace(/(\\*)#.*/g, (m, bs) => bs.length % 2 ? m.slice(1) : bs)
+	.replace(/(\\*)#.*/g, unescapeOrRemove)
 	// do the same for all whitespaces afterwards, so that sections behind escaped '#' are processed
-	.replace(/(\\*)\s/g, (m, bs) => bs.length % 2 ? m.slice(1) : bs);
+	.replace(/(\\*)\s/g, unescapeOrRemove);
+	function unescapeOrRemove(m, bs) { return bs.length % 2 ? m.slice(1) : bs; }
 
 	// flags may optionally be appended after a (not escaped) closing '/'. (The opening '/' is implicit)
 	const end = /(\\*)\/(.*)/g;

@@ -393,7 +393,7 @@ TemplateEngine.prototype = {
 			return callback.call(thisArg, top.array[top.index], top.index, top.array);
 		}
 		return callback.apply(thisArg, args.map(function(value) {
-			const tupel = this.find(value.name);
+			const tupel = value.command === value ? this.top() : this.find(value.name);
 			// console.log('tupel', tupel, value);
 			if (value.command === Value) {
 				return tupel.array[tupel.index];

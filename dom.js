@@ -38,17 +38,15 @@ const clickElement = exports.clickElement = function clickElement(element, win) 
 	return evt;
 };
 
+/**
+ * Invokes a save dialogue for a Blob object.
+ * @param  {Blob}    content The Blob to save.
+ * @param {string}   name    The suggested file name.
+ * @param  {window}  win     A window object to use instead of the global window.
+ * @return {void}
+ */
 const saveAs = exports.saveAs = function saveAs(content, name, win) {
 	win = win || window;
-
-	if (typeof content.generate === 'function') {
-		try { // gen blob if zip
-			content = content.generate({type:"blob"});
-		} catch (error) {
-			content = content.generate({type:"uint8array"});
-			content = new win.Blob([ content, ], { type: 'application/octet-binary', });
-		}
-	}
 
 	let link = Object.assign(win.document.createElement('a'), {
 		download: name,

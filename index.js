@@ -9,9 +9,6 @@ exports = {
 	get dom() {
 		return require('es6lib/dom');
 	},
-	get firefox() {
-		return require('es6lib/firefox');
-	},
 	get format() {
 		return require('es6lib/format');
 	},

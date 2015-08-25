@@ -25,18 +25,16 @@ exports = (typeof module !== 'undefined') ? (() => {
 })() : (() => {
 	// content script
 	const onError = error => {
-		try {
-			unsafeWindow.console.error('error', error);
-		} catch (e) { }
+		// preserve Error objects through the JSON console.
 		if (error instanceof Error) {
-			error.json = [ 'columnNumber', 'fileName', 'lineNumber', 'message', 'stack', ]
+			error = [ 'columnNumber', 'fileName', 'lineNumber', 'message', 'stack', ]
 			.reduce((json, key) => ((json[key] = error[key]), json), { });
 		}
 		self.port.emit("reject", error);
 	};
 
 	try {
-		Promise.resolve(new String.constructor(self.options)()) // i.e. new Function(script)
+		Promise.resolve(new String.constructor(self.options)()) // i.e. new Function(script), but 'script' was a function before and moves from more to less trusted code, so this is secure.
 		.then(value => self.port.emit("resolve", value))
 		.catch(onError);
 	} catch(error) {

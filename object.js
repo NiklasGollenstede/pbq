@@ -17,6 +17,7 @@ const checkNativeType = exports.checkNativeType = function checkNativeType(objec
 	return Object.prototype.toString.call(object).indexOf(constructorName, 8) === 8;
 };
 
+// TODO: handle circular objects!!
 const copyProperties = exports.copyProperties = function copyProperties(target, source/*, ...more*/) {
 	for (let key in source) {
 		if (checkNativeType(source[key], "Object")) {
@@ -30,8 +31,7 @@ const copyProperties = exports.copyProperties = function copyProperties(target, 
 		}
 	}
 	if (arguments.length > 2) {
-		const args = Array.prototype.slice.call(arguments);
-		args.splice(1, 1);
+		const args = Array.prototype.slice.call(arguments, 1);
 		return copyProperties.apply(null, args);
 	}
 	return target;

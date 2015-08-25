@@ -4,19 +4,20 @@ const XHR = (typeof XMLHttpRequest !== 'undefined') ? XMLHttpRequest : require('
 
 /**
  * Constructs an XMLHttpRequest from the given url and options and returns a Promise
- * that is fulfilled with the request once the result is loaded or canceld with an ProgressEvent if an error occurs
- * @param {string} url     destination url, may be property of options (url or src)
+ * that is fulfilled with the request once the result is loaded or canceld with an ProgressEvent if an error occurs.
+ * @param {string} url     Destination url, may be omited in favor of the url or src property of the options object.
  * @param {Object} options optional object of:
- *                         @attribute {string}  method            HTTP request method
- *                         @attribute {string}  user              HTTP user name
- *                         @attribute {string}  password          HTTP password
- *                         @attribute {object}  header            HTTP header key/value-pairs (strings)
- *                         @attribute {string}  responseType      XHR response type, influences the type of the promisedrequest.response
- *                         @attribute {uint}    timeout           requests timeout
- *                         @attribute {string}  overrideMimeType  overwrites the mime type of the requests body
- *                         @attribute {any}     body              body to send with the request
- *                         @attribute {bool}    mozAnon           mozilla privileged code only, don't send any session/login data
- *                         @attribute {bool}    mozSystem         mozilla privileged code only, allow cross side request
+ *     @property {string}  url || src        optional replacement for the url panameter
+ *     @property {string}  method            HTTP request method
+ *     @property {string}  user              HTTP user name
+ *     @property {string}  password          HTTP password
+ *     @property {object}  header            HTTP header key/value-pairs (strings)
+ *     @property {string}  responseType      XHR response type, influences the type of the promisedrequest.response
+ *     @property {uint}    timeout           requests timeout
+ *     @property {string}  overrideMimeType  overwrites the mime type of the requests body
+ *     @property {any}     body              body to send with the request
+ *     @property {bool}    mozAnon           mozilla privileged code only, don't send any session/login data
+ *     @property {bool}    mozSystem         mozilla privileged code only, allow cross side request
  */
 const HttpRequest = exports.HttpRequest = function HttpRequest(url, options) {
 	var request, cancel;
@@ -60,6 +61,24 @@ function cancelWith(reject, reason) {
 	reject(error);
 }
 
+/**
+ * Converts an ArrayBuffer into a binary string, where each char represents a byte of the buffer.
+ * @param  {ArrayBuffer}   buffer   The input buffer
+ * @return {string}        string with .length === buffer.length
+ */
+const arrayBufferToString = exports.arrayBufferToString = function arrayBufferToString(buffer) {
+	buffer = new Uint8Array(buffer);
+	const ret = new Array(buffer.length);
+	for (let i = 0, length = buffer.length; i < length; ++i) {
+		ret[i] = String.fromCharCode(buffer[i]);
+	}
+	return ret.join('');
+};
+
+/**
+ * Map object from file extensions to mime-types
+ * @type {object}
+ */
 const mimeTypes = exports.mimeTypes = {
 	bmp: 'image/bmp',
 	css: 'text/css',

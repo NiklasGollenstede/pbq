@@ -27,7 +27,7 @@ exports = (typeof module !== 'undefined') ? (() => {
 	const onError = error => {
 		// preserve Error objects through the JSON console.
 		if (error instanceof Error) {
-			error = [ 'columnNumber', 'fileName', 'lineNumber', 'message', 'stack', ]
+			error = [ 'columnNumber', 'fileName', 'lineNumber', 'message', 'stack', 'type', ]
 			.reduce((json, key) => ((json[key] = error[key]), json), { });
 		}
 		self.port.emit("reject", error);

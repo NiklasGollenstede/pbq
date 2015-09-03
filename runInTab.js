@@ -28,7 +28,7 @@ if (typeof module !== 'undefined') {
 
 		const worker = tab.attach({
 			contentScriptFile: modules,
-			contentScriptOptions: { script: `return (${ script })()`, args, },
+			contentScriptOptions: { script: `return (${ script }).apply(this, arguments)`, args, },
 		});
 		worker.port.on("resolve", value => {
 			worker.destroy();

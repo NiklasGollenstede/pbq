@@ -23,12 +23,12 @@ const HttpRequest = exports.HttpRequest = function HttpRequest(url, options) {
 	var request, cancel;
 	const o = arguments[arguments.length - 1] || { };
 	return Object.assign(new Promise(function(resolve, reject) {
-		o === url && (url = o.url || o.src);
+		typeof url !== 'string' && (url = o.url || o.src);
 
 		request = new XHR(o);
 		cancel = cancelWith.bind(request, reject);
 
-		request.open(o.method || "get", o.url, true, o.user, o.password);
+		request.open(o.method || "get", url, true, o.user, o.password);
 
 		o.responseType && (request.responseType = o.responseType);
 		o.timeout && (request.timeout = o.timeout);

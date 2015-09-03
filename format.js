@@ -146,7 +146,7 @@ const numberToRoundString = exports.numberToRoundString = function numberToRound
 const QueryObject = exports.QueryObject = function QueryObject(query, key, value) {
 	value = value || '=';
 	const self = (this instanceof QueryObject) ? this : Object.create(QueryObject.prototype);
-	query.split(key || /[&#?]+/)
+	String.split(query, key || /[&#?]+/)
 	.map(function(string) { return string.split(value); })
 	.forEach(function(pair) { pair[0] && (self[pair[0]] = pair[1]); });
 };

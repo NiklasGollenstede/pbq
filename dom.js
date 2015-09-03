@@ -40,28 +40,30 @@ const clickElement = exports.clickElement = function clickElement(element, win) 
 
 /**
  * Invokes a save dialogue for a Blob object.
- * @param  {Blob}    content The Blob to save.
- * @param {string}   name    The suggested file name.
- * @param  {window}  win     A window object to use instead of the global window.
+ * @param  {Blob|Url}  content The Blob or Url to save.
+ * @param  {string}    name    The suggested file name.
+ * @param  {window}    win     A window object to use instead of the global window.
  * @return {void}
  */
 const saveAs = exports.saveAs = function saveAs(content, name, win) {
 	win = win || window;
+	const isBlob = content.type && typeof content.type === 'string';
 
 	let link = Object.assign(win.document.createElement('a'), {
 		download: name,
-		href: win.URL.createObjectURL(content),
+		target: '_blank', // fallback
+		href: isBlob ? win.URL.createObjectURL(content) : content,
 	});
 
 	clickElement(link, win);
 
-	timeout(function() { win.URL.revokeObjectURL(link.href); }, 1000);
+	isBlob && timeout(function() { win.URL.revokeObjectURL(link.href); }, 1000);
 };
 
 const once = exports.once = function once(element, event, callback, capture) {
 	function handler() {
 		element.removeEventListener(event, handler, capture);
-		callback.apply(null, arguments);
+		callback.apply(this, arguments);
 	}
 	element.addEventListener(event, handler, capture);
 };

@@ -81,7 +81,7 @@ const Call = exports.Call = function Call(args, callback, thisArg) {
 };
 
 // read-only-assign 'command' properties to each ControlFlowElement function, so that they can be used like their return values
-Object.keys(exports).forEach(key => Object.defineProperty(exports[key], 'command', { value: exports[key], }));
+Object.keys(exports).forEach(function(key) { Object.defineProperty(exports[key], 'command', { value: exports[key], }); });
 
 /**
  * Ends a ControlFlowElement's branch
@@ -108,12 +108,13 @@ function noMaptoString() { return this && this.value || ''; }
  * as "TemplateEngine(options)" with (additional) Options
  * or as a template string processor ("TemplateEngine`template${string}`").
  * So calling "TemplateEngine(options)`template${string}`" will process the string with the given options.
- * @param {object|Function}   options   Object containing
- *                            @attribute {string}    trim    Trimming options, may contain
- *                                 'front' which removes any whitespaces at the front of the result or
- *                                 'parts' which removes most whritspaces before and after skiped or control values.
- *                            @attribute {function}  mapper  Function that all value parts of the result will b passed through.
- *                                 May receive any type of (single) value and its result will be casted to string.
+ * @param  {object|Function}   options   Object containing
+ *         @attribute  {string}    trim    Trimming options, may contain
+ *                     'front' which removes any whitespaces at the front of the result or
+ *                     'parts' which removes most whritspaces before and after skiped or control values.
+ *         @attribute  {function}  mapper  Function that all value parts of the result will b passed through.
+ *                     May receive any type of (single) value and its result will be casted to string.
+ *         @attribute  {bool}      raw     Use raw string parts.
  * @param  {Array, ...any}    strings, ...vars  Arguments when called via "TemplateEngine`template${string}`".
  * @return {Function|string}  If called with options (with or without 'new') the same function with bound options.
  *                            If called as template string function, the processed string.
@@ -146,7 +147,7 @@ const TemplateEngine = exports.TemplateEngine = function TemplateEngine(options)
 	self.options.trim = self.options.trim || '';
 
 	// all string parts of the template string
-	self.strings = options;
+	self.strings = self.options.raw ? options.raw : options;
 	// all value parts that are ether ControlFlowElements or values to be mapped and concatted into the result string
 	self.vars = vars;
 	// the result stack, mix of string and processed value parts

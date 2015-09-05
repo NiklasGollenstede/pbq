@@ -1,6 +1,6 @@
 (function(exports) { 'use strict';
 
-const XHR = (typeof XMLHttpRequest !== 'undefined') ? XMLHttpRequest : require('sdk/net/xhr').XMLHttpRequest;
+var XHR; try { XHR = (typeof XMLHttpRequest !== 'undefined') ? XMLHttpRequest : require('sdk/net/xhr').XMLHttpRequest; } catch(e) { };
 
 /**
  * Constructs an XMLHttpRequest from the given url and options and returns a Promise

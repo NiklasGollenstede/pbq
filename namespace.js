@@ -1,4 +1,4 @@
-'use strict';
+(function(exports) { 'use strict';
 
 const NameSpace = exports.NameSpace = function NameSpace() {
 	const map = new WeakMap();
@@ -33,3 +33,5 @@ const Marker = exports.Marker = function Marker() {
 		return old;
 	};
 };
+
+const moduleName = 'es6lib/namespace'; if (typeof module !== 'undefined') { module.exports = exports; } else if (typeof define === 'function') { define(moduleName, exports); } else if (typeof window !== 'undefined' && typeof module === 'undefined') { window[moduleName] = exports; } return exports; })({ });

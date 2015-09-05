@@ -41,12 +41,23 @@ const spawn = exports.spawn = function spawn(generator, thisArg) {
 	return iterate('next');
 };
 
+/**
+ * Asynchronously executes a callback as soon as possible.
+ * @param  {function}  callback  Callback that will be executed without this or arguments.
+ */
+const async = exports.async = (function async(callback) {
+	const resolved = Promise.resolve();
+	return function async(callback) {
+		resolved.then(callback);
+	};
+});
+
 /* global setTimeout */
-const timeout = (typeof setTimeout !== 'undefined') ? setTimeout : require("sdk/timers").setTimeout;
+const timeout = exports.timeout = (typeof setTimeout !== 'undefined') ? setTimeout : require("sdk/timers").setTimeout;
 
 /**
- * @param  {uint}    ms  time to "sleep"
- * @return {Promise}     resolves to undefined after ms ms
+ * @param  {uint}    ms  Time to "sleep" in milliseconds
+ * @return {Promise}     Resolves to undefined after 'ms' milliseconds
  */
 const sleep = exports.sleep = function sleep(ms) {
 	return new Promise(function(done) { timeout(done, ms); });

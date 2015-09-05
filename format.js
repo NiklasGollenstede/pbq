@@ -21,7 +21,7 @@
  *     var sentence = /[\w\.\ 0-9]/; // RegExp (modifiers ignored)
  *     RegExpX`(${sentence}(<br><\/br>)+${newLine})+` <= same as => /([\w\. 0-9](<br><\/br>)+[\n\r])+/
  */
-function RegExpX() {
+const RegExpX = exports.RegExpX = function RegExpX() {
 	// use '.source' property if variable is a RegExp
 	for (let i = 1, l = arguments.length; i < l; ++i) {
 		arguments[i] && arguments[i].source && (arguments[i] = arguments[i].source);

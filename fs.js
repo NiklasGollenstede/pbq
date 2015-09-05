@@ -29,6 +29,7 @@ const FS = exports.FS = (function() {
 	return Object.freeze(FS);
 })();
 
+// TODO: reimplement (licence?)
 function walk(dir, done) {
 	var results = [ ];
 	fs.readdir(dir, function(err, list) {

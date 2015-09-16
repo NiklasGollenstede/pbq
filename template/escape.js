@@ -39,8 +39,12 @@ const toString = exports.toString = function toString(any) {
 const removeTags = exports.removeTags = function removeTags(html) {
 	const newLine = this && this.newLine || '\n';
 	const space = this && this.space || '';
-	return String.replace(html, /(<\/?.*?>)+/g, function(match) {
-		if (/<(br|\/div)>/.test(match)) {
+	const linkReplacer = this && this.linkReplacer || function(link, href, text) {
+		return '['+ text +'] ('+ href +')';
+	};
+	return String.replace(html, /<a[^>]+?href="?([^>"]*)"?[^]*?>([^]*?)<\/a>/g, linkReplacer)
+	.replace(/(<\/?.*?>)+/g, function(tag) {
+		if (/<(br|\/div)>/.test(tag)) {
 			return newLine;
 		}
 		return space;

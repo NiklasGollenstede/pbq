@@ -59,6 +59,7 @@ const tryCopyProperties = exports.tryCopyProperties = function tryCopyProperties
 
 const setConst = exports.setConst = function setConst(object, key, value) {
 	Object.defineProperty(object, key, { value, enumerable: true, });
+	return value;
 };
 
 const moduleName = 'es6lib/object'; if (typeof module !== 'undefined') { module.exports = exports; } else if (typeof define === 'function') { define(moduleName, exports); } else if (typeof window !== 'undefined' && typeof module === 'undefined') { window[moduleName] = exports; } return exports; })({ });

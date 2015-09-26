@@ -1,6 +1,7 @@
 (function(exports) { 'use strict';
 
-var XHR; try { XHR = (typeof XMLHttpRequest !== 'undefined') ? XMLHttpRequest : require('sdk/net/xhr').XMLHttpRequest; } catch(e) { };
+/* global XMLHttpRequest */
+var XHR; try { XHR = (typeof XMLHttpRequest !== 'undefined') ? XMLHttpRequest : require('sdk/net/xhr').XMLHttpRequest; } catch(e) { }
 
 /**
  * Constructs an XMLHttpRequest from the given url and options and returns a Promise
@@ -33,7 +34,7 @@ const HttpRequest = exports.HttpRequest = function HttpRequest(url, options) {
 		o.responseType && (request.responseType = o.responseType);
 		o.timeout && (request.timeout = o.timeout);
 		o.overrideMimeType && request.overrideMimeType(o.overrideMimeType);
-		o.header && Object.keys(o.header).forEach(function(key) { request.setRequestHeader(key, header[key]); });
+		o.header && Object.keys(o.header).forEach(function(key) { request.setRequestHeader(key, o.header[key]); });
 
 		request.onerror = reject;
 		request.ontimeout = reject;
@@ -53,6 +54,7 @@ const HttpRequest = exports.HttpRequest = function HttpRequest(url, options) {
 	});
 };
 function cancelWith(reject, reason) {
+	/* global ProgressEvent */
 	const error = new ProgressEvent(reason);
 	this.dispatchEvent(error); // side effects ??
 	reject(error);

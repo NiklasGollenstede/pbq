@@ -1,9 +1,9 @@
 (function(exports) { 'use strict';
 
 /**
- * turns an asynchronous callback function into one that returns a promise
- * @param  {function} async function that takes an callback(error, value) as last argument
- * @return {function}       function that returns a Promise to it's asyncronous value
+ * Turns an asynchronous callback method into one that returns a promise
+ * @param  {function} async  Method that takes an callback(error, value) as last argument
+ * @return {function}        Method that returns a Promise to it's asyncronous value
  */
 const promisify = exports.promisify = function promisify(async) {
 	return function() {
@@ -16,8 +16,8 @@ const promisify = exports.promisify = function promisify(async) {
 };
 
 /**
- * asynchronous task spawner
- * @param  {function*}  generator  generator function that yields promises to asynchronous values which are returned to the generator once the promises are fullfilled
+ * Asynchronous task spawner. Supset of Task.js
+ * @param  {function*}  generator  Generator function that yields promises to asynchronous values which are returned to the generator once the promises are fullfilled
  * @return {Promise}               Promise of the return value of the generator
  */
 const spawn = exports.spawn = function spawn(generator, thisArg) {
@@ -50,7 +50,7 @@ const async = exports.async = (function async(callback) {
 	return function async(callback) {
 		resolved.then(callback);
 	};
-});
+})();
 
 /* global setTimeout */
 const timeout = exports.timeout = (typeof setTimeout !== 'undefined') ? setTimeout : require("sdk/timers").setTimeout;

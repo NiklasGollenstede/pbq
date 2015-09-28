@@ -16,12 +16,14 @@ const promisify = exports.promisify = function promisify(async) {
 };
 
 /**
- * Asynchronous task spawner. Supset of Task.js
+ * Asynchronous task spawner. Supset of Task.js. Executes immediately.
  * @param  {function*}  generator  Generator function that yields promises to asynchronous values which are returned to the generator once the promises are fullfilled
+ * @param  {object}     thisArg    'this' in generator
+ * @param  {Arguments}  args       Arguments for generator
  * @return {Promise}               Promise of the return value of the generator
  */
-const spawn = exports.spawn = function spawn(generator, thisArg) {
-	const iterator = generator.call(thisArg);
+const spawn = exports.spawn = function spawn(generator, thisArg, args) {
+	const iterator = generator.apply(thisArg, args);
 	const onFulfilled = iterate.bind(null, 'next');
 	const onRejected = iterate.bind(null, 'throw');
 
@@ -42,12 +44,23 @@ const spawn = exports.spawn = function spawn(generator, thisArg) {
 };
 
 /**
- * Asynchronously executes a callback as soon as possible.
+ * Asynchronous task spawner. Supset of Task.js. Executes when called. Forwards this and arguments.
+ * @param  {function*}  generator  Generator function that yields promises to asynchronous values which are returned to the generator once the promises are fullfilled
+ * @return {Promise}               Async (member) function
+ */
+const async = exports.async = function async(generator) {
+	return function async(/*arguments*/) {
+		return spawn(generator, this, arguments);
+	};
+};
+
+/**
+ * Instantly asynchronously executes a callback as soon as possible.
  * @param  {function}  callback  Callback that will be executed without this or arguments.
  */
-const async = exports.async = (function async(callback) {
+const instantly = exports.instantly = (function instantly(callback) {
 	const resolved = Promise.resolve();
-	return function async(callback) {
+	return function instantly(callback) {
 		resolved.then(callback);
 	};
 })();

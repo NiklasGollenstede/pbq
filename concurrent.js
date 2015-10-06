@@ -71,9 +71,9 @@ const async = exports.async = function async(name, generator) {
 			return spawn(generator, this, arguments);
 		};
 	} else {
-		return new Function('generator', 'return function '+ name +'() {\
+		return new Function('spawn, generator', 'return function '+ name +'() {\
 			return spawn(generator, this, arguments);\
-		}')(generator);
+		}')(spawn, generator);
 	}
 };
 

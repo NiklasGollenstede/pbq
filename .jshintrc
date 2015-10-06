@@ -7,10 +7,11 @@
 	"-W093": false, // Did you mean to return a conditional instead of an assignment?
 
 	"curly": true,
-	"newcap": false,
-	"undef": false,
 	"eqnull": true,
 	"laxbreak": true,
+	"multistr": true,
+	"newcap": false,
+	"undef": false,
 	"validthis": true,
 
 	"esnext": true,

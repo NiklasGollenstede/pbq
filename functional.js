@@ -13,6 +13,37 @@ const noop = exports.noop = (function(self) {
 }
 
 /**
+ * Function.prototype.apply optimised for the common case (no this and/or few arguments).
+ * @param  {Function}   callback The function to call
+ * @param  {any}        self     Optional this for callback
+ * @param  {Arguments}  args     Optional argument (array-like) for callback
+ * @return {any}                 Callbacks return value
+ */
+const apply = exports.apply = function apply(callback, self, args) {
+	if (!args || !args.length) {
+		if (!self) {
+			return callback();
+		} else {
+			return callback.call(self);
+		}
+	}
+	switch (args.length) {
+		case 1: {
+			return callback.call(self, args[0]);
+		} break;
+		case 2: {
+			return callback.call(self, args[0], args[1]);
+		} break;
+		case 3: {
+			return callback.call(self, args[0], args[1], args[2]);
+		} break;
+		default: {
+			return callback.apply(self, args);
+		}
+	}
+};
+
+/**
  * console.log's it's arguments
  * @return {any} the last argument
  */

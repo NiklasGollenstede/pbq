@@ -5,14 +5,16 @@
  * When called with an arbitrary object, an instance returns a shadow object associated with that particular object.
  * The shadow object can be used to store "namespaced" properties.
  * Since the NameSpace instance is the only way to obtain the shadow object, these properties are truly private.
+ * @param  {object}  proto  optional __proto__ of all shadow objects.
  * @throws {TypeError} If called with non-object argument.
  */
-const NameSpace = exports.NameSpace = function NameSpace() {
+const NameSpace = exports.NameSpace = function NameSpace(proto) {
+	typeof proto === 'object' || (proto = Object.prototype);
 	const map = new WeakMap();
 	return function(key) {
 		let value = map.get(key);
 		if (value === undefined) {
-			map.set(key, value = { });
+			map.set(key, value = Object.create(proto));
 		}
 		return value;
 	};
@@ -20,16 +22,18 @@ const NameSpace = exports.NameSpace = function NameSpace() {
 
 /**
  * IterableNameSpace, similar to NameSpace, but holds strong references to the arguments it is called with.
+ * @param  {object}  proto  optional __proto__ of all shadow objects.
  * @method forEach  Iterate the internal Map.
  * @method destroy  Reset the instance and drop all references.
  * Doesn't throw if called with non-object argument.
  */
-const IterableNameSpace = exports.IterableNameSpace = function IterableNameSpace() {
+const IterableNameSpace = exports.IterableNameSpace = function IterableNameSpace(proto) {
+	typeof proto === 'object' || (proto = Object.prototype);
 	const map = new Map();
 	return Object.assign(function(key) {
 		let value = map.get(key);
 		if (value === undefined) {
-			map.set(key, value = { });
+			map.set(key, value = Object.create(proto));
 		}
 		return value;
 	}, {

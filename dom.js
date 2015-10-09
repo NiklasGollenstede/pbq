@@ -177,4 +177,13 @@ const notify = exports.notify = function notify(options) {
 	});
 };
 
+const DOMContentLoaded = exports.DOMContentLoaded = new Promise(function(resolve, reject) {
+	if (typeof document !== 'object') { return reject(); }
+	if (document.readyState !== 'interactive' && document.readyState !== 'complete') {
+		document.addEventListener('DOMContentLoaded', resolve);
+	} else {
+		resolve();
+	}
+});
+
 const moduleName = 'es6lib/dom'; if (typeof module !== 'undefined') { module.exports = exports; } else if (typeof define === 'function') { define(moduleName, exports); } else if (typeof window !== 'undefined' && typeof module === 'undefined') { window[moduleName] = exports; } return exports; })({ });

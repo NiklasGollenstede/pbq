@@ -10,6 +10,7 @@ var XHR; try { XHR = (typeof XMLHttpRequest !== 'undefined') ? XMLHttpRequest : 
  * @param {Object} options optional object of:
  *     @property {string}  url || src        optional replacement for the url panameter
  *     @property {string}  method            HTTP request method
+ *     @property {bool}    xhr               Set to false to not set the 'X-Requested-With' header to 'XMLHttpRequest'
  *     @property {string}  user              HTTP user name
  *     @property {string}  password          HTTP password
  *     @property {object}  header            HTTP header key/value-pairs (strings)
@@ -34,12 +35,13 @@ const HttpRequest = exports.HttpRequest = function HttpRequest(url, options) {
 		o.responseType && (request.responseType = o.responseType);
 		o.timeout && (request.timeout = o.timeout);
 		o.overrideMimeType && request.overrideMimeType(o.overrideMimeType);
+		(o.xhr == null || o.xhr) && request.setRequestHeader('X-Requested-With', 'XMLHttpRequest');
 		o.header && Object.keys(o.header).forEach(function(key) { request.setRequestHeader(key, o.header[key]); });
 
 		request.onerror = reject;
 		request.ontimeout = reject;
 		request.onload = function(event) {
-			if (request.status == 200) {
+			if (request.status >= 200 && request.status < 300) {
 				resolve(request);
 			} else {
 				cancel('bad status');

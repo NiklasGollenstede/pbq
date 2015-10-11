@@ -19,7 +19,7 @@ const checkNativeType = exports.checkNativeType = function checkNativeType(objec
 
 // TODO: handle circular objects!!
 const copyProperties = exports.copyProperties = function copyProperties(target, source/*, ...more*/) {
-	for (let key in source) {
+	for (var key in source) {
 		if (checkNativeType(source[key], "Object")) {
 			target[key] = target[key] || { };
 			copyProperties(target[key], source[key]);
@@ -38,7 +38,7 @@ const copyProperties = exports.copyProperties = function copyProperties(target, 
 };
 
 const tryCopyProperties = exports.tryCopyProperties = function tryCopyProperties(target, source/*, ...more*/) {
-	for (let key in source) {
+	for (var key in source) {
 		if (checkNativeType(source[key], "Object")) {
 			try { target[key] = target[key] || { }; } catch (e) { }
 			tryCopyProperties(target[key], source[key]);

@@ -6,33 +6,34 @@ const unTimeout = (typeof clearTimeout !== 'undefined') ? clearTimeout : require
 
 const copyProperties = require('es6lib/object').copyProperties;
 
+exports.document = typeof document !== 'undefined' ? document : null;
 
 const inIframe = exports.inIframe = function inIframe() {
 	try { return (window.self !== window.top); } catch (e) { return true; }
 };
 
 const createElement = exports.createElement = function createElement(tagName, properties, childList) {
-	let element = document.createElement(tagName);
+	const element = (this || window).document.createElement(tagName);
 	copyProperties(element, properties);
-	for (let i = 0, child; childList && (child = childList[i]); ++i) {
+	for (var i = 0, child; childList && (child = childList[i]); ++i) {
 		element.appendChild(child);
 	}
 	return element;
 };
 
 const createStyleElement = exports.createStyleElement = function createStyleElement(css) {
-	let element = document.createElement("style");
+	const element = (this || window).document.createElement("style");
 	element.type = "text/css";
 	element.innerHTML = css;
 	return element;
 };
 
 const addStyle = exports.addStyle = function addStyle(css) {
-	return document.querySelector("head").appendChild(createStyleElement(css));
+	return (this || window).document.querySelector("head").appendChild(createStyleElement(css));
 };
 
 const clickElement = exports.clickElement = function clickElement(element, win) {
-	const evt = (win || window).document.createEvent('MouseEvents');
+	const evt = (win || this || window).document.createEvent('MouseEvents');
 	evt.initEvent('click', true, true);
 	element.dispatchEvent(evt);
 	return evt;
@@ -46,10 +47,10 @@ const clickElement = exports.clickElement = function clickElement(element, win) 
  * @return {void}
  */
 const saveAs = exports.saveAs = function saveAs(content, name, win) {
-	win = win || window;
+	win = win || this || window;
 	const isBlob = content.type && typeof content.type === 'string';
 
-	let link = Object.assign(win.document.createElement('a'), {
+	const link = Object.assign(win.document.createElement('a'), {
 		download: name,
 		target: '_blank', // fallback
 		href: isBlob ? win.URL.createObjectURL(content) : content,
@@ -70,9 +71,11 @@ const once = exports.once = function once(element, event, callback, capture) {
 
 const getSelector = exports.getSelector = function getSelector(element, prev) {
 	prev = prev || '';
-	if (!element || element === document) { return prev.slice(1); }
-	return getSelector(
-		element.parentNode, '>'+ element.tagName
+	if (!element || element === (this || window).document) { return prev.slice(1); }
+	return getSelector.call(
+		this,
+		element.parentNode,
+		'>'+ element.tagName
 		+ (element.id ? '#'+ element.id : '')
 		+ (element.className ? '.'+ element.className.replace(/ +/g, '.') : '')
 		+ prev
@@ -80,7 +83,7 @@ const getSelector = exports.getSelector = function getSelector(element, prev) {
 };
 
 const onElementChanged = exports.onElementChanged = function onElementChanged(element, attributeFilter, callback) {
-	return new MutationObserver(function(mutations, observer) {
+	return new (this || window).MutationObserver(function(mutations, observer) {
 		mutations.forEach(function(mutation) {
 			if (mutation.target.getAttribute(mutation.attributeName) != mutation.oldValue) {
 				try { callback(mutation.target, mutation.oldValue); } catch(e) {  }
@@ -94,11 +97,11 @@ const Self = new WeakMap();
 const CreationObserver = exports.CreationObserver = function CreationObserver(element) {
 	const listeners = [/*{ callback: function(){}, selector: string [, single: true] }*/];
 	const observer = new MutationObserver(function(mutations, observer) {
-		for (let mutation of mutations) {
-			for (let j = 0, element; (element = mutation.addedNodes[j]); j++) {
+		for (var mutation of mutations) {
+			for (var j = 0, element; (element = mutation.addedNodes[j]); j++) {
 				elementCreated(listeners, element);
 				if (element.querySelectorAll) {
-					for (let list = element.querySelectorAll("*"),
+					for (var list = element.querySelectorAll("*"),
 						i=0; (element = list[i]); i++) {
 						elementCreated(listeners, element);
 					}
@@ -122,31 +125,31 @@ function elementCreated(listeners, element) {
 	});
 }
 CreationObserver.prototype.add = function(selector, callback, single) {
-	let self = Self.get(this);
+	const self = Self.get(this);
 	if (self.listeners.find(function(item) { return item.selector == selector && item.callback == callback && !item.single === !single; })) { return; }
 	self.listeners.push({ selector: selector, callback: callback, single: single });
 	self.listeners.length == 1 && self.observe(self.element, { subtree: true, childList: true });
 };
 CreationObserver.prototype.remove = function(selector, callback, single) {
-	let self = Self.get(this);
-	let length = self.listeners.length;
+	const self = Self.get(this);
+	const length = self.listeners.length;
 	self.listeners.filter(function(item) { return !item.selector == selector && item.callback == callback && !item.single == !single; });
 	self.listeners.length === 0 && self.disconnect();
 	return length - self.listeners.length;
 };
 CreationObserver.prototype.single = function(selector, callback) {
-	let element;
-	if ((element = Self.get(this).element.querySelector(selector))) {
+	const element = Self.get(this).element.querySelector(selector);
+	if (element) {
 		timeout(callback.bind(undefined, element), 0);
 	} else {
 		this.add(selector, callback, true);
 	}
 };
 CreationObserver.prototype.all = function(selector, callback) {
-	let alreadyExisting = Self.get(this).element.querySelectorAll(selector);
+	const alreadyExisting = Self.get(this).element.querySelectorAll(selector);
 	this.add(selector, callback, false);
 
-	for (let element, i = 0; (element = alreadyExisting[i]); i++) {
+	for (var element, i = 0; (element = alreadyExisting[i]); i++) {
 		timeout(callback.bind(undefined, element), 0);
 	}
 };
@@ -154,7 +157,7 @@ CreationObserver.prototype.all = function(selector, callback) {
 const notify = exports.notify = function notify(options) {
 	return new Promise(function(resolve, reject) {
 		function doIt() {
-			let self = new Notification(options.title, options);
+			const self = new Notification(options.title, options);
 			self.onclick = resolve;
 			self.onerror = reject;
 			self.onclose = reject;

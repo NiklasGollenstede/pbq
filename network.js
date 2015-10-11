@@ -70,7 +70,7 @@ function cancelWith(reject, reason) {
 const arrayBufferToString = exports.arrayBufferToString = function arrayBufferToString(buffer) {
 	buffer = new Uint8Array(buffer);
 	const ret = new Array(buffer.length);
-	for (let i = 0, length = buffer.length; i < length; ++i) {
+	for (var i = 0, length = buffer.length; i < length; ++i) {
 		ret[i] = String.fromCharCode(buffer[i]);
 	}
 	return ret.join('');

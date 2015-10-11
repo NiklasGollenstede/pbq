@@ -12,7 +12,7 @@ const NameSpace = exports.NameSpace = function NameSpace(proto) {
 	typeof proto === 'object' || (proto = Object.prototype);
 	const map = new WeakMap();
 	return function(key) {
-		let value = map.get(key);
+		var value = map.get(key);
 		if (value === undefined) {
 			map.set(key, value = Object.create(proto));
 		}
@@ -31,7 +31,7 @@ const IterableNameSpace = exports.IterableNameSpace = function IterableNameSpace
 	typeof proto === 'object' || (proto = Object.prototype);
 	const map = new Map();
 	return Object.assign(function(key) {
-		let value = map.get(key);
+		var value = map.get(key);
 		if (value === undefined) {
 			map.set(key, value = Object.create(proto));
 		}

@@ -11,9 +11,18 @@ function extend(object, key, value) {
 // don't alarm static analysis by using 'Function' global
 const FunctionPrototypeCall = (function() { }).call;
 
-exports = function polyfill(global, options) {
+exports = function polyfill(subject, options) {
 
-	const String = global.String;
+	if (!subject) {
+		if (typeof global !== 'undefined') {
+			subject = global;
+		} else
+		if (typeof window !== 'undefined') {
+			subject = window;
+		}
+	}
+
+	const String = subject.String;
 	if (typeof String === 'function') {
 		[
 			'charAt',
@@ -49,7 +58,7 @@ exports = function polyfill(global, options) {
 		});
 	}
 
-	const Array = global.Array;
+	const Array = subject.Array;
 	if (typeof Array === 'function') {
 
 		if (!Array.prototype.find && Array.prototype.some) {
@@ -125,7 +134,7 @@ exports = function polyfill(global, options) {
 		});
 	}
 
-	const Object = global.Object;
+	const Object = subject.Object;
 	if (typeof Object === 'function') {
 
 		// from https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Object/assign

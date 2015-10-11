@@ -21,10 +21,10 @@ const checkNativeType = exports.checkNativeType = function checkNativeType(objec
 const copyProperties = exports.copyProperties = function copyProperties(target, source/*, ...more*/) {
 	for (var key in source) {
 		if (checkNativeType(source[key], "Object")) {
-			target[key] = target[key] || { };
+			!target[key] && (target[key] = { });
 			copyProperties(target[key], source[key]);
 		} else if (Array.isArray(source[key])) {
-			target[key] = target[key] || [ ];
+			!target[key] && (target[key] = [ ]);
 			copyProperties(target[key], source[key]);
 		} else {
 			target[key] = source[key];

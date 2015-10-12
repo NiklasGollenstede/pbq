@@ -110,7 +110,7 @@ const timeToRoundString = exports.timeToRoundString = function timeToRoundString
 	const one = [ "ms", "second", "minute", "hour", "day", "month", "year" ];
 	const sizes = [ 1000, 60, 60, 24, 30.4375, 12, Number.MAX_VALUE];
 	if (!time) { return "0"+ many[0]; }
-	const sign = "";
+	var sign = "";
 	if (time < 0) { time *= -1; sign = "-"; }
 	var i = 0;
 	while (time > sizes[i] * tolerance) {

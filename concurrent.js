@@ -62,18 +62,24 @@ const spawn = exports.spawn = function spawn(generator, thisArg, args) {
  * Asynchronous task spawner. Supset of Task.js. Executes when called. Forwards this and arguments.
  * @param  {string}     name       Optional function.name
  * @param  {function*}  generator  Generator function that yields promises to asynchronous values which are returned to the generator once the promises are fullfilled
+ * @param  {function}   catcher    Function that can .catch() exceptions thrown in generator
  * @return {Promise}               Async (member) function
  */
-const async = exports.async = function async(name, generator) {
-	if (arguments.length === 1) {
-		generator = name;
+const async = exports.async = function async(name, generator, catcher) {
+	if (typeof name === 'function') {
+		if (arguments.length > 2) { throw new TypeError('First of three arguments must be string'); }
+		catcher = generator; generator = name;
 		return function async(/*arguments*/) {
-			return spawn(generator, this, arguments);
+			return catcher
+			? spawn(generator, this, arguments).catch(catcher)
+			: spawn(generator, this, arguments);
 		};
 	} else {
-		return new Function('spawn, generator', 'return function '+ name +'() {\
-			return spawn(generator, this, arguments);\
-		}')(spawn, generator);
+		return new Function('spawn, generator, catcher', 'return function '+ name +'() {\
+			return catcher\
+			? spawn(generator, this, arguments).catch(catcher)\
+			: spawn(generator, this, arguments);\
+		}')(spawn, generator, catcher);
 	}
 };
 

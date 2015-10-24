@@ -62,4 +62,26 @@ const setConst = exports.setConst = function setConst(object, key, value) {
 	return value;
 };
 
+const extendPrototype = exports.extendPrototype = function extendPrototype(constructor, options, extend) {
+	!extend && (extend = options) && (options = { });
+	const freeze = options.freeze == null ? true : options.freeze;
+	const configurable = options.const == null ? false : options.const;
+	const proto = constructor.prototype;
+	Object.keys(extend).forEach(key => {
+		const enumerable = !(/^_/).test(key);
+		const descriptor = Object.getOwnPropertyDescriptor(extend, key);
+		Object.defineProperty(proto, key.slice(!enumerable), Object.assign(
+			descriptor, { configurable, enumerable, writable: configurable, }
+		));
+	});
+	if (freeze) {
+		Object.freeze(proto);
+		Object.defineProperty(constructor, 'prototype', {
+			configurable: false,
+			enumerable: false,
+		});
+	}
+	return constructor;
+};
+
 const moduleName = 'es6lib/object'; if (typeof module !== 'undefined') { module.exports = exports; } else if (typeof define === 'function') { define(moduleName, exports); } else if (typeof window !== 'undefined' && typeof module === 'undefined') { window[moduleName] = exports; } return exports; })({ });

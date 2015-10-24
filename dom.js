@@ -24,7 +24,7 @@ const createElement = exports.createElement = function createElement(tagName, pr
 const createStyleElement = exports.createStyleElement = function createStyleElement(css) {
 	const element = (this || window).document.createElement("style");
 	element.type = "text/css";
-	element.innerHTML = css;
+	element.textContent = css;
 	return element;
 };
 

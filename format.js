@@ -23,7 +23,7 @@
  */
 const RegExpX = exports.RegExpX = function RegExpX() {
 	// use '.source' property if variable is a RegExp
-	for (let i = 1, l = arguments.length; i < l; ++i) {
+	for (var i = 1, l = arguments.length; i < l; ++i) {
 		arguments[i] && arguments[i].source && (arguments[i] = arguments[i].source);
 	}
 	// get the string exactly as typed ==> no further escaping necessary
@@ -36,7 +36,7 @@ const RegExpX = exports.RegExpX = function RegExpX() {
 
 	// flags may optionally be appended after a (not escaped) closing '/'. (The opening '/' is implicit)
 	const end = /(\\*)\/(.*)/g;
-	let mods; do {
+	var mods; do {
 		mods = end.exec(raw); // find slash
 	} while (mods && mods[1].length % 2 !== 0 && (end.lastIndex -= mods[2].length)); // repeat if slash was escaped
 
@@ -80,8 +80,8 @@ const Guid = exports.Guid = function Guid() {
  */
 const secondsToHhMmSs = exports.secondsToHhMmSs = function secondsToHhMmSs(time) {
 	time = +time;
-	let hours = Math.floor(time / 3600); time = time % 3600;
-	let ret = Math.floor(time / 60) +":"+ (time % 60 < 10 ? ("0" + time % 60) : (time % 60));
+	const hours = Math.floor(time / 3600); time = time % 3600;
+	const ret = Math.floor(time / 60) +":"+ (time % 60 < 10 ? ("0" + time % 60) : (time % 60));
 	if (hours) { return hours + (ret.length > 4 ? ':' : ':0') +ret; }
 	return ret;
 };
@@ -106,13 +106,13 @@ const hhMmSsToSeconds = exports.hhMmSsToSeconds = function hhMmSsToSeconds(time)
  */
 const timeToRoundString = exports.timeToRoundString = function timeToRoundString(time, tolerance) {
 	time = +time; tolerance = +tolerance || 1;
-	let many = [ "ms", "seconds", "minutes", "hours", "days", "months", "years" ];
-	let one = [ "ms", "second", "minute", "hour", "day", "month", "year" ];
-	let sizes = [ 1000, 60, 60, 24, 30.4375, 12, Number.MAX_VALUE];
+	const many = [ "ms", "seconds", "minutes", "hours", "days", "months", "years" ];
+	const one = [ "ms", "second", "minute", "hour", "day", "month", "year" ];
+	const sizes = [ 1000, 60, 60, 24, 30.4375, 12, Number.MAX_VALUE];
 	if (!time) { return "0"+ many[0]; }
-	let sign = "";
+	var sign = "";
 	if (time < 0) { time *= -1; sign = "-"; }
-	let i = 0;
+	var i = 0;
 	while (time > sizes[i] * tolerance) {
 		time = Math.floor(time / sizes[i]);
 		i++;
@@ -129,7 +129,7 @@ const timeToRoundString = exports.timeToRoundString = function timeToRoundString
 const exponentAliases = { "-9": "p", "-6": "µ", "-3": "m", 0: "", 3: "k", 6: "M", 9: "G", 12: "T", };
 const numberToRoundString = exports.numberToRoundString = function numberToRoundString(number, digits) {
 	digits = (+digits > 0) ? Number.parseInt(digits) : 3;
-	let exponent = +number.toExponential(0).match(/e([+-]?\d+)/)[1];
+	var exponent = +number.toExponential(0).match(/e([+-]?\d+)/)[1];
 	exponent = Math.trunc((exponent > 0 ? exponent : exponent - 2) / 3) * 3;
 	number /= Math.pow(10, exponent);
 	digits -= number.toFixed(0).length;

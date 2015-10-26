@@ -83,6 +83,7 @@ const async = exports.async = function async(name, generator, catcher) {
 	}
 };
 
+if (typeof Promise !== 'undefined') {
 /**
  * Periodically calls callback until it returns a true'ish value.
  * @param  {Function}  callback  Function to repeatedly call.
@@ -92,14 +93,30 @@ const async = exports.async = function async(name, generator, catcher) {
  * @throws {Promise}             Retuned Promise is rejected if callback throws or returns a rejected Promise.
  */
 const periodic = exports.periodic = function periodic(callback, waitFor) {
-	if (!waitFor) {
+	// TODO: test & catch around waitFor()
+	typeof waitFor === 'function' || (waitFor = (function() { return this; }).bind(waitFor || 0));
+	return new Promise(function(resolve, reject) {
+		var expected = hrtime(), index = 0;
+		function ping() {
+			var value;
+			try { value = callback(); } catch (error) { reject(error); }
+			typeof value.then === 'function' ? value.then(pong, reject) : pong(value);
+		}
+		function pong(value) {
+			if (value) { return value; }
+			expected += waitFor(++index);
+			timeout(ping, expected - hrtime());
+		}
+		timeout(ping, waitFor(0));
+	});
+/*	if (!waitFor) {
 		return spawn(function*() {
 			var value;
 			while (!(value = (yield callback()))) { }
 			return value;
 		});
 	} else {
-		typeof waitFor === 'function' || (waitFor = (function() { return this; }).bind(waitFor));
+		typeof waitFor === 'function' || (waitFor = (function() { return this; }).bind(waitFor || 0));
 		return spawn(function*() {
 			var value, expected = hrtime(), index = 0;
 			while (!(value = (yield callback()))) {
@@ -109,7 +126,7 @@ const periodic = exports.periodic = function periodic(callback, waitFor) {
 			}
 			return value;
 		});
-	}
+	}*/
 };
 
 /**
@@ -122,5 +139,6 @@ const instantly = exports.instantly = (function instantly(callback) {
 		resolved.then(callback);
 	};
 })();
+}
 
 const moduleName = 'es6lib/concurrent'; if (typeof module !== 'undefined') { module.exports = exports; } else if (typeof define === 'function') { define(moduleName, exports); } else if (typeof window !== 'undefined' && typeof module === 'undefined') { window[moduleName] = exports; } return exports; })({ });

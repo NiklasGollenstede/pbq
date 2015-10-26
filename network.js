@@ -49,7 +49,7 @@ const HttpRequest = exports.HttpRequest = function HttpRequest(url, options) {
 		};
 		request.send(o.body);
 	}), {
-		abort() {
+		abort: function() {
 			request.abort();
 			cancel('canceled');
 		},

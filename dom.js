@@ -97,7 +97,7 @@ const Self = new WeakMap();
 const CreationObserver = exports.CreationObserver = function CreationObserver(element) {
 	const listeners = [/*{ callback: function(){}, selector: string [, single: true] }*/];
 	const observer = new MutationObserver(function(mutations, observer) {
-		for (var mutation of mutations) {
+		mutations.forEach(function(mutation) {
 			for (var j = 0, element; (element = mutation.addedNodes[j]); j++) {
 				elementCreated(listeners, element);
 				if (element.querySelectorAll) {
@@ -107,7 +107,7 @@ const CreationObserver = exports.CreationObserver = function CreationObserver(el
 					}
 				}
 			}
-		}
+		});
 		observer.takeRecords();
 	});
 	observer.listeners = listeners;

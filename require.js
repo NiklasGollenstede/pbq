@@ -12,7 +12,7 @@ const modules = new Map();
 
 window.define = function define(name, module) {
 	if (modules.has(name)) {
-		const error = new Error(`Module "${ name }" is already defined`);
+		const error = new Error('Module "'+ name +'" is already defined');
 		console.error(error);
 		throw error;
 	}
@@ -22,7 +22,7 @@ window.define = function define(name, module) {
 
 window.require = function require(name, module) {
 	if (!modules.has(name)) {
-		const error = new Error(`Can't find module "${ name }"`);
+		const error = new Error('Can\'t find module "'+ name +'"');
 		console.error(error);
 		throw error;
 	}

@@ -7,7 +7,7 @@ if (typeof Proxy !== 'undefined') {
  * Object/Function that returns itself on execution and every property access. Stateless
  */
 const noop = exports.noop = (function(self) {
-	return self = new Proxy(function() { return self; }, { get() { return self; }, set() { }, });
+	return self = new Proxy(function() { return self; }, { get: function() { return self; }, set: function() { }, });
 })();
 // { valueOf() { return NaN; }, toString() { return ''; }, } ??
 }
@@ -85,7 +85,7 @@ const Timer = exports.Timer = function Timer() {
  */
 const Counter = exports.Counter = function Counter(start) {
 	start = +start || 0;
-	return Object.assign(function() { return ++start; }, { get() { return start; }, });
+	return Object.assign(function() { return ++start; }, { get: function() { return start; }, });
 };
 
 /**

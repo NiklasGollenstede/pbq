@@ -7,7 +7,7 @@ const deepFreeze = exports.deepFreeze = function deepFreeze(object) {
 		if (typeof object !== 'object' || object === null || done.has(object)) { return; }
 		done.add(object);
 		Object.freeze(object);
-		Object.keys(object).forEach(key => doIt(object[key]));
+		Object.keys(object).forEach(function(key) { doIt(object[key]); });
 	}
 	doIt(object);
 	return object;
@@ -58,7 +58,7 @@ const tryCopyProperties = exports.tryCopyProperties = function tryCopyProperties
 };
 
 const setConst = exports.setConst = function setConst(object, key, value) {
-	Object.defineProperty(object, key, { value, enumerable: true, });
+	Object.defineProperty(object, key, { value: value, enumerable: true, });
 	return value;
 };
 
@@ -67,11 +67,13 @@ const extendPrototype = exports.extendPrototype = function extendPrototype(const
 	const freeze = options.freeze == null ? true : options.freeze;
 	const configurable = options.const == null ? false : options.const;
 	const proto = constructor.prototype;
-	Object.keys(extend).forEach(key => {
+	Object.keys(extend).forEach(function(key) {
 		const enumerable = !(/^_/).test(key);
 		const descriptor = Object.getOwnPropertyDescriptor(extend, key);
-		Object.defineProperty(proto, key.slice(!enumerable), Object.assign(
-			descriptor, { configurable, enumerable, writable: configurable, }
+		Object.defineProperty(proto, key.slice(!enumerable), Object.assign(descriptor, {
+			configurable: configurable,
+			enumerable: enumerable,
+			writable: configurable, }
 		));
 	});
 	if (freeze) {

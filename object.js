@@ -62,28 +62,35 @@ const setConst = exports.setConst = function setConst(object, key, value) {
 	return value;
 };
 
-const extendPrototype = exports.extendPrototype = function extendPrototype(constructor, options, extend) {
-	!extend && (extend = options) && (options = { });
+const Class = exports.Class = function Class(constructor, extend, options) {
+	!options && (options = { });
 	const freeze = options.freeze == null ? true : options.freeze;
 	const configurable = options.const == null ? false : options.const;
-	const proto = constructor.prototype;
+	const _private = options.private === undefined ? Object.prototype : options.private;
+	const Self = options.namespace == null ? function(x) { return x; } : options.namespace;
+	function Constructor() {
+		var _this; try { _this = this instanceof Constructor ? this : Object.create(Constructor.prototype); }
+		catch (e) { _this = Object.create(Constructor.prototype); }
+		Self(Self(_this, Object.create(_private)), _this);
+		return constructor.apply(_this, arguments);
+	}
+	const proto = Constructor.prototype;
 	Object.keys(extend).forEach(function(key) {
 		const enumerable = !(/^_/).test(key);
 		const descriptor = Object.getOwnPropertyDescriptor(extend, key);
-		Object.defineProperty(proto, key.slice(!enumerable), Object.assign(descriptor, {
-			configurable: configurable,
-			enumerable: enumerable,
-			writable: configurable, }
-		));
+		descriptor.configurable = configurable;
+		descriptor.enumerable = enumerable;
+		!descriptor.get && !descriptor.set && (descriptor.writable = configurable);
+		Object.defineProperty(proto, key.slice(!enumerable), descriptor);
 	});
-	if (freeze) {
+	if (options.freezeProto == null || options.freezeProto) {
 		Object.freeze(proto);
-		Object.defineProperty(constructor, 'prototype', {
+		Object.defineProperty(Constructor, 'prototype', {
 			configurable: false,
 			enumerable: false,
 		});
 	}
-	return constructor;
+	return Constructor;
 };
 
 const moduleName = 'es6lib/object'; if (typeof module !== 'undefined') { module.exports = exports; } else if (typeof define === 'function') { define(moduleName, exports); } else if (typeof window !== 'undefined' && typeof module === 'undefined') { window[moduleName] = exports; } return exports; })({ });

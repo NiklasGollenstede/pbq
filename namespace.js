@@ -11,10 +11,10 @@
 const NameSpace = exports.NameSpace = function NameSpace(proto) {
 	typeof proto === 'object' || (proto = Object.prototype);
 	const map = new WeakMap();
-	return function(key) {
+	return function(key, set) {
 		var value = map.get(key);
 		if (value === undefined) {
-			map.set(key, value = Object.create(proto));
+			map.set(key, value = set || Object.create(proto));
 		}
 		return value;
 	};

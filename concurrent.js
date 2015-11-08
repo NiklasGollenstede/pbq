@@ -4,6 +4,8 @@ const functional = require('es6lib/functional');
 const hrtime = functional.hrtime;
 const apply = functional.apply;
 
+const resolved = Promise.resolve();
+
 /* global setTimeout */
 const timeout = exports.timeout = (typeof setTimeout !== 'undefined') ? setTimeout : require("sdk/timers").setTimeout;
 
@@ -18,7 +20,7 @@ const sleep = exports.sleep = function sleep(ms) {
 /**
  * Turns an asynchronous callback method into one that returns a promise
  * @param  {function} async  Method that takes an callback(error, value) as last argument
- * @return {function}        Method that returns a Promise to it's asyncronous value
+ * @return {function}        Method that returns a Promise to it's asynchronous value
  */
 const promisify = exports.promisify = function promisify(async) {
 	return function() {
@@ -32,58 +34,52 @@ const promisify = exports.promisify = function promisify(async) {
 
 /**
  * Asynchronous task spawner. Subset of Task.js. Executes immediately. Uses global 'Promise'.
- * @param  {function*}  generator  Generator function that yields promises to asynchronous values which are returned to the generator once the promises are fullfilled
+ * @param  {function*}  generator  Generator function that yields promises to asynchronous values which are returned to the generator once the promises are fulfilled
  * @param  {object}     thisArg    'this' in generator
  * @param  {Arguments}  args       Arguments for generator
  * @return {Promise}               Promise of the return value of the generator
  */
 const spawn = exports.spawn = function spawn(generator, thisArg, args) {
 	const iterator = apply(generator, thisArg, args);
-	const onFulfilled = iterate.bind(null, true);
-	const onRejected = iterate.bind(null, false);
 
-	function iterate(next, arg) {
-		var result;
-		try {
-			result = next ? iterator.next(arg) : iterator.throw(arg);
-		} catch (err) {
-			return Promise.reject(err);
-		}
+	function next(arg) {
+		return handle(iterator.next(arg));
+	}
+	function _throw(arg) {
+		return handle(iterator.throw(arg));
+	}
+	function handle(result) {
 		if (result.done) {
 			return Promise.resolve(result.value);
 		} else {
-			return Promise.resolve(result.value).then(onFulfilled, onRejected);
+			return Promise.resolve(result.value).then(next, _throw);
 		}
 	}
-	return iterate(true);
+
+	return resolved.then(next);
+	/*try {
+		return next();
+	} catch (error) {
+		return Promise.reject(error);
+	}*/
 };
 
 /**
- * Asynchronous task spawner. Supset of Task.js. Executes when called. Forwards this and arguments.
- * @param  {string}     name       Optional function.name
+ * Asynchronous task spawner. Subset of Task.js. Executes when called. Forwards this and arguments.
  * @param  {function*}  generator  Generator function that yields promises to asynchronous values which are returned to the generator once the promises are fullfilled
  * @param  {function}   catcher    Function that can .catch() exceptions thrown in generator
  * @return {Promise}               Async (member) function
  */
-const async = exports.async = function async(name, generator, catcher) {
-	if (typeof name === 'function') {
-		if (arguments.length > 2) { throw new TypeError('First of three arguments must be string'); }
-		catcher = generator; generator = name;
-		return function async(/*arguments*/) {
-			return catcher
-			? spawn(generator, this, arguments).catch(catcher)
-			: spawn(generator, this, arguments);
-		};
-	} else {
-		return new Function('spawn, generator, catcher', 'return function '+ name +'() {\
-			return catcher\
-			? spawn(generator, this, arguments).catch(catcher)\
-			: spawn(generator, this, arguments);\
-		}')(spawn, generator, catcher);
+const async = exports.async = function async(generator, catcher) {
+	return catcher
+	? function async(/*arguments*/) {
+		return spawn(generator, this, arguments).catch(catcher);
 	}
+	: function async(/*arguments*/) {
+		return spawn(generator, this, arguments);
+	};
 };
 
-if (typeof Promise !== 'undefined') {
 /**
  * Periodically calls callback until it returns a true'ish value.
  * @param  {Function}  callback  Function to repeatedly call.
@@ -133,12 +129,8 @@ const periodic = exports.periodic = function periodic(callback, waitFor) {
  * Instantly asynchronously executes a callback as soon as possible.
  * @param  {function}  callback  Callback that will be executed without this or arguments.
  */
-const instantly = exports.instantly = (function instantly(callback) {
-	const resolved = Promise.resolve();
-	return function instantly(callback) {
-		resolved.then(callback);
-	};
-})();
-}
+const instantly = exports.instantly = function instantly(callback) {
+	resolved.then(callback);
+};
 
 const moduleName = 'es6lib/concurrent'; if (typeof module !== 'undefined') { module.exports = exports; } else if (typeof define === 'function') { define(moduleName, exports); } else if (typeof window !== 'undefined' && typeof module === 'undefined') { window[moduleName] = exports; } return exports; })({ });

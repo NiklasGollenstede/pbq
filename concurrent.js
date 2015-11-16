@@ -1,6 +1,6 @@
 (function(exports) { 'use strict';
 
-const functional = require('es6lib/functional');
+const functional = (function() { try { return require('es6lib/functional'); } catch(e) { return require('./functional'); } })();
 const hrtime = functional.hrtime;
 const apply = functional.apply;
 
@@ -19,16 +19,28 @@ const sleep = exports.sleep = function sleep(ms) {
 
 /**
  * Turns an asynchronous callback method into one that returns a promise
- * @param  {function} async  Method that takes an callback(error, value) as last argument
- * @return {function}        Method that returns a Promise to it's asynchronous value
+ * @param  {function}  callUlater  Method that takes an callback(error, value) as last argument
+ * @return {function}              Method that returns a Promise to it's asynchronous value
  */
-const promisify = exports.promisify = function promisify(async) {
+const promisify = exports.promisify = function promisify(callUlater) {
 	return function() {
-		var self = this, args = Array.prototype.slice.call(arguments);
+		const self = this, args = arguments;
 		return new Promise(function(resolve, reject) {
-			args.push(function(err, res) { err ? reject(err) : resolve(res); });
-			async.apply(self, args);
+			apply(callUlater, self, args, function(err, res) { err ? reject(err) : resolve(res); });
 		});
+	};
+};
+
+/**
+ * Turns a method that returns a promise into one that accepts a callback as last parameter.
+ * @param  {function}  promiser  Method that returns a Promise to it's asynchronous value
+ * @return {function}            Method that takes an callback(error, value) as last argument
+ */
+const promised = exports.promised = function promised(promiser) {
+	return function() {
+		const callback = Array.prototype.pop.call(arguments);
+		apply(promiser, this, arguments)
+		.then(callback.bind(null, null), callback);
 	};
 };
 
@@ -57,11 +69,6 @@ const spawn = exports.spawn = function spawn(generator, thisArg, args) {
 	}
 
 	return resolved.then(next);
-	/*try {
-		return next();
-	} catch (error) {
-		return Promise.reject(error);
-	}*/
 };
 
 /**

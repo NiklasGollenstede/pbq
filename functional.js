@@ -17,27 +17,29 @@ const noop = exports.noop = (function(self) {
  * @param  {Function}   callback The function to call
  * @param  {any}        self     Optional this for callback
  * @param  {Arguments}  args     Optional argument (array-like) for callback
+ * @param  {any}        arg      Additional argument to push on top of args
  * @return {any}                 Callbacks return value
  */
-const apply = exports.apply = function apply(callback, self, args) {
-	if (!args || !args.length) {
-		if (!self) {
-			return callback();
-		} else {
-			return callback.call(self);
-		}
-	}
-	switch (args.length) {
+const apply = exports.apply = function apply(callback, self, args, arg) {
+	const haveArg = arguments.length > 3;
+	switch (((args && args.length) + haveArg) || 0) {
+		case 0: {
+			return self ? callback.call(self) : callback();
+		} break;
 		case 1: {
-			return callback.call(self, args[0]);
+			return callback.call(self, haveArg ? arg : args[0]);
 		} break;
 		case 2: {
-			return callback.call(self, args[0], args[1]);
+			return callback.call(self, args[0], haveArg ? arg : args[1]);
 		} break;
 		case 3: {
-			return callback.call(self, args[0], args[1], args[2]);
+			return callback.call(self, args[0], args[1], haveArg ? arg : args[2]);
 		} break;
 		default: {
+			if (haveArg) {
+				args = Array.prototype.slice.call(args);
+				args.push(arg);
+			}
 			return callback.apply(self, args);
 		}
 	}
@@ -48,7 +50,7 @@ const apply = exports.apply = function apply(callback, self, args) {
  * @return {any} the last argument
  */
 const log = exports.log = exports.debugLog = function log() {
-	console.log.apply(console, arguments);
+	apply(console.log, console, arguments);
 	return arguments[arguments.length - 1];
 };
 

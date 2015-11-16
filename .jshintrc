@@ -11,6 +11,7 @@
 	"laxbreak": true,
 	"multistr": true,
 	"newcap": false,
+	"noyield": true,
 	"undef": false,
 	"validthis": true,
 
@@ -27,6 +28,15 @@
 		"global": false,
 		"require": false,
 		"console": false,
-		"exports": false
+		"exports": false,
+		"describe": false,
+		"xdescribe": false,
+		"it": false,
+		"xit": false,
+		"chaiAsPromised": false,
+		"expect": false,
+		"AssertionError": false,
+		"Assertion": false,
+		"assert": false
 	}
 }

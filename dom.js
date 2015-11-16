@@ -3,6 +3,9 @@
 /* global setTimeout */ /* global clearTimeout */
 const timeout = (typeof setTimeout !== 'undefined') ? setTimeout : require("sdk/timers").setTimeout;
 const unTimeout = (typeof clearTimeout !== 'undefined') ? clearTimeout : require("sdk/timers").clearTimeout;
+/* global setTimeout */ /* global clearTimeout */
+const interval = (typeof setInterval !== 'undefined') ? setInterval : require("sdk/timers").setInterval;
+const unInterval = (typeof clearInterval !== 'undefined') ? clearInterval : require("sdk/timers").clearInterval;
 
 const copyProperties = require('es6lib/object').copyProperties;
 
@@ -67,6 +70,23 @@ const once = exports.once = function once(element, event, callback, capture) {
 		callback.apply(this, arguments);
 	}
 	element.addEventListener(event, handler, capture);
+};
+
+const whileVisible = exports.whileVisible = function whileVisible(callback, time) {
+	let handle;
+	function check() {
+		if ((this || window).document.hidden) {
+			return handle && unInterval(handle);
+		} else {
+			!handle && (handle = intreval(callback, time));
+		}
+	}
+	check();
+	(this || window).document.addEventListener('visibilitychange', check);
+	return function cancel() {
+		(this || window).document.addEventListener('visibilitychange', check);
+		handle && unTimeout(handle);
+	};
 };
 
 const getSelector = exports.getSelector = function getSelector(element, prev) {

@@ -1,7 +1,10 @@
 'use strict';
 
-const promisify = require('./concurrent.js').promisify;
+const concurrent = require('./concurrent.js');
+const promisify = concurrent.promisify;
 const fs = require('fs');
+
+const defaultMask = ~process.umask() & 511 /*0777*/;
 
 /**
  * the native (node-compatible) 'path' module
@@ -13,21 +16,37 @@ const Path = exports.Path = require('path');
  * INSTEAD of taking a callback as last argument, all asynchronous functions return Promises
  *
  * @function listDir   asynchronous, recursive, unordered direktory listing
- * @function makeDir   asynchronous direktory path creation, 'mkdirp' package
+ * @function makeDir   asynchronous direktory path creation, reimplementation of 'mkdirp' package
  */
 const FS = exports.FS = (function() {
 	const FS = Object.assign({ }, fs);
-	FS.makeDir = promisify(require('mkdirp'));
-	FS.listDir = promisify(walk);
 	const exists = FS.exists;
-	Object.keys(FS).forEach(function(key) {
-		if (!(/Sync$/.test(key))) { return; }
-		key = key.slice(0, -4);
-		FS[key] = promisify(FS[key]);
-	});
-	FS.exists = function(path) { return new Promise(function (done) { exists(path, done); }); };
+	Object.keys(FS)
+	.filter(key => (/Sync$/).test(key))
+	.map(key => key.slice(0, -4))
+	.forEach(key => FS[key] = promisify(FS[key]));
+	FS.exists = path => new Promise(done => exists(path, done));
+	FS.listDir = promisify(walk);
+	FS.makeDir = function(path, mask) {
+		return trustedMakeDir(Path.resolve(path), arguments.length < 1 ? mask : defaultMask);
+	};
 	return Object.freeze(FS);
 })();
+
+function trustedMakeDir(path, mask) {
+	return FS.mkdir(path, mask)
+	.catch(function(error) {
+		if (error.code === 'ENOENT') {
+			return FS.trustedMakeDir(Path.dirname(path), mask)
+			.then(FS.trustedMakeDir.bind(FS, path, mask));
+		}
+		return FS.stat(path)
+		.then(function(stat) {
+			if (!stat.isDirectory()) { throw null; }
+		})
+		.catch(function() { throw error; });
+	});
+}
 
 // TODO: reimplement (licence?)
 function walk(dir, done) {

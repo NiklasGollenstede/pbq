@@ -88,104 +88,103 @@ const async = exports.async = function async(generator, catcher) {
 	};
 };
 
+/**
+ * Turns a readable Stream into an asynchronous iterator over ist's 'data' and 'end' events.
+ * Receives and yields the values of 'data' events until after ether 'end' or 'error' is emitted.
+ * If the Stream ends due to 'error', a Promise.reject(error) is returned as the last value.
+ * If the Stream ends due to 'end', that events data is returned as the last value.
+ * To stop listening on the stream, end the iterator and clear it's data, call throw().
+ * Do not call next() while the previous promise is pending.
+ * @param   {stream}    stream  EventEmitter, that emits 'data' and an 'end' event.
+ * @return  {iterator}          Object{ next(), throw(), }.
+ */
 const StreamIterator = exports.StreamIterator = function StreamIterator(stream) {
-	const self = this;
+	const self = { };
 	self.stream = stream;
 	self.data = [ ];
 	self.done = false;
 
-	(function makePromise() {
-		self.promise = new Promise(function(resolve, reject) {
-			self.resolve = function(value) { resolve(value); self.resolve = self.reject = null; };
-			self.reject = function(error) { reject(error); self.resolve = self.reject = null; };
-		});
-		self.promise.then(makePromise, makePromise);
-	})();
-
-	stream.on('data', this.ondata = function(data) {
-		if (self.resolve) {
+	stream.on('data', self.ondata = function(data) {
+		if (self.promise) {
 			self.resolve(data);
+			self.promise = null;
 		} else {
 			self.data.push(data);
 		}
 	});
-	stream.once('error', this.onerror = function(error) {
-		if (self.resolve) {
+	stream.once('error', self.onerror = function(error) {
+		if (self.promise) {
 			self.reject(error);
+			self.promise = null;
 		} else {
 			self.data.push(Promise.reject(error));
 		}
 	});
-	stream.once('end', this.onend = function(data) {
-		if (self.resolve) {
+	stream.once('end', self.onend = function(data) {
+		if (self.promise) {
 			self.resolve(data);
+			self.promise = null;
 		} else {
 			self.data.push(data);
 		}
-		self.destroy();
+		destroy();
 	});
 
-	stream.resume && stream.resume();
-};
-StreamIterator.prototype = {
-	constructor: StreamIterator,
-
-	next() {
-		if (this.data.length) {
-			// console.log('next', 'had');
-			return { value: this.data.shift(), done: this.done, };
-		} else {
-			// console.log('next', 'wait', this.done, this.promise);
-			if (this.done) {
-				return { value: null, done: true, };
-			}
-			if (this.promise) {
-				const promise = this.promise;
-				this.promise = null;
-				return { value: promise, done: false, };
-			} else {
-				return { value: Promise.reject(new Error('No data available, await previous promise before iterating')), done: false, };
-			}
-		}
-	},
-
-	throw(error) {
-		this.data.length = 0;
-		this.destroy(error);
-		return { value: Promise.reject(error), done: false, };
-	},
-
-	makePromise() {
-		const self = this;
-		return new Promise(function(resolve, reject) {
-			self.requested.push({
-				resolve: resolve,
-				reject: reject,
-			});
-		});
-	},
-
-	destroy(error) {
-		this.done = true;
-		this.reject && this.reject(error);
-		this.promise = null;
-		this.stream.removeListener('data', this.ondata);
-		this.stream.removeListener('error', this.onerror);
-		this.stream.removeListener('end', this.onend);
-	},
-
-	[Symbol.iterator]() {
-		return this;
+	function destroy(error) {
+		self.done = true;
+		self.reject && self.reject(error);
+		self.promise = null;
+		self.stream.removeListener('data', self.ondata);
+		self.stream.removeListener('error', self.onerror);
+		self.stream.removeListener('end', self.onend);
 	}
+
+	stream.resume && stream.resume();
+
+	return {
+
+		next() {
+			if (self.data.length) {
+				return { value: self.data.shift(), done: false, };
+			} else {
+				if (self.done) {
+					return { value: null, done: true, };
+				}
+				if (!self.promise) {
+					self.promise = new Promise(function(resolve, reject) {
+						self.resolve = resolve;
+						self.reject = reject;
+					});
+					return { value: self.promise, done: false, };
+				} else {
+					return { value: Promise.reject(new Error('No data available, await previous promise before iterating')), done: false, };
+				}
+			}
+		},
+
+		throw(error) {
+			self.data.length = 0;
+			destroy(error);
+			return { value: Promise.reject(error), done: false, };
+		},
+
+		[Symbol.iterator]() {
+			return self;
+		}
+	};
 };
 
+/**
+ * Iterates an iterator of Promises and calls the callback with each trueisch value.
+ * @param  {iterator}  iterator  Iterator that can return Promises as values. next() will not be called before the previous value resolved. If a Promise is rejected, the iteration gets aborted, rejected with that error and the error gets throw()'n into the iterator.
+ * @param  {Function}  callback  Called with each trueisch, resolved value the iterator yields. If it throws an error, the iteration gets aborted, rejected with that error and the error gets throw()'n into the iterator.
+ * @param  {any}       thisArg   'this' in 'callback'
+ * @return {Promise}              Promise(true), resolved when the iterator is done.
+ */
 const forOn = exports.forOn = function forOn(iterator, callback, thisArg) {
 
 	function next() {
 		const result = iterator.next();
-		Promise.resolve(result.value)
-			.catch(error => console.error('error', result.done, error))
-			.then(value => console.log('value', result.done, value));
 
 		if (result.done) {
 			return Promise.resolve(result.value)
@@ -200,15 +199,13 @@ const forOn = exports.forOn = function forOn(iterator, callback, thisArg) {
 		}
 	}
 
-	return resolved.then(next)
+	return (!iterator.throw) ? resolved.then(next) : resolved.then(next)
 	.then(function(value) {
 		iterator.throw();
-		console.log('iteration done then', value);
 		return value;
 	})
 	.catch(function(error) {
 		iterator.throw(error);
-		console.log('iteration done catch', error);
 		throw error;
 	});
 };

@@ -12,7 +12,7 @@ global.AssertionError = chai.AssertionError;
 global.Assertion = chai.Assertion;
 global.assert = chai.assert;
 
-require('babel/register')({
+require('babel/register-without-polyfill')({
 	whitelist: [
 		'es6.classes',
 		'es6.destructuring',

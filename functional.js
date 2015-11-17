@@ -50,7 +50,7 @@ const apply = exports.apply = function apply(callback, self, args, arg) {
  * @return {any} the last argument
  */
 const log = exports.log = exports.debugLog = function log() {
-	apply(console.log, console, arguments);
+	console.log.apply(console, arguments);
 	return arguments[arguments.length - 1];
 };
 
@@ -94,14 +94,14 @@ const Counter = exports.Counter = function Counter(start) {
  * Logger
  * @param {...[type]} outer first args
  */
-// (...outer) => (...inner) => console.log(...outer, ...inner);
+// (...outer) => (...inner) => log(...outer, ...inner);
 const Logger = exports.Logger = function Logger() {
 	const outer = arguments;
 	return function() {
 		const args = [];
 		args.push.apply(args, outer);
 		args.push.apply(args, arguments);
-		console.log.apply(console, args);
+		return log.apply(null, args);
 	};
 };
 

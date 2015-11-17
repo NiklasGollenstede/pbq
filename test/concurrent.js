@@ -4,6 +4,7 @@ const {
 	promisify,
 	promised,
 	spawn,
+	async,
 	StreamIterator,
 	forOn,
 	sleep,
@@ -140,33 +141,34 @@ describe('"spawn"ed should', () => {
 
 describe('"StreamIterator" should', () => {
 
-	it('directly end on end', () => {
+	it('directly end on end', async(function*() {
 		const emitter = new EvebtEmitter, values = [ ];
-		const sut = new StreamIterator(emitter);
+		const sut = StreamIterator(emitter);
 
-		emitter.emit('end');
+		emitter.emit('end', 'blob');
 
 		const promise = spawn(function*() {
 			let pair; while ((pair = sut.next()) && !pair.done) {
-				values.push(log(yield pair.value));
+				values.push((yield pair.value));
 			}
 			return true;
 		});
 
-		promise.then(() => values.should.deep.equal([ ]));
-		return promise.should.become(true);
-	});
+		(yield promise).should.equal(true);
 
-	it('iterate data and end events', () => {
+		values.should.deep.equal([ 'blob', ]);
+	}));
+
+	it('iterate data and end events', async(function*() {
 		const emitter = new EvebtEmitter, values = [ ];
-		const sut = new StreamIterator(emitter);
+		const sut = StreamIterator(emitter);
 
 		const promise = spawn(function*() {
 			let pair; while ((pair = sut.next()) && !pair.done) {
-				values.push(log(yield pair.value));
+				values.push((yield pair.value));
 			}
 			return true;
-		}).then(Logger('values', values));
+		});
 
 		emitter.emit('data', 1);
 		emitter.emit('data', 2);
@@ -180,63 +182,70 @@ describe('"StreamIterator" should', () => {
 			emitter.emit('end', 7);
 		}, 3);
 
-		promise.then(() => log('sum', values.reduce((a, b) => a + b)));
-		promise.then(() => values.should.deep.equal([ 1, 2, 3, 4, 5, 6, 7, ]));
-		return promise.should.rejectedWith(17);
-	});
+		(yield promise).should.equal(true);
+
+		values.should.deep.equal([ 1, 2, 3, 4, 5, 6, 7, ]);
+	}));
 
 });
 
 describe('"forOn" should', () => {
 	const sut = forOn;
 
-	it('directly return on end', () => {
+	it('directly return on end', async(function*() {
 		const emitter = new EvebtEmitter, values = [ ];
-		const promise = sut(new StreamIterator(emitter), value => values.push(value));
+		const promise = sut(StreamIterator(emitter), value => values.push(value));
 
 		emitter.emit('end');
 
-		promise.then(() => values.should.deep.equal([ ]));
-		return promise.should.become(true);
-	});
+		(yield promise).should.equal(true);
+		values.should.deep.equal([ ]);
+	}));
 
-	it('directly throw on error', () => {
+	it('directly throw on error', async(function*() {
 		const emitter = new EvebtEmitter, values = [ ];
-		const promise = sut(new StreamIterator(emitter), value => values.push(value));
+		const promise = sut(StreamIterator(emitter), value => values.push(value));
 
 		emitter.emit('error', 17);
 
-		promise.catch(() => values.should.deep.equal([ ]));
-		promise.catch(error => console.error('Error', error));
-		return promise.should.rejectedWith(17);
-	});
+		let cought;
+		(yield promise.catch(error => cought = error));
+		cought.should.equal(17);
 
-	it('throw on error lateron', () => {
+		values.should.deep.equal([ ]);
+	}));
+
+	it('throw on error later on', async(function*() {
 		const emitter = new EvebtEmitter, values = [ ];
-		const promise = sut(new StreamIterator(emitter), value => values.push(value));
+		const promise = sut(StreamIterator(emitter), value => values.push(value));
 
 		emitter.emit('data', -1);
 		emitter.emit('data', -2);
 		emitter.emit('error', 17);
 
-		promise.catch(() => values.should.deep.equal([ -1, -2, ]));
-		promise.catch(error => console.error('Error', error));
-		return promise.should.rejectedWith(17);
-	});
+		let cought;
+		(yield promise.catch(error => cought = error));
+		cought.should.equal(17);
 
-	it('directly rethrow', () => {
+		values.should.deep.equal([ -1, -2, ]);
+	}));
+
+	it('directly rethrow', async(function*() {
 		const emitter = new EvebtEmitter, values = [ ];
-		const promise = sut(new StreamIterator(emitter), value => { throw 23; });
+		const promise = sut(StreamIterator(emitter), value => { throw 23; });
 
 		emitter.emit('data', 42);
 
-		promise.catch(() => values.should.deep.equal([ ]));
-		return promise.should.rejectedWith(23);
-	});
+		let cought;
+		(yield promise.catch(error => cought = error));
+		cought.should.equal(23);
 
-	it('iterate data and end events', () => {
+		values.should.deep.equal([ ]);
+	}));
+
+	it('iterate data and end events', async(function*() {
 		const emitter = new EvebtEmitter, values = [ ];
-		const promise = sut(new StreamIterator(emitter), value => values.push(value));
+		const promise = sut(StreamIterator(emitter), value => values.push(value));
 
 		emitter.emit('data', 1);
 		emitter.emit('data', 2);
@@ -250,10 +259,9 @@ describe('"forOn" should', () => {
 			emitter.emit('end', 7);
 		}, 3);
 
-		promise.then(() => log('sum', values.reduce((a, b) => a + b)));
-		promise.then(() => log('sum', [ 1, 2, 3, 4, 5, 6, 7, ].reduce((a, b) => a + b)));
-		promise.then(() => values.should.deep.equal([ 1, 2, 3, 4, 5, 6, 7, ]));
-		return promise.should.become(true);
-	});
+		(yield promise).should.equal(true);
+
+		values.should.deep.equal([ 1, 2, 3, 4, 5, 6, 7, ]);
+	}));
 
 });

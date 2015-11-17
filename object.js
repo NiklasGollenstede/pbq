@@ -3,25 +3,43 @@
 
 const NameSpace = reqire('es6lib/namespace').NameSpace;
 
+/**
+ * Deeply freezes an object structure by crawling the objects enumerable own properties (Object.keys()).
+ * Can handles cyclic structures.
+ * @param  {object}  object  An object that is part of the structure to freeze.
+ * @return {object}          The object passed in.
+ */
 const deepFreeze = exports.deepFreeze = function deepFreeze(object) {
-	const done = new WeakSet();
-	function doIt(object) {
+	const done = new WeakSet;
+	(function doIt(object) {
 		if (typeof object !== 'object' || object === null || done.has(object)) { return; }
 		done.add(object);
 		Object.freeze(object);
 		Object.keys(object).forEach(function(key) { doIt(object[key]); });
-	}
-	doIt(object);
+	})(object);
 	return object;
 };
 
+/**
+ * Checks the type of build in objects, e.g. 'Object', 'Date', 'Array', ...
+ * @param  {object}  object           Object to check
+ * @param  {string}  constructorName  Name of the (native) constructor Function
+ * @return {bool}                     true, if object is instance of the constructor
+ */
 const checkNativeType = exports.checkNativeType = function checkNativeType(object, constructorName) {
 	return Object.prototype.toString.call(object).indexOf(constructorName, 8) === 8;
 };
 
-// TODO: handle circular objects!!
-const copyProperties = exports.copyProperties = function copyProperties(target, source/*, ...more*/) {
-	for (var key in source) {
+/**
+ * Deeply copies the enumerable own property values from one object to an other.
+ * If a property is an object of a not build-in type (i.e. not a Date, Window, Element, etc.),
+ * it's properties will recursively copied to ether the existing property value on target
+ * or an new object (or Array if the source property is an Array).
+ * Can NOT handle cyclic structures (of none-native object).
+ * @return {object}          target
+ */
+const copyProperties = exports.copyProperties = function copyProperties(target, source) {
+	Object.keys(source).forEach(function(key) {
 		if (checkNativeType(source[key], "Object")) {
 			!target[key] && (target[key] = { });
 			copyProperties(target[key], source[key]);
@@ -31,39 +49,64 @@ const copyProperties = exports.copyProperties = function copyProperties(target, 
 		} else {
 			target[key] = source[key];
 		}
-	}
-	if (arguments.length > 2) {
-		const args = Array.prototype.slice.call(arguments, 1);
-		return copyProperties.apply(null, args);
-	}
+	});
 	return target;
 };
 
-const tryCopyProperties = exports.tryCopyProperties = function tryCopyProperties(target, source/*, ...more*/) {
-	for (var key in source) {
+/**
+ * Same as copyProperties but can handle cyclic structures.
+ */
+const cloneOnto = exports.cloneOnto = function cloneOnto(target, source) {
+	const done = new WeakSet;
+	(function doIt(source) {
+		if (done.has(source)) { return; }
+		done.add(source);
+		Object.keys(source).forEach(function(key) {
+			if (checkNativeType(source[key], "Object")) {
+				!target[key] && (target[key] = { });
+				doIt(target[key], source[key]);
+			} else if (Array.isArray(source[key])) {
+				!target[key] && (target[key] = [ ]);
+				doIt(target[key], source[key]);
+			} else {
+				target[key] = source[key];
+			}
+		});
+	})(source);
+	return target;
+};
+
+/**
+ * Same as copyProperties except that assignments will fail silently, instead of throwing.
+ */
+const tryCopyProperties = exports.tryCopyProperties = function tryCopyProperties(target, source) {
+	Object.keys(source).forEach(function(key) {
 		if (checkNativeType(source[key], "Object")) {
-			try { target[key] = target[key] || { }; } catch (e) { }
+			try { !target[key] && (target[key] = { }); } catch (e) { }
 			tryCopyProperties(target[key], source[key]);
 		} else if (Array.isArray(source[key])) {
-			try { target[key] = target[key] || [ ]; } catch (e) { }
+			try { !target[key] && (target[key] = { }); } catch (e) { }
 			tryCopyProperties(target[key], source[key]);
 		} else {
 			try { target[key] = source[key]; } catch (e) { }
 		}
-	}
-	if (arguments.length > 2) {
-		const args = Array.prototype.slice.call(arguments);
-		args.splice(1, 1);
-		return tryCopyProperties.apply(null, args);
-	}
+	});
 	return target;
 };
 
+/**
+ * Set 'value' as enumerable but unconfigurable and unwritable property 'key' of 'object'.
+ * @return {object}   The value that was set.
+ */
 const setConst = exports.setConst = function setConst(object, key, value) {
 	Object.defineProperty(object, key, { value: value, enumerable: true, });
 	return value;
 };
 
+/**
+ * Copies the complete descriptors of the enumerable own properties from one object to an other.
+ * @return {object}      The target object.
+ */
 const assignDescriptors = exports.assignDescriptors = function(to, from) {
 	Object.keys(from).forEach(function(key) {
 		Object.defineProperty(to, key, Object.getOwnPropertyDescriptor(from, key));

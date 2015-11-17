@@ -9,12 +9,29 @@ const unInterval = (typeof clearInterval !== 'undefined') ? clearInterval : requ
 
 const copyProperties = require('es6lib/object').copyProperties;
 
-exports.document = typeof document !== 'undefined' ? document : null;
+/**
+ * The functions in this module operate on the global windows 'document' (and URL, self, top, etc.) by default.
+ * This is the default document.
+ * To have any of the functions of this module operate on a different scope, call them with that scope as this,
+ * e.g. `cerateElement.call(iframe.contentWindow, 'a', { ...});` to create an Element in an iframe.
+ */
+exports.defaultWindow = typeof window !== 'undefined' ? window : null;
 
+/**
+ * Returns true, if the current execution context is not a browser top level context.
+ * I.e the current script is executed in an iframe.
+ */
 const inIframe = exports.inIframe = function inIframe() {
-	try { return (window.self !== window.top); } catch (e) { return true; }
+	try { return ((this || window).self !== (this || window).top); } catch (e) { return true; }
 };
 
+/**
+ * Creates a dom element and sets properties/attributes and children.
+ * @param  {string}          tagName     Type of the new Element.
+ * @param  {object}          properties  Properties, whisch are deeply copied onto the new element.
+ * @param  {Array(Element)}  childList   Array of elements set as the children of the new elenent.
+ * @return {Element}                     New DOM element
+ */
 const createElement = exports.createElement = function createElement(tagName, properties, childList) {
 	const element = (this || window).document.createElement(tagName);
 	copyProperties(element, properties);
@@ -24,6 +41,9 @@ const createElement = exports.createElement = function createElement(tagName, pr
 	return element;
 };
 
+/**
+ * Creates a new style Element of the given css string.
+ */
 const createStyleElement = exports.createStyleElement = function createStyleElement(css) {
 	const element = (this || window).document.createElement("style");
 	element.type = "text/css";
@@ -31,27 +51,35 @@ const createStyleElement = exports.createStyleElement = function createStyleElem
 	return element;
 };
 
+/**
+ * Adds a css string to the document.
+ * @param {string}  css  Style to add to the end of the document head.
+ * @return {Element}     The new style Element.
+ */
 const addStyle = exports.addStyle = function addStyle(css) {
 	return (this || window).document.querySelector("head").appendChild(createStyleElement(css));
 };
 
-const clickElement = exports.clickElement = function clickElement(element, win) {
-	const evt = (win || this || window).document.createEvent('MouseEvents');
+/**
+ * Triggers a 'click' event on a DOM Element, often causing it's default click action.
+ * @return {Event}         The dispatched click Event
+ */
+const clickElement = exports.clickElement = function clickElement(element) {
+	const evt = (this || window).document.createEvent('MouseEvents');
 	evt.initEvent('click', true, true);
 	element.dispatchEvent(evt);
 	return evt;
 };
 
 /**
- * Invokes a save dialogue for a Blob object.
+ * Invokes a save dialogue for a Blob or Url object.
  * @param  {Blob|Url}  content The Blob or Url to save.
  * @param  {string}    name    The suggested file name.
- * @param  {window}    win     A window object to use instead of the global window.
  * @return {void}
  */
-const saveAs = exports.saveAs = function saveAs(content, name, win) {
-	win = win || this || window;
-	const isBlob = content.type && typeof content.type === 'string';
+const saveAs = exports.saveAs = function saveAs(content, name) {
+	const win = this || window;
+	const isBlob = typeof content.type === 'string';
 
 	const link = Object.assign(win.document.createElement('a'), {
 		download: name,
@@ -64,12 +92,16 @@ const saveAs = exports.saveAs = function saveAs(content, name, win) {
 	isBlob && timeout(function() { win.URL.revokeObjectURL(link.href); }, 1000);
 };
 
+/**
+ * Listen for a DOM Event on an Element only once and removes the listener afterwards.
+ */
 const once = exports.once = function once(element, event, callback, capture) {
 	function handler() {
 		element.removeEventListener(event, handler, capture);
 		callback.apply(this, arguments);
 	}
 	element.addEventListener(event, handler, capture);
+	return handler;
 };
 
 const whileVisible = exports.whileVisible = function whileVisible(callback, time) {
@@ -89,17 +121,22 @@ const whileVisible = exports.whileVisible = function whileVisible(callback, time
 	};
 };
 
-const getSelector = exports.getSelector = function getSelector(element, prev) {
-	prev = prev || '';
-	if (!element || element === (this || window).document) { return prev.slice(1); }
-	return getSelector.call(
-		this,
-		element.parentNode,
-		'>'+ element.tagName
-		+ (element.id ? '#'+ element.id : '')
-		+ (element.className ? '.'+ element.className.replace(/ +/g, '.') : '')
-		+ prev
-	);
+/**
+ * Builds the strongest possible selector of tagNames, ids and classes for an Element (at its's current position in the document).
+ * @param  {Element}  element  The Element in question.
+ * @return {string}            String that matches /^({{tagName}}(#{{id}})?(.{{class}})*)*$/
+ */
+const getSelector = exports.getSelector = function getSelector(element) {
+	const document = (this || window).document, strings = [ ];
+	while (element && element !== document) {
+		strings.add(
+			element.tagName
+			+ (element.id ? '#'+ element.id : '')
+			+ (element.className ? '.'+ element.className.replace(/ +/g, '.') : '')
+		);
+		element = element.parentNode;
+	}
+	return strings.join('>');
 };
 
 const onElementChanged = exports.onElementChanged = function onElementChanged(element, attributeFilter, callback) {
@@ -200,6 +237,9 @@ const notify = exports.notify = function notify(options) {
 	});
 };
 
+/**
+ * Promise that resolves once the 'DOMContentLoaded' event is/was fired.
+ */
 const DOMContentLoaded = exports.DOMContentLoaded = new Promise(function(resolve, reject) {
 	if (typeof document !== 'object') { return reject(); }
 	if (document.readyState !== 'interactive' && document.readyState !== 'complete') {

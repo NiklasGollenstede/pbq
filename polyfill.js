@@ -20,6 +20,7 @@ exports = function polyfill(subject, options) {
 		if (typeof window !== 'undefined') {
 			subject = window;
 		}
+		throw new TypeError('Unable to perform polyfill, no subject found');
 	}
 
 	const String = subject.String;

@@ -2,7 +2,7 @@
 
 const { noop, apply, } = require('../functional.js');
 
-xdescribe('"noop" should', () => {
+(noop ? describe : xdescribe)('"noop" should', () => {
 	const sut = noop;
 
 	it('always stay noop', () => {

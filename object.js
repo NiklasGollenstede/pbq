@@ -1,7 +1,7 @@
 (function(exports) {
 'use strict';
 
-const NameSpace = reqire('es6lib/namespace').NameSpace;
+const NameSpace = require('es6lib/namespace').NameSpace;
 
 /**
  * Deeply freezes an object structure by crawling the objects enumerable own properties (Object.keys()).
@@ -100,6 +100,24 @@ const tryCopyProperties = exports.tryCopyProperties = function tryCopyProperties
  */
 const setConst = exports.setConst = function setConst(object, key, value) {
 	Object.defineProperty(object, key, { value: value, enumerable: true, });
+	return value;
+};
+
+/**
+ * Set 'value' as unenumerable but configurable and writable property 'key' of 'object'.
+ * @return {object}   The value that was set.
+ */
+const setHidden = exports.setHidden = function setHidden(object, key, value) {
+	Object.defineProperty(object, key, { value: value, configurable: true, writable: true, });
+	return value;
+};
+
+/**
+ * Set 'value' as unenumerable, unconfigurable and unwritable property 'key' of 'object'.
+ * @return {object}   The value that was set.
+ */
+const setHiddenConst = exports.setHiddenConst = function setHiddenConst(object, key, value) {
+	Object.defineProperty(object, key, { value: value, });
 	return value;
 };
 

@@ -136,7 +136,7 @@ const Self = new NameSpace;
 
 const ClassPrivate = {
 
-	getSuper(extend) {
+	getSuper: function(extend) {
 		if (!extend) { return; }
 		if (typeof extend === 'function') {
 			this.extendMode = '__proto__';
@@ -151,7 +151,7 @@ const ClassPrivate = {
 		}
 	},
 
-	getNameSpaces() {
+	getNameSpaces: function() {
 		const _super = this.super;
 		this.hasPublic = this.getPublic || this.extendMode === 'public' && (_super.hasPublic);
 		this.hasProtected = this.getProtected || this.extendMode === 'protected' && (_super.hasPublic || _super.hasProtected);
@@ -161,16 +161,16 @@ const ClassPrivate = {
 		this.Private = this.hasPrivate ?  new NameSpace : idFunction;
 	},
 
-	getMethods() {
-		this.public = this.getPublic && this.getPublic(this.Private, this.Protected, this.Public) || { };
+	getMethods: function() {
+		this.public = this.getPublic && copyPublicProperties({ }, this.getPublic(this.Private, this.Protected, this.Public)) || { };
 		this.protected = this.getProtected && this.getProtected(this.Private, this.Protected, this.Public);
 		this.private = this.getPrivate && this.getPrivate(this.Private, this.Protected, this.Public);
 		switch (this.extendMode) {
 			case 'private': {
-				this.private = assignDescriptors(this.private, this.super.asProtected);
+				this.private = assignDescriptors(this.private, this.super.asProtected());
 			} break;
 			case 'protected': {
-				this.protected = assignDescriptors(this.protected, this.super.asProtected);
+				this.protected = assignDescriptors(this.protected, this.super.asProtected());
 			} break;
 			case 'public': {
 				this.public = copyPublicProperties(Object.create(this.super.public), this.public, this.const);
@@ -182,13 +182,13 @@ const ClassPrivate = {
 		}
 	},
 
-	get asProtected() {
+	asProtected: function() {
 		if (this._asProtected) { return this._asProtected; }
-		const patent = this.super ? this.super.asProtected : { };
+		const patent = this.super ? this.super.asProtected() : { };
 		return this._asProtected = assignDescriptors(assignDescriptors(parent, this.protected), this.public);
 	},
 
-	getConstructorFor(_Protected, _Public) {
+	getConstructorFor: function(_Protected, _Public) {
 		const constructor = this.constructor, _private = this.private || Object.prototype, _protected = this.protected || Object.prototype;
 		const Public = this.Public, Protected = this.Protected, Private = this.Private;
 		return function() {
@@ -198,11 +198,12 @@ const ClassPrivate = {
 			Public(__protected, __public); Public(__private, __public);
 			Protected(__public, __protected); Protected(__private, __protected);
 			Private(__public, __private); Private(__protected, __private);
-			return constructor.apply(__public, arguments);
+			constructor.apply(__public, arguments);
+			return __public;
 		};
 	},
 
-	getConstructor(constructor) {
+	getConstructor: function(constructor) {
 		switch (this.extendMode) {
 			case 'private': {
 				this.Super = this.super.getConstructorFor();
@@ -251,7 +252,7 @@ const Class = exports.Class = function Class(options) {
 	self.getMethods();
 	self.getConstructor(options.constructor);
 
-	Self(self.Constructor, self)
+	Self(self.Constructor, self);
 	return self.Constructor;
 };
 

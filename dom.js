@@ -35,8 +35,8 @@ const inIframe = exports.inIframe = function inIframe() {
 const createElement = exports.createElement = function createElement(tagName, properties, childList) {
 	const element = (this || window).document.createElement(tagName);
 	copyProperties(element, properties);
-	for (var i = 0, child; childList && (child = childList[i]); ++i) {
-		element.appendChild(child);
+	for (var i = 0; childList && i < childList.length; ++i) {
+		childList[i] && element.appendChild(childList[i]);
 	}
 	return element;
 };
@@ -105,7 +105,7 @@ const once = exports.once = function once(element, event, callback, capture) {
 };
 
 const whileVisible = exports.whileVisible = function whileVisible(callback, time) {
-	let handle;
+	var handle;
 	function check() {
 		if ((this || window).document.hidden) {
 			return handle && unInterval(handle);

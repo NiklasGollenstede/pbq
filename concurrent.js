@@ -7,6 +7,8 @@ const apply = functional.apply;
 const resolved = Promise.resolve();
 const hasStream = typeof Stream === 'function';
 
+const SymbolIterator = typeof Symbol === 'function' && Symbol.iterator ? Symbol.iterator : '[[Symbol.iterator]]';
+
 /* global setTimeout */
 const timeout = exports.timeout = (typeof setTimeout !== 'undefined') ? setTimeout : require("sdk/timers").setTimeout;
 
@@ -141,9 +143,8 @@ const StreamIterator = exports.StreamIterator = function StreamIterator(stream) 
 
 	stream.resume && stream.resume();
 
-	return {
-
-		next() {
+	const ret = {
+		next: function() {
 			if (self.data.length) {
 				return { value: self.data.shift(), done: false, };
 			} else {
@@ -162,16 +163,16 @@ const StreamIterator = exports.StreamIterator = function StreamIterator(stream) 
 			}
 		},
 
-		throw(error) {
+		throw: function(error) {
 			self.data.length = 0;
 			destroy(error);
 			return { value: Promise.reject(error), done: false, };
 		},
-
-		[Symbol.iterator]() {
-			return self;
-		}
 	};
+	ret[SymbolIterator] = function() {
+		return self;
+	};
+	return ret;
 };
 
 /**

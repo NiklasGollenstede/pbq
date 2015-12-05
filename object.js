@@ -35,7 +35,8 @@ const checkNativeType = exports.checkNativeType = function checkNativeType(objec
  * If a property is an object of a not build-in type (i.e. not a Date, Window, Element, etc.),
  * it's properties will recursively copied to ether the existing property value on target
  * or an new object (or Array if the source property is an Array).
- * Can NOT handle cyclic structures (of none-native object).
+ * Build-in types will not be cloned but simply assigned to the clone.
+ * Can NOT handle cyclic structures (of none-native objects).
  * @return {object}          target
  */
 const copyProperties = exports.copyProperties = function copyProperties(target, source) {
@@ -57,22 +58,31 @@ const copyProperties = exports.copyProperties = function copyProperties(target, 
  * Same as copyProperties but can handle cyclic structures.
  */
 const cloneOnto = exports.cloneOnto = function cloneOnto(target, source) {
-	const done = new WeakSet;
-	(function doIt(source) {
-		if (done.has(source)) { return; }
-		done.add(source);
+	const done = new WeakMap([ [ source, target, ], ]);
+	(function doIt(target, source) {
 		Object.keys(source).forEach(function(key) {
-			if (checkNativeType(source[key], "Object")) {
-				!target[key] && (target[key] = { });
-				doIt(target[key], source[key]);
-			} else if (Array.isArray(source[key])) {
-				!target[key] && (target[key] = [ ]);
-				doIt(target[key], source[key]);
+			const sourceValue = source[key];
+			if (checkNativeType(sourceValue, "Object")) {
+				const targetValue = done.get(sourceValue);
+				if (targetValue) {
+					target[key] = targetValue;
+				} else {
+					!target[key] && (target[key] = { });
+					doIt(target[key], sourceValue);
+				}
+			} else if (Array.isArray(sourceValue)) {
+				const targetValue = done.get(sourceValue);
+				if (targetValue) {
+					target[key] = targetValue;
+				} else {
+					!target[key] && (target[key] = [ ]);
+					doIt(target[key], sourceValue);
+				}
 			} else {
-				target[key] = source[key];
+				target[key] = sourceValue;
 			}
 		});
-	})(source);
+	})(target, source);
 	return target;
 };
 
@@ -239,8 +249,8 @@ const ClassPrivate = {
 
 const Class = exports.Class = function Class(options) {
 	const self = Object.create(ClassPrivate);
-	self.const = options.const == null ? true : options.const;
-	self.static = options.static;
+	self.const = options.const == null ? true : !!options.const;
+	self.static = Object.freeze(options.static);
 
 	self.getPublic = options.public;
 	self.getPrivate = options.private;

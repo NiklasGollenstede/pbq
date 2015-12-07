@@ -208,8 +208,8 @@ const ClassPrivate = {
 			Public(__protected, __public); Public(__private, __public);
 			Protected(__public, __protected); Protected(__private, __protected);
 			Private(__public, __private); Private(__protected, __private);
-			constructor.apply(__public, arguments);
-			return __public;
+			const ret = constructor.apply(__public, arguments);
+			return typeof ret === 'object' ? ret : __public;
 		};
 	},
 

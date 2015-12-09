@@ -21,6 +21,18 @@ const sleep = exports.sleep = function sleep(ms) {
 };
 
 /**
+ * Returns a new node-style callback with a 'promise' property that will be resolved/rejected when the callback gets called.
+ */
+const promiseCallback = exports.promiseCallback = function promiseCallback() {
+	var ret;
+	const promise = new Promise(function(resolve, reject) {
+		ret = function(err, res) { err ? reject(err) : resolve(res); };
+	});
+	ret.promise = promise;
+	return ret;
+};
+
+/**
  * Turns an asynchronous callback method into one that returns a promise
  * @param  {function}  callUlater  Method that takes an callback(error, value) as last argument
  * @return {function}              Method that returns a Promise to it's asynchronous value

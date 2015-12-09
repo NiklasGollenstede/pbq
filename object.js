@@ -142,7 +142,7 @@ const assignDescriptors = exports.assignDescriptors = function(to, from) {
 	return to;
 };
 
-const Self = new NameSpace;
+const ClassMap = new WeakMap;
 
 const ClassPrivate = {
 
@@ -155,7 +155,8 @@ const ClassPrivate = {
 		const _this = this;
 		if (![ 'public', 'protected', 'private', ].some(function(mode) {
 			_this.extendMode = mode;
-			return _this.super = Self(extend[mode]);
+			_this.super = ClassMap.get(extend[mode]);
+			return true;
 		})) {
 			this.extendMode = '';
 		}
@@ -184,7 +185,7 @@ const ClassPrivate = {
 			} break;
 			case 'public': {
 				this.public = copyPublicProperties(Object.create(this.super.public), this.public, this.const);
-				this.protected = assignDescriptors(this.protected, this.super.protected);
+				this.protected && this.super.protected && (this.protected = assignDescriptors(this.protected, this.super.protected));
 			} break;
 			case '__proto__': {
 				this.public = copyPublicProperties(Object.create(this.super.prototype), this.public, this.const);
@@ -262,7 +263,7 @@ const Class = exports.Class = function Class(options) {
 	self.getMethods();
 	self.getConstructor(options.constructor);
 
-	Self(self.Constructor, self);
+	ClassMap.set(self.Constructor, self);
 	return self.Constructor;
 };
 

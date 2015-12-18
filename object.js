@@ -40,7 +40,7 @@ const checkNativeType = exports.checkNativeType = function checkNativeType(objec
  * @return {object}          target
  */
 const copyProperties = exports.copyProperties = function copyProperties(target, source) {
-	Object.keys(source).forEach(function(key) {
+	source && Object.keys(source).forEach(function(key) {
 		if (checkNativeType(source[key], "Object")) {
 			!target[key] && (target[key] = { });
 			copyProperties(target[key], source[key]);
@@ -59,7 +59,7 @@ const copyProperties = exports.copyProperties = function copyProperties(target, 
  */
 const cloneOnto = exports.cloneOnto = function cloneOnto(target, source) {
 	const done = new WeakMap([ [ source, target, ], ]);
-	(function doIt(target, source) {
+	source && (function doIt(target, source) {
 		Object.keys(source).forEach(function(key) {
 			const sourceValue = source[key];
 			if (checkNativeType(sourceValue, "Object")) {
@@ -90,7 +90,7 @@ const cloneOnto = exports.cloneOnto = function cloneOnto(target, source) {
  * Same as copyProperties except that assignments will fail silently, instead of throwing.
  */
 const tryCopyProperties = exports.tryCopyProperties = function tryCopyProperties(target, source) {
-	Object.keys(source).forEach(function(key) {
+	source && Object.keys(source).forEach(function(key) {
 		if (checkNativeType(source[key], "Object")) {
 			try { !target[key] && (target[key] = { }); } catch (e) { }
 			tryCopyProperties(target[key], source[key]);
@@ -163,28 +163,28 @@ const ClassPrivate = {
 
 	getNameSpaces: function() {
 		const _super = this.super;
-		this.hasPublic = this.getPublic || this.extendMode === 'public' && (_super.hasPublic);
-		this.hasProtected = this.getProtected || this.extendMode === 'protected' && (_super.hasPublic || _super.hasProtected);
-		this.hasPrivate = this.getPrivate || this.extendMode === 'private' && (_super.hasPublic || _super.hasProtected);
-		this.Public = this.hasPublic ?  new NameSpace : idFunction;
+		this.hasPublic = !!this.getPublic || this.extendMode === 'public' && (_super.hasPublic) || this.extendMode === '__proto__' ;
+		this.hasProtected = !!this.getProtected || this.extendMode === 'protected' && (_super.hasPublic || _super.hasProtected) || this.extendMode === 'public' && (_super.hasProtected);
+		this.hasPrivate = !!this.getPrivate || this.extendMode === 'private' && (_super.hasPublic || _super.hasProtected);
+		this.Public = this.hasProtected || this.hasPrivate ?  new NameSpace : idFunction;
 		this.Protected = this.hasProtected ?  new NameSpace : idFunction;
 		this.Private = this.hasPrivate ?  new NameSpace : idFunction;
 	},
 
 	getMethods: function() {
-		this.public = this.getPublic && copyPublicProperties({ }, this.getPublic(this.Private, this.Protected, this.Public)) || { };
+		this.public = this.getPublic && copyPublicProperties({ }, this.getPublic(this.Private, this.Protected, this.Public), this.const) || { };
 		this.protected = this.getProtected && this.getProtected(this.Private, this.Protected, this.Public);
 		this.private = this.getPrivate && this.getPrivate(this.Private, this.Protected, this.Public);
 		switch (this.extendMode) {
 			case 'private': {
-				this.private = assignDescriptors(this.private, this.super.asProtected());
+				this.private = assignDescriptors(this.private || { }, this.super.asProtected());
 			} break;
 			case 'protected': {
-				this.protected = assignDescriptors(this.protected, this.super.asProtected());
+				this.protected = assignDescriptors(this.protected || { }, this.super.asProtected());
 			} break;
 			case 'public': {
 				this.public = copyPublicProperties(Object.create(this.super.public), this.public, this.const);
-				this.protected = assignDescriptors(this.protected, this.super.protected);
+				this.protected = assignDescriptors(this.protected || { }, this.super.protected);
 			} break;
 			case '__proto__': {
 				this.public = copyPublicProperties(Object.create(this.super.prototype), this.public, this.const);
@@ -248,6 +248,7 @@ const ClassPrivate = {
 };
 
 const Class = exports.Class = function Class(options) {
+	if (!options.hasOwnProperty('constructor')) { throw new Error('options.constructor is not defined'); }
 	const self = Object.create(ClassPrivate);
 	self.const = options.const == null ? true : !!options.const;
 	self.static = Object.freeze(options.static);

@@ -28,13 +28,14 @@ const inIframe = exports.inIframe = function inIframe() {
 /**
  * Creates a dom element and sets properties/attributes and children.
  * @param  {string}          tagName     Type of the new Element.
- * @param  {object}          properties  Properties, whisch are deeply copied onto the new element.
- * @param  {Array(Element)}  childList   Array of elements set as the children of the new elenent.
+ * @param  {object}          properties  Optional object of properties, whisch are deeply copied onto the new element.
+ * @param  {Array(Element)}  childList   Optional Array of elements set as the children of the new elenent.
  * @return {Element}                     New DOM element
  */
 const createElement = exports.createElement = function createElement(tagName, properties, childList) {
 	const element = (this || window).document.createElement(tagName);
-	copyProperties(element, properties);
+	if (Array.isArray(properties)) { childList = properties; properties = null; }
+	properties && copyProperties(element, properties);
 	for (var i = 0; childList && i < childList.length; ++i) {
 		childList[i] && element.appendChild(childList[i]);
 	}
@@ -62,13 +63,13 @@ const addStyle = exports.addStyle = function addStyle(css) {
 
 /**
  * Triggers a 'click' event on a DOM Element, often causing it's default click action.
- * @return {Event}         The dispatched click Event
+ * @return {Element}         The clicked Element
  */
 const clickElement = exports.clickElement = function clickElement(element) {
 	const evt = (this || window).document.createEvent('MouseEvents');
 	evt.initEvent('click', true, true);
 	element.dispatchEvent(evt);
-	return evt;
+	return element;
 };
 
 /**

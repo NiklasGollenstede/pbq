@@ -85,6 +85,11 @@ exports = function polyfill(subject, options) {
 				return -1;
 			});
 		}
+		if (!Array.prototype.includes && Array.prototype.indexOf) {
+			extend(Array.prototype, 'includes', function(element, start) {
+				return this.indexOf(element, start) !== -1;
+			});
+		}
 
 		if (!Array.prototype.fill) {
 			Array.prototype.fill = function fill(value, start, end) {

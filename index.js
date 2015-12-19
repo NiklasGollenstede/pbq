@@ -1,12 +1,13 @@
 (function(exports) { 'use strict';
 
 function exportLazy(key) {
+	var value;
 	Object.defineProperty(exports, key, {
 		enumerable: true,
 		configurable: true,
 		get: function() {
-			const value = require('es6lib/'+ key);
-			Object.defineProperty(exports, key, {
+			!value && (value = require('es6lib/'+ key));
+			!Object.isSealed(exports) && Object.defineProperty(exports, key, {
 				enumerable: true,
 				configurable: false,
 				writable: false,

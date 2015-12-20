@@ -57,8 +57,9 @@ const HttpRequest = exports.HttpRequest = function HttpRequest(url, options) {
 };
 function cancelWith(reject, reason) {
 	/* global ProgressEvent */
-	const error = new ProgressEvent(reason);
-	this.dispatchEvent(error); // side effects ??
+	const error = document.createEvent('ProgressEvent');
+	error.initEvent(reason, false, false);
+	this.dispatchEvent(error);
 	reject(error);
 }
 

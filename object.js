@@ -185,7 +185,7 @@ const ClassPrivate = {
 			} break;
 			case 'public': {
 				this.public = copyPublicProperties(Object.create(this.super.public), this.public, this.const);
-				this.protected && this.super.protected && (this.protected = assignDescriptors(this.protected, this.super.protected));
+				this.protected = assignDescriptors(this.protected || { }, this.super.protected);
 			} break;
 			case '__proto__': {
 				this.public = copyPublicProperties(Object.create(this.super.prototype), this.public, this.const);

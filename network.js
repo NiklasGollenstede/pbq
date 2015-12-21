@@ -2,7 +2,7 @@
 
 
 var XHR; try { XHR = (/* global XMLHttpRequest */ typeof XMLHttpRequest !== 'undefined') ? XMLHttpRequest : require('sdk/net/xhr'/* firefox */).XMLHttpRequest; } catch(e) { }
-var ProgressEventConstruntor; try { /* global ProgressEvent */ new ProgressEvent(''); ProgressEventConstruntor = ProgressEvent; } catch (error) { ProgressEventConstruntor = function(reason) { const error = document.createEvent('ProgressEvent'); error.initEvent(reason, false, false); retunr error; }; }
+var ProgressEventConstruntor; try { /* global ProgressEvent */ new ProgressEvent(''); ProgressEventConstruntor = ProgressEvent; } catch (error) { ProgressEventConstruntor = function(reason) { const error = document.createEvent('ProgressEvent'); error.initEvent(reason, false, false); return error; }; }
 
 /**
  * Constructs an XMLHttpRequest from the given url and options and returns a Promise

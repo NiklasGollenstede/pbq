@@ -1,7 +1,8 @@
 (function(exports) { 'use strict';
 
-/* global XMLHttpRequest */
-var XHR; try { XHR = (typeof XMLHttpRequest !== 'undefined') ? XMLHttpRequest : require('sdk/net/xhr').XMLHttpRequest; } catch(e) { }
+
+var XHR; try { XHR = (/* global XMLHttpRequest */ typeof XMLHttpRequest !== 'undefined') ? XMLHttpRequest : require('sdk/net/xhr'/* firefox */).XMLHttpRequest; } catch(e) { }
+var ProgressEventConstruntor; try { /* global ProgressEvent */ new ProgressEvent(''); ProgressEventConstruntor = ProgressEvent; } catch (error) { ProgressEventConstruntor = function(reason) { const error = document.createEvent('ProgressEvent'); error.initEvent(reason, false, false); retunr error; }; }
 
 /**
  * Constructs an XMLHttpRequest from the given url and options and returns a Promise
@@ -56,9 +57,7 @@ const HttpRequest = exports.HttpRequest = function HttpRequest(url, options) {
 	});
 };
 function cancelWith(reject, reason) {
-	/* global ProgressEvent */
-	const error = document.createEvent('ProgressEvent');
-	error.initEvent(reason, false, false);
+	const error = new ProgressEventConstruntor(reason);
 	this.dispatchEvent(error);
 	reject(error);
 }

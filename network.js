@@ -9,8 +9,9 @@ var ProgressEventConstruntor; try { /* global ProgressEvent */ new ProgressEvent
  * that is fulfilled with the request once the result is loaded or canceld with an ProgressEvent if an error occurs.
  * @param {string} url     Destination url, may be omited in favor of the url or src property of the options object.
  * @param {Object} options optional object of:
- *     @property {string}  url || src        optional replacement for the url panameter
+ *     @property {string}  url || src        Optional replacement for the url panameter
  *     @property {string}  method            HTTP request method
+ *     @property {bool}    needAbort         If trueisch, the returned Promise has an abort() method that aborts the XHR and rejects the Promise
  *     @property {bool}    xhr               Set to false to not set the 'X-Requested-With' header to 'XMLHttpRequest'
  *     @property {string}  user              HTTP user name
  *     @property {string}  password          HTTP password
@@ -25,7 +26,7 @@ var ProgressEventConstruntor; try { /* global ProgressEvent */ new ProgressEvent
 const HttpRequest = exports.HttpRequest = function HttpRequest(url, options) {
 	var request, cancel;
 	const o = arguments[arguments.length - 1] || { };
-	return Object.assign(new Promise(function(resolve, reject) {
+	const promise = new Promise(function(resolve, reject) {
 		typeof url !== 'string' && (url = o.url || o.src);
 
 		request = new XHR(o);
@@ -49,12 +50,12 @@ const HttpRequest = exports.HttpRequest = function HttpRequest(url, options) {
 			}
 		};
 		request.send(o.body);
-	}), {
-		abort: function() {
-			request.abort();
-			cancel('canceled');
-		},
 	});
+	o.needAbort && (promise.abort = function() {
+		request.abort();
+		cancel('canceled');
+	});
+	return promise;
 };
 function cancelWith(reject, reason) {
 	const error = new ProgressEventConstruntor(reason);
@@ -89,7 +90,7 @@ const mimeTypes = exports.mimeTypes = {
 	ico: 'image/x-icon',
 	jpeg: 'image/jpeg',
 	jpg: 'image/jpeg',
-	js: 'text/javascript',
+	js: 'application/javascript',
 	json: 'application/json',
 	mp4: 'video/mp4',
 	pdf: 'application/pdf',

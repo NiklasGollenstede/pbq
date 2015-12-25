@@ -16,7 +16,7 @@
   "scripts": {
     "debug": "node debug.js",
     "start": "node start.js",
-    "test": "mocha --require test/node",
+    "test": "mocha",
     "test-debug": "node-debug _mocha --debug --require test/node"
   },
   "version": "0.0.1"

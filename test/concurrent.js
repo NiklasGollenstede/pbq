@@ -1,18 +1,13 @@
 'use strict';
 
-const {
-	promisify,
-	promised,
-	spawn,
-	async,
-	StreamIterator,
-	forOn,
-	sleep,
-} = require('../concurrent.js');
-
-const {
-	log, Logger,
-} = require('../functional.js');
+const concurrent = require('../concurrent.js');
+	const promisify = concurrent.promisify;
+	const promised = concurrent.promised;
+	const spawn = concurrent.spawn;
+	const async = concurrent.async;
+	const StreamIterator = concurrent.StreamIterator;
+	const forOn = concurrent.forOn;
+	const sleep = concurrent.sleep;
 
 function nodeReturn(value, callback) {
 	callback(null, value, 'ignored');

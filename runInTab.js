@@ -1,4 +1,4 @@
-(function firefox(exports) { 'use strict';
+(function () { 'use strict';
 
 /**
  * Loaded in the main process, provides a single function that allows to run functions in a tab process.
@@ -60,4 +60,4 @@ if (typeof module !== 'undefined') {
 	}
 }
 
-const moduleName = 'es6lib/runInTab'; if (typeof module !== 'undefined') { module.exports = exports; } else if (typeof define === 'function') { define(moduleName, exports); } else if (typeof window !== 'undefined' && typeof module === 'undefined') { window[moduleName] = exports; } return exports; })({ });
+})({ });

@@ -1,6 +1,8 @@
 'use strict';
 
-const { noop, apply, } = require('../functional.js');
+const functional = require('../functional.js');
+	const noop = functional.noop;
+	const apply = functional.apply;
 
 (noop ? describe : xdescribe)('"noop" should', () => {
 	const sut = noop;
@@ -28,7 +30,8 @@ const { noop, apply, } = require('../functional.js');
 describe('"apply" should', function() {
 	const sut = apply;
 
-	function concat(...args) {
+	function concat(/*...*/args) {
+		args = Array.prototype.slice.call(arguments);
 		args.unshift(this);
 		return args;
 	}

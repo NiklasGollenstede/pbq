@@ -15,7 +15,7 @@ if (typeof module !== 'undefined') {
 	const __FILE__ = new Error().fileName.match(/ -> (resource:\/\/.*?)$/)[1];
 	const __REQUIRE__ = __FILE__.replace(/[^\/]*$/, 'require.js');
 
-	exports = (tab, ...args) => new Promise((resolve, reject) => {
+	return (tab, ...args) => new Promise((resolve, reject) => {
 		const modules = [ __REQUIRE__, ];
 		let i = 0;
 		while (typeof args[i] !== 'function' && i < args.length) {

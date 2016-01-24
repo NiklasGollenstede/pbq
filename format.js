@@ -4,9 +4,9 @@
  * Turns a template string containing an extended RegExp, which may contain uninterpreted whitespaces
  * and # comments, into a regular RegExp object.
  * Must be called as a template string tagging function.
- * Since it uses the template strings '.raw' property, no additional escaping compared to regular RegExp,
- * expressions is required, except that whitespaces and '#' characters that are not to be removed need to be escaped.
- * Note: The sequence '${' needs to be escaped to '\${' and will then appear as '\${' in the resulting RegExp.
+ * Since it uses the template strings '.raw' property, no additional escaping compared to regular RegExp
+ * literal is required, except that whitespaces and '#' characters that are not to be removed need to be escaped.
+ * Note: The sequence '${' needs to be escaped to '\${' or '$\{' and will then appear as '\${' or '$\{' in the resulting RegExp.
  * The usual flags 'gim' may follow the RegExp itself after a closing '/'.
  * Example:
  *     RegExpX`a` <= same as => /a/
@@ -17,31 +17,34 @@
  *             /g` <= same as => /[\n ]\/#notacomment/g
  *     RegExpX`^ . * ? x / g i m` <= smae as => /^.*?x/gim
  * As a plus, you can also use variables in your RegExp's, e.g.:
- *     var newLine = '[\\n\\r]'; // string
- *     var sentence = /[\w\.\ 0-9]/; // RegExp (modifiers ignored)
- *     RegExpX`(${sentence}(<br><\/br>)+${newLine})+` <= same as => /([\w\. 0-9](<br><\/br>)+[\n\r])+/
+ *     var newLine = '[\\r\\n]'; // string
+ *     var sentence = /([\w\.\ 0-9]*)/; // RegExp (modifiers ignored)
+ *     RegExpX`(${ sentence } (<br><\/br>)+ ${ newLine })+` <= same as => /(([\w\. 0-9]*)(<br><\/br>)+[\r\n])+/
  */
 const RegExpX = exports.RegExpX = function RegExpX() {
 	// use '.source' property if variable is a RegExp
 	for (var i = 1, l = arguments.length; i < l; ++i) {
 		arguments[i] && arguments[i].source && (arguments[i] = arguments[i].source);
 	}
+
+	var flags = '';
+
 	// get the string exactly as typed ==> no further escaping necessary
-	const raw = String.raw.apply(String, arguments)
-	// remove all '#'+string which are not escaped, i.e. preceded my an odd number of '\'
-	.replace(/(\\*)#.*/g, unescapeOrRemove)
-	// do the same for all whitespaces afterwards, so that sections behind escaped '#' are processed
-	.replace(/(\\*)\s/g, unescapeOrRemove);
-	function unescapeOrRemove(m, bs) { return bs.length % 2 ? m.slice(1) : bs; }
+	const source = String.raw.apply(String, arguments)
 
-	// flags may optionally be appended after a (not escaped) closing '/'. (The opening '/' is implicit)
-	const end = /(\\*)\/(.*)/g;
-	var mods; do {
-		mods = end.exec(raw); // find slash
-	} while (mods && mods[1].length % 2 !== 0 && (end.lastIndex -= mods[2].length)); // repeat if slash was escaped
+	// remove all '#'+comments which are not escaped, i.e. they are preceded my an even number of '\'
+	.replace(/(^|[^\\])((\\\\)*)#.*/g, '$1$2')
+	// remove '\' used to escape an '#'
+	.replace(/\\((\\\\)*)#/g, '$1#')
 
-	return mods ? new RegExp(raw.slice(0, -(mods[2].length + 1)), mods[2]) : new RegExp(raw);
-}
+	// remove all whitespace characters which are not escaped or an escaping slash for each escaped whitespace
+	.replace(/(\\*)\s/g, function(match, slashes) { return slashes.length % 2 ? match.slice(1) : slashes; })
+
+	// if a not escaped '/' is present, it separates the flags from the source
+	.replace(/(^|[^\\])((\\\\)*)\/([^]*)$/, function(match, char, slashes, slash, _flags) { flags = _flags; return char + slashes; });
+
+	return new RegExp(source, flags);
+};
 
 /**
  * Fills or truncates a string so that 'string'.length === 'length'

@@ -1,8 +1,8 @@
 'use strict';
 
-const functional = require('../functional.js');
-	const noop = functional.noop;
-	const apply = functional.apply;
+const {
+	functional: { apply, noop, },
+} = require('../');
 
 (noop ? describe : xdescribe)('"noop" should', () => {
 	const sut = noop;

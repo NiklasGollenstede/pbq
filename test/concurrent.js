@@ -1,13 +1,8 @@
 'use strict';
 
-const concurrent = require('../concurrent.js');
-	const promisify = concurrent.promisify;
-	const promised = concurrent.promised;
-	const spawn = concurrent.spawn;
-	const async = concurrent.async;
-	const StreamIterator = concurrent.StreamIterator;
-	const forOn = concurrent.forOn;
-	const sleep = concurrent.sleep;
+const {
+	concurrent: { promisify, promised, spawn, async, StreamIterator, forOn, sleep, },
+} = require('../');
 
 function nodeReturn(value, callback) {
 	callback(null, value, 'ignored');

@@ -6,7 +6,7 @@ function exportLazy(key) {
 		enumerable: true,
 		configurable: true,
 		get: function() {
-			!value && (value = require('es6lib/'+ key));
+			!value && (value = (function() { try { return require('./'+ key); } catch (e) { return require('es6lib/'+ key); } })());
 			!Object.isSealed(exports) && Object.defineProperty(exports, key, {
 				enumerable: true,
 				configurable: false,

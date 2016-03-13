@@ -11,11 +11,7 @@ if (typeof window === 'undefined' || typeof window.require !== 'undefined' || ty
 const modules = new Map();
 
 const define = window.define = function define(name, requires, module) {
-	if (modules.has(name)) {
-		const error = new Error('Module "'+ name +'" is already defined');
-		console.error(error);
-		throw error;
-	}
+	if (modules.has(name)) { throw new Error('Module "'+ name +'" is already defined'); }
 	if (arguments.length >= 3) {
 		module = module.apply(null, Array.prototype.map.call(requires, require));
 	} else if (typeof requires === 'function') {
@@ -27,11 +23,7 @@ const define = window.define = function define(name, requires, module) {
 };
 
 const require = window.require = function require(name, module) {
-	if (!modules.has(name)) {
-		const error = new Error('Can\'t find module "'+ name +'"');
-		console.error(error);
-		throw error;
-	}
+	if (!modules.has(name)) { throw new Error('Can\'t find module "'+ name +'"'); }
 	return modules.get(name);
 };
 

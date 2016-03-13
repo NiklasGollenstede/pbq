@@ -88,7 +88,7 @@ const saveAs = exports.saveAs = function saveAs(content, name) {
 		href: isBlob ? win.URL.createObjectURL(content) : content,
 	});
 
-	clickElement(link, win);
+	clickElement.call(win, link);
 
 	isBlob && timeout(function() { win.URL.revokeObjectURL(link.href); }, 1000);
 };

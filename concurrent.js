@@ -46,6 +46,14 @@ const promisify = exports.promisify = function promisify(callUlater) {
 	};
 };
 
+const promisifyAll = exports.promisifyAll = function promisifyAll(object, prefix, keys) {
+	prefix = prefix || '';
+	keys = keys || Object.keys(object);
+	keys.forEach(function(key) {
+		object[prefix + key] = promisify(object[key]);
+	});
+};
+
 /**
  * Turns a method that returns a promise into one that accepts a callback as last parameter.
  * @param  {function}  promiser  Method that returns a Promise to it's asynchronous value
@@ -242,7 +250,7 @@ const periodic = exports.periodic = function periodic(callback, waitFor) {
 			(value && typeof value.then === 'function') ? value.then(pong, reject) : pong(value);
 		}
 		function pong(value) {
-			if (value) { return value; }
+			if (value) { return resolve(value); }
 			try { expected += waitFor(++index); } catch (error) { return reject(error); }
 			timeout(ping, expected - hrtime());
 		}

@@ -7,7 +7,7 @@
  * Since it uses the template strings '.raw' property, no additional escaping compared to regular RegExp
  * literal is required, except that whitespaces and '#' characters that are not to be removed need to be escaped.
  * Note: The sequence '${' needs to be escaped to '\${' or '$\{' and will then appear as '\${' or '$\{' in the resulting RegExp.
- * The usual flags 'gim' may follow the RegExp itself after a closing '/'.
+ * The usual flags 'gim(uy)' may follow the RegExp itself after a closing '/'.
  * Example:
  *     RegExpX`a` <= same as => /a/
  *     RegExpX`a/i` <= same as => /a/i
@@ -41,7 +41,7 @@ const RegExpX = exports.RegExpX = function RegExpX() {
 	.replace(/(\\*)\s/g, function(match, slashes) { return slashes.length % 2 ? match.slice(1) : slashes; })
 
 	// if a not escaped '/' is present, it separates the flags from the source
-	.replace(/(^|[^\\])((\\\\)*)\/([^]*)$/, function(match, char, slashes, slash, _flags) { flags = _flags; return char + slashes; });
+	.replace(/(^|[^\\])((?:\\\\)*)\/([^]*)$/, function(match, char, slashes, _flags) { flags = _flags; return char + slashes; });
 
 	return new RegExp(source, flags);
 };
@@ -131,12 +131,17 @@ const timeToRoundString = exports.timeToRoundString = function timeToRoundString
  */
 const exponentAliases = { "-9": "p", "-6": "µ", "-3": "m", 0: "", 3: "k", 6: "M", 9: "G", 12: "T", };
 const numberToRoundString = exports.numberToRoundString = function numberToRoundString(number, digits) {
-	digits = (+digits > 0) ? Number.parseInt(digits) : 3;
-	var exponent = +number.toExponential(0).match(/e([+-]?\d+)/)[1];
-	exponent = Math.trunc((exponent > 0 ? exponent : exponent - 2) / 3) * 3;
-	number /= Math.pow(10, exponent);
-	digits -= number.toFixed(0).length;
-	return number.toFixed(digits) + (exponentAliases[exponent] != null ? exponentAliases[exponent] : "e"+ exponent);
+	digits = (+digits > 3) ? +digits : 3;
+	const match = number.toExponential(digits + 2).match(/(-?)(.*)e(.*)/);
+	const exponent = +match[3];
+	const unit = Math.floor(exponent / 3) * 3;
+	const shift = exponent - unit;
+	const mantissa = shift ? match[2].replace(/(\d)\.(\d)(\d)(\d*)/, (x, _1, _2, _3, _R) =>
+		shift === 1
+		? (_1 + _2 +'.'+ _3 + _R.slice(0, digits - 3))
+		: (_1 + _2 + _3 + (digits <= 3 ? '' : +'.'+ _R.slice(0, digits - 3)))
+	) : match[2].slice(0, digits + 1);
+	return match[1] + mantissa + (exponentAliases[unit] != null ? exponentAliases[unit] : "e"+ unit);
 };
 
 /**
@@ -149,7 +154,7 @@ const numberToRoundString = exports.numberToRoundString = function numberToRound
 const QueryObject = exports.QueryObject = function QueryObject(query, key, value) {
 	value = value || '=';
 	const self = (this instanceof QueryObject) ? this : Object.create(QueryObject.prototype);
-	String.split(query, key || /[&#?]+/)
+	String.prototype.split.call(query, key || (/[&#?]+/))
 	.map(function(string) { return string.split(value); })
 	.forEach(function(pair) { pair[0] && (self[pair[0]] = pair[1]); });
 };

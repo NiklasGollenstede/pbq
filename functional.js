@@ -140,6 +140,29 @@ const fuzzyMatch = exports.fuzzyMatch = function fuzzyMatch(s1, s2, n) {
 	return (l1 + l2) ? 2 * total / (l1 + l2) : 0;
 };
 
+/**
+ * Class that can be extended instead of Function.
+ * Forwards all calls to this() to the specified member of this,
+ * providing the correct this instance inside that member.
+ * The extending constructor has to (extend and) return the result of super()!
+ */
+try {
+	exports.Callable = new (function() { }).constructor("\
+		class Callable extends Function {\
+			constructor(methodName) {\
+				const bind = { };\
+				super('const self = this.self; return self.'+ (methodName || 'run') +'.apply(self, arguments)');\
+				const self = bind.self = super.bind(bind);\
+				return self;\
+			}\
+			bind() {\
+				return Object.assign(super.bind.apply(this, arguments), this);\
+			}\
+		}\
+		return Callable\
+	")();
+} catch (error) {}
+
 /*
 // untested
 const Cache = exports.Cache = function Cache(compute, options) {

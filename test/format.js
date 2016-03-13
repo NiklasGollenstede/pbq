@@ -2,7 +2,7 @@
 
 const {
 	functional: { log, },
-	format: { RegExpX, }
+	format: { RegExpX, numberToRoundString, }
 } = require('../');
 
 
@@ -50,6 +50,7 @@ describe('"RegExpX" should', function() {
 	it('find flags', () => {
 		RegExpX`a/i`.should.deep.equal((/a/i));
 		RegExpX`a\/b/i`.should.deep.equal((/a\/b/i));
+		RegExpX`a\/b\\\\/i`.should.deep.equal((/a\/b\\\\/i));
 		RegExpX`a\/b # comment
 		/igm # flags`.should.deep.equal((/a\/b/igm));
 	});
@@ -88,4 +89,40 @@ describe('"RegExpX" should', function() {
 		RegExpX`(${ sentence } (<br><\/br>)+ ${ newLine })+`.should.deep.equal((/(([\w\. 0-9]*)(<br><\/br>)+[\r\n])+/));
 	});
 
+});
+
+describe('"numberToRoundString" should', function() {
+
+	it('work', () => {
+		numberToRoundString(+1.23e1, 3).should.equal( '12.3');
+		numberToRoundString(-1.23e1, 3).should.equal('-12.3');
+
+		numberToRoundString(+1.23e2, 3).should.equal( '123');
+		numberToRoundString(-1.23e2, 3).should.equal('-123');
+
+		numberToRoundString(+1.23e3, 3).should.equal( '1.23k');
+		numberToRoundString(-1.23e3, 3).should.equal('-1.23k');
+
+		numberToRoundString(+1.23e5, 3).should.equal( '123k');
+		numberToRoundString(-1.23e5, 3).should.equal('-123k');
+
+		numberToRoundString(+1.23e7, 3).should.equal( '12.3M');
+		numberToRoundString(-1.23e7, 3).should.equal('-12.3M');
+
+		numberToRoundString(+1.23e9, 3).should.equal( '1.23G');
+		numberToRoundString(-1.23e9, 3).should.equal('-1.23G');
+
+		numberToRoundString(+1.23e-1, 3).should.equal( '123m');
+		numberToRoundString(-1.23e-1, 3).should.equal('-123m');
+
+		numberToRoundString(+1.23e-3, 3).should.equal( '1.23m');
+		numberToRoundString(-1.23e-3, 3).should.equal('-1.23m');
+
+		numberToRoundString(+1.23e-6, 3).should.equal( '1.23µ');
+		numberToRoundString(-1.23e-6, 3).should.equal('-1.23µ');
+
+		numberToRoundString(+1.2345678e4, 6).should.equal( '12.3456k');
+		numberToRoundString(-1.2345678e4, 6).should.equal('-12.3456k');
+
+	});
 });

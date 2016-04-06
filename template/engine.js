@@ -411,7 +411,7 @@ TemplateEngine.prototype = {
 /**
  * Marks parts that will be filtered out, but are first included to maintain the condition
  * that every odd part is a value and every even part is a string part.
- * NoStrip version will be replaces by '' instead of beeing removed.
+ * NoStrip version will be replaced by '' instead of being removed.
  */
 function emptyValue() { }
 function emptyValueNoStrip() { }

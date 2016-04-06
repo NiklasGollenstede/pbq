@@ -124,13 +124,14 @@ const timeToRoundString = exports.timeToRoundString = function timeToRoundString
 };
 
 /**
- * outputs a number as a human readable string like '12.3 µ', '42', '1.05 T'
+ * outputs a number as a human readable string like '12.3µ', '42', '1.05T'
  * @param  {number} number  input
  * @param  {uint}   digits  significant digits in the output
  * @return {string}         s.o.
  */
 const exponentAliases = { "-9": "p", "-6": "µ", "-3": "m", 0: "", 3: "k", 6: "M", 9: "G", 12: "T", };
 const numberToRoundString = exports.numberToRoundString = function numberToRoundString(number, digits) {
+	if (typeof number !== 'number') { return '0'; }
 	digits = (+digits > 3) ? +digits : 3;
 	const match = number.toExponential(digits + 2).match(/(-?)(.*)e(.*)/);
 	const exponent = +match[3];
@@ -146,17 +147,17 @@ const numberToRoundString = exports.numberToRoundString = function numberToRound
 
 /**
  * turns a (url) query string into an object and back
- * @param {string}           query the query string
- * @param {string || RegExp} key   sequence used to seperate key/value-pairs, defaults to anyPositiveNumberOf('&', '#', '?')
- * @param {string || RegExp} value sequence used to seperate keys from values, defaults to '=', value may be optional (in the query)
- * @param {QueryObject}      instance of QueryObject that has properties as read from the query
+ * @param  {string}            query the query string
+ * @param  {string || RegExp}  key   sequence used to seperate key/value-pairs, defaults to anyPositiveNumberOf('&', '#', '?')
+ * @param  {string || RegExp}  value sequence used to seperate keys from values, defaults to '=', value may be optional (in the query)
+ * @return {QueryObject}       QueryObject instance that has properties as read from the query
  */
-const QueryObject = exports.QueryObject = function QueryObject(query, key, value) {
+const QueryObject = exports.QueryObject = function QueryObject(query, key, value, mapper) {
 	value = value || '=';
 	const self = (this instanceof QueryObject) ? this : Object.create(QueryObject.prototype);
 	String.prototype.split.call(query, key || (/[&#?]+/))
 	.map(function(string) { return string.split(value); })
-	.forEach(function(pair) { pair[0] && (self[pair[0]] = pair[1]); });
+	.forEach(function(pair) { pair[0] && (self[pair[0]] = mapper ? mapper(pair[1]) : pair[1]); });
 };
 /**
  * turns the QueryObject back into a query string

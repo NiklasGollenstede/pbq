@@ -234,7 +234,7 @@ const ClassPrivate = {
 		}
 		this.constructor = constructor(this.Super, this.Private, this.Protected, this.Public);
 		const Constructor = this.Constructor = this.getConstructorFor(this.Protected, this.Public);
-		Constructor.class = this; // TODO: remove
+		// Constructor.class = this; // TODO: remove
 
 		Constructor.prototype = copyPublicProperties(this.public, { _constructor: Constructor, }, this.const);
 		/*Object.defineProperty(Constructor, 'prototype', {

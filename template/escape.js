@@ -3,13 +3,13 @@
 const htmlEscapeObject = { '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;', '/': '&#47;', '--': '-&#45;', };
 const htmlEscapeRegExp = new RegExp(Object.keys(htmlEscapeObject).join('|'), 'g'); // also correct for multi char strings
 // const htmlEscapeRegExp = new RegExp('['+ Object.keys(htmlEscapeObject).join('') +']', 'g'); // faster ??
-const escapeHtml = exports.escapeHtml = exoprts.encodeHtml = function escapeHtml(string) {
+const escapeHtml = exports.escapeHtml = exports.encodeHtml = function escapeHtml(string) {
 	return String.prototype.replace.call(string != null ? string : '', htmlEscapeRegExp, function(c) { return htmlEscapeObject[c]; });
 };
 
 try {
 	const htmlUnscapeElement = document.createElement('textarea');
-	exports.unescapeHtml = exports.decodeHtml = function(html) { decoder.innerHTML = html; return decoder.value; };
+	exports.unescapeHtml = exports.decodeHtml = function(html) { htmlUnscapeElement.innerHTML = html; return htmlUnscapeElement.value; };
 } catch (error) { }
 
 const escapeString = exports.escapeString = function escapeString(string) {

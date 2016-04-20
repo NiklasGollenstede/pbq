@@ -82,9 +82,11 @@ const arrayBufferToString = exports.arrayBufferToString = function arrayBufferTo
  * @type {object}
  */
 const mimeTypes = exports.mimeTypes = {
+	'3gp': 'video/3gpp',
 	bmp: 'image/bmp',
 	css: 'text/css',
 	htm: 'text/html',
+	flv: 'video/x-flv',
 	gif: 'image/gif',
 	html: 'text/html',
 	ico: 'image/x-icon',

@@ -37,7 +37,7 @@ const RegExpX = exports.RegExpX = function RegExpX() {
 	// remove '\' used to escape an '#'
 	.replace(/\\((\\\\)*)#/g, '$1#')
 
-	// remove all whitespace characters which are not escaped or an escaping slash for each escaped whitespace
+	// remove all whitespace characters which are not escaped or remove an escaping slash for each escaped whitespace
 	.replace(/(\\*)\s/g, function(match, slashes) { return slashes.length % 2 ? match.slice(1) : slashes; })
 
 	// if a not escaped '/' is present, it separates the flags from the source
@@ -47,11 +47,11 @@ const RegExpX = exports.RegExpX = function RegExpX() {
 };
 
 /**
- * Fills or truncates a string so that 'string'.length === 'length'
- * @param  {string} string input, will be casted to string
- * @param  {uint}   length length the output will have, defaults to string.length
- * @param  {char}   fill   char used to add padding, defaults to '0'
- * @return {string}        string of .length length
+ * Fills or truncates a string at its start so that string.length === length
+ * @param  {string}   string  Input, will be casted to string
+ * @param  {natural}  length  Length the output will have, defaults to string.length
+ * @param  {char}     fill    Character used to add padding, defaults to '0'
+ * @return {string}           string of .length length
  */
 const toFixedLength = exports.toFixedLength = function toFixedLength(string, length, fill) {
 	fill = fill ? (fill+'')[0] : '0';
@@ -84,7 +84,7 @@ const Guid = exports.Guid = function Guid() {
 const secondsToHhMmSs = exports.secondsToHhMmSs = function secondsToHhMmSs(time) {
 	time = +time;
 	const hours = Math.floor(time / 3600); time = time % 3600;
-	const ret = Math.floor(time / 60) +":"+ (time % 60 < 10 ? ("0" + time % 60) : (time % 60));
+	const ret = Math.floor(time / 60) +':'+ (time % 60 < 10 ? ('0' + time % 60) : (time % 60));
 	if (hours) { return hours + (ret.length > 4 ? ':' : ':0') +ret; }
 	return ret;
 };
@@ -94,7 +94,7 @@ const secondsToHhMmSs = exports.secondsToHhMmSs = function secondsToHhMmSs(time)
  * @return {uint}        time in seconds
  */
 const hhMmSsToSeconds = exports.hhMmSsToSeconds = function hhMmSsToSeconds(time) {
-	time = time.split(":").map(parseFloat);
+	time = time.split(':').map(parseFloat);
 	while(time.length > 1) {
 		time[0] = time[1] + 60 * time.shift();
 	}
@@ -147,29 +147,32 @@ const numberToRoundString = exports.numberToRoundString = function numberToRound
 
 /**
  * turns a (url) query string into an object and back
- * @param  {string}            query the query string
- * @param  {string || RegExp}  key   sequence used to seperate key/value-pairs, defaults to anyPositiveNumberOf('&', '#', '?')
- * @param  {string || RegExp}  value sequence used to seperate keys from values, defaults to '=', value may be optional (in the query)
+ * @param  {string}            query     the query string
+ * @param  {string || RegExp}  key       sequence used to separate key/value-pairs, defaults to anyPositiveNumberOf('&', '#', '?')
+ * @param  {string || RegExp}  value     sequence used to separate keys from values, defaults to '=', value may be optional (in the query)
+ * @param  {function}          decoder   Optional function sued to decode value segments.
  * @return {QueryObject}       QueryObject instance that has properties as read from the query
  */
-const QueryObject = exports.QueryObject = function QueryObject(query, key, value, mapper) {
-	value = value || '=';
+const QueryObject = exports.QueryObject = function QueryObject(query, key, value, decoder) {
+	value = value || '='; decoder = decoder || function(id) { return id; };
 	const self = (this instanceof QueryObject) ? this : Object.create(QueryObject.prototype);
 	String.prototype.split.call(query, key || (/[&#?]+/))
 	.map(function(string) { return string.split(value); })
-	.forEach(function(pair) { pair[0] && (self[pair[0]] = mapper ? mapper(pair[1]) : pair[1]); });
+	.forEach(function(pair) { pair[0] && (self[pair[0]] = decoder(pair[1])); });
 };
 /**
  * turns the QueryObject back into a query string
- * @param  {string} keySep   seperator between key/value-pairs, defaults to '&'
- * @param  {string} valueSep seperator between key and value, defaults to '='
- * @return {string}          the query string representation of this
+ * @param  {string}    keySep    Separator between key/value-pairs, defaults to '&'
+ * @param  {string}    valueSep  Separator between key and value, defaults to '='
+ * @param  {function}  encoder   Optional function sued to encode value segments.
+ * @return {string}              the query string representation of this
  */
-QueryObject.prototype.toString = function(keySep, valueSep) {
-	keySep = keySep || '&'; valueSep = valueSep || '=';
-	return Object.keys(this).reduce(function(ret, key) {
-		return ret + keySep + key + ((this[key] !== null) ? (valueSep + this[key]) : '');
-	}.bind(this), '').substring(1);
+QueryObject.prototype.toString = function(keySep, valueSep, encoder) {
+	const self = this;
+	valueSep = valueSep || '='; encoder = encoder || function(id) { return id; };
+	return Object.keys(self).map(function(key) {
+		return key + valueSep + (self[key] !== null ? encoder(self[key]) : '');
+	}).join(keySep || '&');
 };
 
 const moduleName = 'es6lib/format'; if (typeof module !== 'undefined') { module.exports = exports; } else if (typeof define === 'function') { define(moduleName, exports); } else if (typeof window !== 'undefined' && typeof module === 'undefined') { window[moduleName] = exports; } return exports; })({ });

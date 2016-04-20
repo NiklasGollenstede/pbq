@@ -193,6 +193,13 @@ CreationObserver.prototype.remove = function(selector, callback, single) {
 	self.listeners.length === 0 && self.disconnect();
 	return length - self.listeners.length;
 };
+CreationObserver.prototype.removeAll = function() {
+	const self = Self.get(this);
+	const length = self.listeners.length;
+	self.listeners.length = 0;
+	self.disconnect();
+	return length;
+};
 CreationObserver.prototype.single = function(selector, callback) {
 	const element = Self.get(this).element.querySelector(selector);
 	if (element) {

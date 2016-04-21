@@ -13,7 +13,12 @@ const copyProperties = require('es6lib/object').copyProperties;
  * To have any of the functions of this module operate on a different scope, call them with that scope as this,
  * e.g. `cerateElement.call(iframe.contentWindow, 'a', { ...});` to create an Element in an iframe.
  */
-exports.defaultWindow = typeof window !== 'undefined' ? window : null;
+if (typeof window !== 'undefined') {
+	exports.defaultWindow = window;
+	exports.document = window.document;
+	exports.URL = window.URL;
+	exports.MutationObserver = window.MutationObserver;
+}
 
 /**
  * Returns true, if the current execution context is not a browser top level context.
@@ -89,6 +94,27 @@ const saveAs = exports.saveAs = function saveAs(content, name) {
 	clickElement.call(win, link);
 
 	isBlob && timeout(function() { win.URL.revokeObjectURL(link.href); }, 1000);
+};
+
+/**
+ * Attempts to write data to the users clipboard.
+ * @param  {string|object}  data  Ether a plain string or an object of multiple pairs { [mimeType]: data, } to write.
+ */
+const writeToClipboard = exports.writeToClipboard = function writeToClipboard(data) {
+	const doc = (this || window).document;
+	function onCopy(event) {
+		doc.removeEventListener('copy', onCopy);
+		const transfer = event.clipboardData;
+		transfer.clearData();
+		if (typeof data === 'string') {
+			transfer.setData('text/plain', data);
+		} else {
+			Object.keys(data).forEach(mimeType => transfer.setData(mimeType, data[mimeType]));
+		}
+		event.preventDefault();
+	}
+	doc.addEventListener('copy', onCopy);
+	doc.execCommand("Copy", false, null);
 };
 
 /**

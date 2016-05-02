@@ -55,6 +55,24 @@ const log = exports.log = exports.debugLog = function log() {
 };
 
 /**
+ * Returns a function that executes a callback after it has not been called for a certain time.
+ * The arguments and this reference passed to the callback will be those of the last call to the returned function.
+ * @param  {function}  callback  The function to call.
+ * @param  {natural}   time      The cool down duration in ms.
+ * @return {function}            Asynchronous, debounced version of callback.
+ */
+const debounce = exports.debounce = function(callback, time) {
+	var timer = -1;
+	return function() {
+		clearTimeout(timer);
+		const args = arguments, self = this;
+		timer = setTimeout(function() {
+			apply(callback, self, args);
+		}, time);
+	};
+};
+
+/**
  * Systems non-absolute but continuous high resolution time
  * @return {uint}   hrtime in ms, accuracy ~µs
  */

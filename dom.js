@@ -158,6 +158,17 @@ const whileVisible = exports.whileVisible = function whileVisible(callback, time
 };
 
 /**
+ * Get the closest parent element (or the element itself) that matches a selector.
+ * @param  {Element}  element   The child element whose parent is searched for
+ * @param  {string}   selector  The selector the parent has to match
+ * @return {Element||null}      'element', if it matches 'selector' or the first parent of 'element' that matches 'selector', if any
+ */
+const getParent = exports.getParent = function getParent(element, selector) {
+	while (element && (!element.matches || !element.matches(selector))) { element = element.parentNode; }
+	return element;
+};
+
+/**
  * Builds the strongest possible selector of tagNames, ids and classes for an Element (at its's current position in the document).
  * @param  {Element}  element  The Element in question.
  * @return {string}            String that matches /^({{tagName}}(#{{id}})?(.{{class}})*)*$/

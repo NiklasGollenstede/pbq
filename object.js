@@ -142,6 +142,79 @@ const assignDescriptors = exports.assignDescriptors = function(to, from) {
 	return to;
 };
 
+/**
+ * Returns a Map where all the values are Sets, so that the map is effectively a multi map.
+ * @param  {class}  MapType  The map type the MultiMap is derived from. (Map or WeakMap).
+ * @return {class}           A MultiMap constructor.
+ */
+const MultiMapOf = MapType => class extends MapType {
+	/**
+	 * Creates a new MiltiMap.
+	 * @param  {iterable}  init  Same as the Map constructor argument, only that the values must be iterable.
+	 */
+	constructor(init) {
+		super();
+		if (init == null) { return; }
+		for (let [ key, value, ] of init) {
+			super.set(key, new Set(value));
+		}
+	}
+
+	/**
+	 * Removes all existing values in a key range and puts 'value' as in that range.
+	 * @param {any}  key    Any key the parent map accepts.
+	 * @param {any}  value  Any value.
+	 */
+	set(key, value) {
+		let set = this.get(key);
+		set.clear();
+		set.add(value);
+	}
+
+	/**
+	 * Adds 'value' to the range of 'key' and creates the key range if it does not exist yet.
+	 * @param {any}  key    Any key the parent map accepts.
+	 * @param {any}  value  Any value.
+	 */
+	add(key, value) {
+		let set = this.get(key);
+		set.add(value);
+	}
+
+	/**
+	 * Retrieves a mutable key range.
+	 * @param  {any}  key    Any key the parent map accepts.
+	 * @return {Set}         The key range. Changing the values in this Set will influence the MultiMap.
+	 */
+	get(key) {
+		let set = super.get(key);
+		if (!set) {
+			set = new Set;
+			super.set(key, set);
+		}
+		return set;
+	}
+
+	/**
+	 * Removes values from a key range.
+	 * @param  {any}      key    Any key the parent map accepts.
+	 * @param  {any}      value  Optional. If provided, only this one value is removed from the range (if present), otherwise the entire range is cleared.
+	 * @return {natural}         The number of elements removed from the range.
+	 */
+	delete(key, value) {
+		const set = super.get(key);
+		if (!set) { return 0; }
+		if (arguments.length < 2) {
+			const size = set.size;
+			set.clear();
+			return size;
+		}
+		return +set.delete(value);
+	}
+};
+const MultiMap = exports.MultiMap = MultiMapOf(Map);
+const WeakMultiMap = exports.WeakMultiMap = MultiMapOf(WeakMap);
+
 const ClassMap = new WeakMap;
 
 const ClassPrivate = {

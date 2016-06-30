@@ -16,6 +16,7 @@ describe('"RegExpX" should', function() {
 
 	it('keep escaped comments', () => {
 		RegExpX`\#`.should.deep.equal((/#/));
+		RegExpX`\#\#\#\\\\\#`.should.deep.equal((/###\\\\#/));
 		RegExpX`a\#b`.should.deep.equal((/a#b/));
 		RegExpX`[a\#b]{10}`.should.deep.equal((/[a#b]{10}/));
 	});

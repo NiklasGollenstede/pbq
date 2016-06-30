@@ -99,22 +99,33 @@ const saveAs = exports.saveAs = function saveAs(content, name) {
 /**
  * Attempts to write data to the users clipboard.
  * @param  {string|object}  data  Ether a plain string or an object of multiple pairs { [mimeType]: data, } to write.
+ * @param  {natural}        time  Maximum runtime of this asynchronous operation after which it will be cancelled and rejected.
+ * @return {Promise}              Promise that rejects if the timeout or an error occurred. If it resolves the operation should have succeeded.
  */
-const writeToClipboard = exports.writeToClipboard = function writeToClipboard(data) {
-	const doc = (this || window).document;
-	function onCopy(event) {
-		doc.removeEventListener('copy', onCopy);
-		const transfer = event.clipboardData;
-		transfer.clearData();
-		if (typeof data === 'string') {
-			transfer.setData('text/plain', data);
-		} else {
-			Object.keys(data).forEach(mimeType => transfer.setData(mimeType, data[mimeType]));
+const writeToClipboard = exports.writeToClipboard = function writeToClipboard(data, time) {
+	return new Promise(function(resolve, reject) {
+		const doc = (this || window).document;
+		function onCopy(event) {
+			try {
+				doc.removeEventListener('copy', onCopy);
+				const transfer = event.clipboardData;
+				transfer.clearData();
+				if (typeof data === 'string') {
+					transfer.setData('text/plain', data);
+				} else {
+					Object.keys(data).forEach(mimeType => transfer.setData(mimeType, data[mimeType]));
+				}
+				event.preventDefault();
+				resolve();
+			} catch (error) { reject(error); }
 		}
-		event.preventDefault();
-	}
-	doc.addEventListener('copy', onCopy);
-	doc.execCommand("Copy", false, null);
+		timeout(function() {
+			reject(Error('Timeout after '+ (time || 1000) +'ms'));
+			doc.removeEventListener('copy', onCopy);
+		}, time || 1000);
+		doc.addEventListener('copy', onCopy);
+		doc.execCommand('copy', false, null);
+	});
 };
 
 /**
@@ -144,6 +155,17 @@ const whileVisible = exports.whileVisible = function whileVisible(callback, time
 		(this || window).document.addEventListener('visibilitychange', check);
 		handle && unTimeout(handle);
 	};
+};
+
+/**
+ * Get the closest parent element (or the element itself) that matches a selector.
+ * @param  {Element}  element   The child element whose parent is searched for
+ * @param  {string}   selector  The selector the parent has to match
+ * @return {Element||null}      'element', if it matches 'selector' or the first parent of 'element' that matches 'selector', if any
+ */
+const getParent = exports.getParent = function getParent(element, selector) {
+	while (element && (!element.matches || !element.matches(selector))) { element = element.parentNode; }
+	return element;
 };
 
 /**
@@ -276,6 +298,7 @@ RemoveObserver.on = function(child, callback) {
  * @return {bool}                True iff a listener was actually removed.
  */
 RemoveObserver.off = function(child, callback) {
+	if (!child) { return false; }
 	const parent = child.parentNode;
 	if (!parent) { return false; }
 	return RemoveObserver.prototype.off.call(RemoveObserver.call(parent, parent), child, callback);
@@ -309,15 +332,14 @@ Object.assign(RemoveObserver.prototype, {
 	off(child, callback) {
 		const self = Self.get(this);
 		const _child = self.children.get(child);
-		if (!_child) { return false; }
-		_child.delete(callback);
+		if (!_child || !_child.delete(callback)) { return false; }
 		if (_child.size) { return true; }
 		self.children.delete(child);
 		if (!self.children.size) { self.detach(); }
 		return true;
 	},
 });
-/// Prevate backend class for RemoveObserver. Can not be accessed. There will never be more than one instance per DomNode.
+/// Private back end class for RemoveObserver. Can not be accessed. There will never be more than one instance per DomNode.
 function RemoveObserverPrivate(node) {
 	this.children = new Map;
 	this.node = node;

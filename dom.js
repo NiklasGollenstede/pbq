@@ -232,7 +232,7 @@ CreationObserver.prototype.add = function(selector, callback, single) {
 	const self = Self.get(this);
 	if (self.listeners.find(function(item) { return item.selector == selector && item.callback == callback && !item.single === !single; })) { return; }
 	self.listeners.push({ selector: selector, callback: callback, single: single });
-	self.listeners.length == 1 && self.observe(self.element, { subtree: true, childList: true });
+	self.listeners.length == 1 && self.observe(self.element, { subtree: true, childList: true, });
 };
 CreationObserver.prototype.remove = function(selector, callback, single) {
 	const self = Self.get(this);
@@ -353,13 +353,19 @@ Object.assign(RemoveObserverPrivate.prototype, {
 	check(child) {
 		const _child = this.children.get(child);
 		if (!_child) { return; }
-		_child.forEach(callback => callback(child));
+		_child.forEach(function(callback) { try {
+			callback(child);
+		} catch (error) { console.error(error); } });
 		this.children.delete(child);
 		if (!this.children.size) { this.detach(); }
 	},
 	// called when the node was removed from it's parent
 	removed(node) {
-		this.children.forEach((_child, child) => _child.forEach(callback => callback(child)));
+		this.children.forEach(function(_child, child) {
+			_child.forEach(function(callback) { try {
+				callback(child);
+			} catch (error) { console.error(error); } });
+		});
 		this.detach();
 	},
 	// listens for the removal of children and of the node from it's parent

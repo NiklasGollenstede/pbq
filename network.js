@@ -1,9 +1,6 @@
 (function(exports) { 'use strict';
 
 
-var XHR; try { XHR = (/* global XMLHttpRequest */ typeof XMLHttpRequest !== 'undefined') ? XMLHttpRequest : require('sdk/net/xhr'/* firefox */).XMLHttpRequest; } catch(e) { }
-var ProgressEventConstruntor; try { /* global ProgressEvent */ new ProgressEvent(''); ProgressEventConstruntor = ProgressEvent; } catch (error) { ProgressEventConstruntor = function(reason) { const error = document.createEvent('ProgressEvent'); error.initEvent(reason, false, false); return error; }; }
-
 /**
  * Constructs an XMLHttpRequest from the given url and options and returns a Promise
  * that is fulfilled with the request once the result is loaded or canceld with an ProgressEvent if an error occurs.
@@ -23,7 +20,12 @@ var ProgressEventConstruntor; try { /* global ProgressEvent */ new ProgressEvent
  *     @property {bool}    mozAnon           mozilla privileged code only, don't send any session/login data
  *     @property {bool}    mozSystem         mozilla privileged code only, allow cross side request
  */
-const HttpRequest = exports.HttpRequest = function HttpRequest(url, options) {
+const HttpRequest = exports.HttpRequest = (function() {
+
+var XHR; try { XHR = (/* global XMLHttpRequest */ typeof XMLHttpRequest !== 'undefined') ? XMLHttpRequest : require('sdk/net/xhr'/* firefox */).XMLHttpRequest; } catch(e) { }
+var ProgressEventConstruntor; try { /* global ProgressEvent */ new ProgressEvent(''); ProgressEventConstruntor = ProgressEvent; } catch (error) { ProgressEventConstruntor = function(reason) { const error = document.createEvent('ProgressEvent'); error.initEvent(reason, false, false); return error; }; }
+
+return function HttpRequest(url, options) {
 	var request, cancel;
 	const o = arguments[arguments.length - 1] || { };
 	const promise = new Promise(function(resolve, reject) {
@@ -62,6 +64,7 @@ function cancelWith(reject, reason) {
 	this.dispatchEvent(error);
 	reject(error);
 }
+})();
 
 /**
  * Converts an ArrayBuffer into a binary string, where each char represents a byte of the buffer.

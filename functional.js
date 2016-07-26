@@ -61,14 +61,35 @@ const log = exports.log = exports.debugLog = function log() {
  * @param  {natural}   time      The cool down duration in ms.
  * @return {function}            Asynchronous, debounced version of callback.
  */
-const debounce = exports.debounce = function(callback, time) {
-	var timer = -1;
+const debounce = exports.debounce = function debounce(callback, time) {
+	var timer = null;
 	return function() {
 		clearTimeout(timer);
 		const args = arguments, self = this;
 		timer = setTimeout(function() {
 			apply(callback, self, args);
 		}, time);
+	};
+};
+
+/**
+ * Wraps a (void to void) function such that it is called asynchronously and at most once every 'time' ms.
+ * The callback gets called exactly once asap after any number of calls, but is never called more than once every 'time' ms
+ * @param  {function}  callback  The function to wrap.
+ * @param  {[type]}    time      The minimum time between two calls in milliseconds.
+ * @return {[type]}              The throttled function.
+ */
+const throttle = exports.throttle = function throttle(callback, time) {
+	var pending = false, last = 0;
+	return function() {
+		if (pending) { return; }
+		const wait = last + time - Date.now();
+		pending = true;
+		setTimeout(function() {
+			last = Date.now();
+			pending = false;
+			callback();
+		}, wait);
 	};
 };
 
@@ -82,7 +103,7 @@ const hrtime = exports.hrtime = (function() {
 	} else if (typeof process !== 'undefined' && typeof process.hrtime === 'function') {
 		return function () { const pair = process.hrtime(); return pair[0] * 1e3 + pair[1] / 1e6; }; // node
 	} else {
-		return require("chrome").Cu.now; // firefox
+		return require("chr" + "ome").Cu.now; // firefox
 	}
 })();
 

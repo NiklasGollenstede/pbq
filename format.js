@@ -159,6 +159,7 @@ const QueryObject = exports.QueryObject = function QueryObject(query, key, value
 	String.prototype.split.call(query, key || (/[&#?]+/))
 	.map(function(string) { return string.split(value); })
 	.forEach(function(pair) { pair[0] && (self[pair[0]] = decoder(pair[1])); });
+	return self;
 };
 /**
  * turns the QueryObject back into a query string

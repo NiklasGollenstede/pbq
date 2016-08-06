@@ -180,6 +180,23 @@ const fuzzyMatch = exports.fuzzyMatch = function fuzzyMatch(s1, s2, n) {
 };
 
 /**
+ * Wraps a function in a simple Map based cache. The cache key is the first argument passed to the resulting function.
+ * @param  {function}  func   The function whose results are to be cached.
+ * @param  {Map}       cache  Optional object with .get() and .set() functions (e.g. a WeakMap or Map). Defaults to a new Map().
+ * @return {function}         The func parameter wrapped such that its return values will be cached with the first argument as the key. All arguments are forwarded to func.
+ */
+const cached = exports.cached = function cached(func, cache) {
+	cache = cache || new Map;
+	return function(arg) {
+		var result = cache.get(arg);
+		if (result !== undefined) { return result; }
+		result = func.apply(this, arguments);
+		cache.set(arg, result);
+		return result;
+	};
+};
+
+/**
  * Class that can be extended instead of Function.
  * Forwards all calls to this() to the specified member of this,
  * providing the correct this instance inside that member.

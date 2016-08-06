@@ -187,13 +187,15 @@ const fuzzyMatch = exports.fuzzyMatch = function fuzzyMatch(s1, s2, n) {
  */
 const cached = exports.cached = function cached(func, cache) {
 	cache = cache || new Map;
-	return function(arg) {
+	const ret = function(arg) {
 		var result = cache.get(arg);
 		if (result !== undefined) { return result; }
 		result = func.apply(this, arguments);
 		cache.set(arg, result);
 		return result;
 	};
+	ret.delete = cache.delete.bind(cache);
+	return ret;
 };
 
 /**

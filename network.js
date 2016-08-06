@@ -13,7 +13,7 @@
  *     @property {string}  user              HTTP user name
  *     @property {string}  password          HTTP password
  *     @property {object}  header            HTTP header key/value-pairs (strings)
- *     @property {string}  responseType      XHR response type, influences the type of the promisedrequest.response
+ *     @property {string}  responseType      XHR response type, influences the type of the promised request.response
  *     @property {uint}    timeout           requests timeout
  *     @property {string}  overrideMimeType  overwrites the mime type of the requests body
  *     @property {any}     body              body to send with the request

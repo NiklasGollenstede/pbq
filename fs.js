@@ -15,7 +15,7 @@ const Path = exports.Path = require('path');
  * The native 'fs' module wrapped in (native) Promises.
  * INSTEAD of taking a callback as last argument, all asynchronous functions return Promises
  *
- * @function listDir   asynchronous, recursive, unordered direktory listing
+ * @function listDir   asynchronous, recursive, unordered directory listing
  * @function makeDir   asynchronous direktory path creation, reimplementation of 'mkdirp' package
  */
 const FS = exports.FS = (function() {

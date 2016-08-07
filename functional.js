@@ -2,15 +2,37 @@
 'use strict';
 /* global performance */
 
-if (typeof Proxy !== 'undefined') {
 /**
  * Object/Function that returns itself on execution and every property access. Stateless
  */
-const noop = exports.noop = (function(self) {
-	return self = new Proxy(function() { return self; }, { get: function() { return self; }, set: function() { }, });
+const noop = exports.noop = (typeof Proxy !== 'undefined') && (function(noop) {
+	const special = {
+		[Symbol.toPrimitive]: function(type) { return type === 'number' ? NaN : ''; },
+		[Symbol.toStringTag]: 'no-op',
+		// arguments: null,
+	};
+	const keys = [ 'arguments', 'caller', 'prototype', ];
+	const target = function target() { return noop; };
+	target.prototype = undefined;
+	// bug in Firefox 49 and Chrome 53: noop.__proto__ calls the __proto__ getter of Object.prototype, not that of the target or the getPrototypeOf trap
+	// Object.defineProperty(target, '__proto__', { get() { return null; }, set() { }, });
+	return noop = new Proxy(target, {
+		has:               function(_, key) { return key === 'arguments' || key === 'prototype'; },
+		get:               function(_, key) { return key in special ? special[key] : noop; },
+		set:               function() { return true; },
+		deleteProperty:    function() { return false; },
+		getPrototypeOf:    function() { return null; },
+		setPrototypeOf:    function() { return true; },
+		preventExtensions: function() { return true; }, // throws (would need to freeze the target)
+		defineProperty:    function() { return true; },
+		ownKeys:           function() { return keys; },
+		apply:             function() { return noop; },
+		construct:         function() { return noop; },
+		getOwnPropertyDescriptor: function(_, key) {
+			return keys.includes(key) ? Object.getOwnPropertyDescriptor(target, key) : undefined;
+		},
+	});
 })();
-// { valueOf() { return NaN; }, toString() { return ''; }, } ??
-}
 
 /**
  * Function.prototype.apply optimised for the common case (no this and/or few arguments).

@@ -5,24 +5,65 @@ const {
 } = require('../');
 
 (noop ? describe : xdescribe)('"noop" should', () => {
-	const sut = noop;
 
 	it('always stay noop', () => {
-		assert(sut() === sut, 'call');
-		assert(sut.blob === sut, 'property');
-		assert(sut.blob() === sut, 'member');
+		assert(noop() === noop, 'call');
+		assert(noop.apply(null, [ ]) === noop, 'apply');
+		assert(new noop === noop, 'new');
+		assert(Reflect.construct(noop, [ ]) === noop, 'constuct');
+		assert(noop.blob === noop, 'property');
+		assert(noop.prototype === noop, '.prototype');
+		assert(noop.blob() === noop, 'member');
+		assert(noop[Symbol()] === noop, 'Symbol() property');
 	});
 
 	it('not be modified', () => {
-		sut.blob = 42;
-		assert(sut.blob === sut, 'immutable');
+		noop.blob = 42;
+		expect(noop.blob).to.equal(noop);
+		Object.defineProperty(noop, 'blob', { vlaue: 42, });
+		expect(noop.blob).to.equal(noop);
+		(() => Object.defineProperty(noop, 'arguments', { vlaue: 42, })).should.not.throw();
 	});
 
-	xit('be falsy', () => {
-		assert(sut == false, 'is false');
-		assert(!sut == true, 'negates to true');
-		assert(+sut == NaN, 'is NaN');
-		assert(''+ sut == '', 'is ""');
+	it('cast to falsy primitives', () => {
+		expect(+noop).to.be.NaN;
+		expect(''+ noop).to.equal('');
+	});
+
+	it('have a special Object.prototype.toString', () => {
+		expect(Object.prototype.toString.call(noop)).to.equal('[object no-op]');
+	});
+
+	xit('have only deletable properties', () => {
+		(() => delete noop.blob).should.not.throw(); // throws in node 6.2.2, but shouldn't
+		(() => delete noop.arguments).should.not.throw();
+	});
+
+	it('have the imutable .__proto__ === null', () => {
+		expect(Object.getPrototypeOf(noop)).to.be.null;
+		Object.setPrototypeOf(noop, Object.prototype);
+		expect(Object.getPrototypeOf(noop)).to.be.null;
+		// noop.__proto__ is Object.prototype
+	});
+
+	it('have no enumerable properties', () => {
+		expect(Object.keys(noop).length).to.equal(0);
+	});
+
+	it('have no property escriptors (exept "prototype")', () => {
+		expect(Object.getOwnPropertyDescriptor(noop, 'blob')).to.be.undefined;
+		expect(Object.getOwnPropertyDescriptor(noop, 'caller')).to.be.undefined;
+		expect(Object.getOwnPropertyDescriptor(noop, 'arguments')).to.be.undefined;
+		expect(Object.getOwnPropertyDescriptor(noop, 'prototype')).to.deep.equal({
+			value: undefined, writable: true, enumerable: false, configurable: false,
+		});
+	});
+
+	it('not have anything ``in´´ it (exept "arguments" and "prototype")', () => {
+		expect('blob' in noop).to.be.false;
+		expect('caller' in noop).to.be.false;
+		expect('arguments' in noop).to.be.true;
+		expect('prototype' in noop).to.be.true;
 	});
 
 });

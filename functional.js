@@ -6,20 +6,10 @@
  * Object/Function that returns itself on execution and every property access. Stateless
  */
 const noop = exports.noop = (typeof Proxy !== 'undefined') && (function(noop) {
-	const special = {
-		[Symbol.toPrimitive]: function(type) { return type === 'number' ? NaN : ''; },
-		[Symbol.toStringTag]: 'no-op',
-		// arguments: null,
-	};
 	const keys = [ 'arguments', 'caller', 'prototype', ];
 	const target = function target() { return noop; };
 	target.prototype = undefined;
-	// bug in Firefox 49 and Chrome 53: noop.__proto__ calls the __proto__ getter of Object.prototype, not that of the target or the getPrototypeOf trap
-	// Object.defineProperty(target, '__proto__', { get() { return null; }, set() { }, });
 	return noop = new Proxy(target, {
-		has:               function(_, key) { return key === 'arguments' || key === 'prototype'; },
-		get:               function(_, key) { return key in special ? special[key] : noop; },
-		set:               function() { return true; },
 		deleteProperty:    function() { return false; },
 		getPrototypeOf:    function() { return null; },
 		setPrototypeOf:    function() { return true; },
@@ -28,6 +18,14 @@ const noop = exports.noop = (typeof Proxy !== 'undefined') && (function(noop) {
 		ownKeys:           function() { return keys; },
 		apply:             function() { return noop; },
 		construct:         function() { return noop; },
+		set:               function() { return true; },
+		has:               function(_, key) { return key === 'arguments' || key === 'prototype'; },
+		get:               function(_, key) { switch (key) {
+			case Symbol.toPrimitive: return function(type) { return type === 'number' ? NaN : ''; };
+			case Symbol.toStringTag: return 'no-op';
+			case '__proto__': return undefined;
+			default: return noop;
+		} },
 		getOwnPropertyDescriptor: function(_, key) {
 			return keys.includes(key) ? Object.getOwnPropertyDescriptor(target, key) : undefined;
 		},

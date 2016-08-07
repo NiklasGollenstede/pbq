@@ -39,11 +39,12 @@ const {
 		(() => delete noop.arguments).should.not.throw();
 	});
 
-	it('have the imutable .__proto__ === null', () => {
+	it('have the imutable .__proto__ == null', () => {
 		expect(Object.getPrototypeOf(noop)).to.be.null;
+		expect(noop.__proto__).to.be.undefined;
 		Object.setPrototypeOf(noop, Object.prototype);
 		expect(Object.getPrototypeOf(noop)).to.be.null;
-		// noop.__proto__ is Object.prototype
+		expect(noop.__proto__).to.be.undefined;
 	});
 
 	it('have no enumerable properties', () => {

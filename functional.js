@@ -109,7 +109,7 @@ const throttle = exports.throttle = function throttle(callback, time) {
 			last = Date.now();
 			pending = false;
 			callback();
-		}, wait);
+		}, wait > 0 ? wait : 0); // mustn't be << 0 in chrome 53+
 	};
 };
 

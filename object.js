@@ -1,7 +1,7 @@
-(function(exports) {
-'use strict';
-
-const NameSpace = require('es6lib/namespace').NameSpace;
+define(function({ // This Source Code Form is subject to the terms of the Mozilla Public License, v. 2.0. If a copy of the MPL was not distributed with this file, You can obtain one at http://mozilla.org/MPL/2.0/.
+	exports,
+	namespace: { NameSpace, },
+}) {
 
 /**
  * Deeply freezes an object structure by crawling the objects enumerable own properties (Object.keys()).
@@ -355,4 +355,4 @@ function copyPublicProperties(to, from, configurable) {
 
 function idFunction(arg) { return arg; }
 
-const moduleName = 'es6lib/object'; if (typeof module !== 'undefined') { module.exports = exports; } else if (typeof define === 'function') { define(moduleName, exports); } else if (typeof window !== 'undefined' && typeof module === 'undefined') { window[moduleName] = exports; } return exports; })({ });
+});

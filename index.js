@@ -1,4 +1,7 @@
-(function(exports) { 'use strict';
+define(function({ // This Source Code Form is subject to the terms of the Mozilla Public License, v. 2.0. If a copy of the MPL was not distributed with this file, You can obtain one at http://mozilla.org/MPL/2.0/.
+	require,
+	exports,
+}) {
 
 function exportLazy(key) {
 	var value;
@@ -6,7 +9,7 @@ function exportLazy(key) {
 		enumerable: true,
 		configurable: true,
 		get: function() {
-			!value && (value = (function() { try { return require('./'+ key); } catch (e) { return require('es6lib/'+ key); } })());
+			!value && (value = require('./'+ key));
 			!Object.isSealed(exports) && Object.defineProperty(exports, key, {
 				enumerable: true,
 				configurable: false,
@@ -33,4 +36,4 @@ function exportLazy(key) {
 	'template',
 ].forEach(exportLazy);
 
-const moduleName = 'es6lib'; if (typeof module !== 'undefined') { module.exports = exports; } else if (typeof define === 'function') { define(moduleName, exports); } else if (typeof window !== 'undefined' && typeof module === 'undefined') { window[moduleName] = exports; } return exports; })({ });
+});

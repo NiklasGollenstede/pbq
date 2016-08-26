@@ -1,8 +1,7 @@
-(function(exports) { 'use strict';
-
-const functional = (function() { try { return require('es6lib/functional'); } catch(e) { return require('./functional'); } })();
-const hrtime = functional.hrtime;
-const apply = functional.apply;
+define(function({ // This Source Code Form is subject to the terms of the Mozilla Public License, v. 2.0. If a copy of the MPL was not distributed with this file, You can obtain one at http://mozilla.org/MPL/2.0/.
+	exports,
+	Functional: { hrtime, apply, },
+}) {
 
 const resolved = Promise.resolve();
 const hasStream = typeof Stream === 'function';
@@ -266,4 +265,4 @@ const instantly = exports.instantly = function instantly(callback) {
 	resolved.then(callback);
 };
 
-const moduleName = 'es6lib/concurrent'; if (typeof module !== 'undefined') { module.exports = exports; } else if (typeof define === 'function') { define(moduleName, exports); } else if (typeof window !== 'undefined' && typeof module === 'undefined') { window[moduleName] = exports; } return exports; })({ });
+});

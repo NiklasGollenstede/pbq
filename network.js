@@ -1,5 +1,6 @@
-(function(exports) { 'use strict';
-
+define(function({ // This Source Code Form is subject to the terms of the Mozilla Public License, v. 2.0. If a copy of the MPL was not distributed with this file, You can obtain one at http://mozilla.org/MPL/2.0/.
+	exports,
+}) {
 
 /**
  * Constructs an XMLHttpRequest from the given url and options and returns a Promise
@@ -109,4 +110,4 @@ const mimeTypes = exports.mimeTypes = {
 	xhtml: 'application/xhtml+xml',
 };
 
-const moduleName = 'es6lib/network'; if (typeof module !== 'undefined') { module.exports = exports; } else if (typeof define === 'function') { define(moduleName, exports); } else if (typeof window !== 'undefined' && typeof module === 'undefined') { window[moduleName] = exports; } return exports; })({ });
+});

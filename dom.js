@@ -1,11 +1,12 @@
-(function(exports) { 'use strict';
+define(function({ // This Source Code Form is subject to the terms of the Mozilla Public License, v. 2.0. If a copy of the MPL was not distributed with this file, You can obtain one at http://mozilla.org/MPL/2.0/.
+	exports,
+	object: { copyProperties, },
+}) {
 
 const timeout = (typeof setTimeout !== 'undefined') ? setTimeout : require("sdk/timers").setTimeout;
 const unTimeout = (typeof clearTimeout !== 'undefined') ? clearTimeout : require("sdk/timers").clearTimeout;
 const interval = (typeof setInterval !== 'undefined') ? setInterval : require("sdk/timers").setInterval;
 const unInterval = (typeof clearInterval !== 'undefined') ? clearInterval : require("sdk/timers").clearInterval;
-
-const copyProperties = require('es6lib/object').copyProperties;
 
 /**
  * The functions in this module operate on the global windows 'document' (and URL, self, top, etc.) by default.
@@ -433,4 +434,4 @@ const DOMContentLoaded = exports.DOMContentLoaded = new Promise(function(resolve
 	}
 });
 
-const moduleName = 'es6lib/dom'; if (typeof module !== 'undefined') { module.exports = exports; } else if (typeof define === 'function') { define(moduleName, exports); } else if (typeof window !== 'undefined' && typeof module === 'undefined') { window[moduleName] = exports; } return exports; })({ });
+});

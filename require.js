@@ -1,69 +1,278 @@
-(function() { 'use strict';
+(function() { 'use strict'; // This Source Code Form is subject to the terms of the Mozilla Public License, v. 2.0. If a copy of the MPL was not distributed with this file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
-/**
- * A very simple require subset, ment to be loaded in context scripts before loading any modules that use define(name, object|function()) or define(name, dependancies, function(dependancies))
- */
+const Generator = Object.getPrototypeOf(function*(){ yield 0; }).constructor;
+function isGenerator(g) { return g instanceof Generator; }
+const resolved = Promise.resolve();
 
-if (typeof window === 'undefined' || typeof window.require !== 'undefined' || typeof window.define !== 'undefined') {
-	throw new Error('Can\'t set up define and require');
+const basePath = (() => {
+	const path = getCallingScript(0);
+	const fromNM = (/\/node_modules\/(?:require|es6lib)\/require\.js$/).test(path);
+	return (fromNM ? new URL('../../', path) : new URL('./', location)).pathname;
+})();
+
+const Modules = new Map;
+const Loading = new Set;
+
+function define(/* id, deps, factory */) {
+	let id, deps, factory;
+	switch (arguments.length) {
+		case 3: {
+			[ id, deps, factory, ] = arguments;
+			if (!Array.isArray(deps)) { badArg(); }
+		} break;
+		case 2: {
+			factory = arguments[1];
+			const first = arguments[0];
+			typeof first === 'string' ? (id = first) : (deps = first);
+		} break;
+		case 1: {
+			factory = arguments[0];
+		} break;
+		default: {
+			badArg();
+		}
+	}
+	if (id === undefined) {
+		let src = getCallingScript(1);
+		id = new URL(src).pathname.replace(/\.js$/, '');
+		if (id.startsWith(basePath)) {
+			id = id.slice(basePath.length);
+		} else if (id.startsWith('/')) {
+			id = id.slice(1);
+		}
+	}
+	if (typeof id !== 'string') { badArg(); }
+	if ((/^[\.\\\/]/).test(id)) { throw new Error('The module id must be an absolute path'); }
+	function badArg () {
+		throw new Error('Bad signature, should be define(id?, dependencies?, factory)');
+	}
+
+	if (Modules.has(id) && !Loading.has(id)) { throw new Error(`Duplicate definition of module "${ id }"`); }
+	Loading.delete(id);
+
+	if (typeof factory !== 'function') { return setModule(id, factory); }
+
+	let special = false;
+	if (!deps) {
+		if (
+			factory.length === 1
+			&& (deps = parseDependancies(factory, id)).length
+		) {
+			special = true;
+		} else {
+			deps = [ 'require', 'exports', 'module', ].slice(0, factory.length);
+		}
+	}
+
+	const context = {
+		id,
+		url: new URL(basePath + id, location.origin),
+		module: {
+			get exports() { context.exports; },
+			set exports(v) { context.exports = v; },
+		},
+		exports: { },
+		initializing: true,
+	};
+	resolved.then(() => context.initializing = false);
+
+	const promise = Promise.all(deps.map(dep => require.call(context, dep)))
+	.then(modules => {
+		const result = runFactory(id, factory, special ? [ makeObject(deps, modules), ] : modules);
+		return isGenerator(factory) ? spawn(result) : result;
+	})
+	// .catch(error => { console.error(`Definition of ${ id } failed:`, error); throw error; })
+	.then(exports => setModule(id, exports == null ? context.exports : exports));
+	context.loaded = promise;
+	return setModule(id, promise);
+}
+define.amd = {
+	destructuring: true,
+	generator: true,
+	promises: true,
+	promise: true,
+};
+
+function setModule(id, module) {
+	Modules.set(id, module);
+	return module;
 }
 
-const modules = new Map;
-const pending = new Map;
-const async   = new Map;
+function require(name) {
+	if (typeof arguments[1] === 'function') {
+		if (Array.isArray(name)) {
+			const modules = name.map(name => require.call(this, name));
+			Promise.resolve(Promise.all(modules)).then(modules => arguments[1](...modules));
+			return modules;
+		} else {
+			const module = require.call(this, name);
+			Promise.resolve(module).then(arguments[1]);
+			return module;
+		}
+	}
 
-const define = window.define = function define(name, requires, module) {
-	if (modules.has(name) || pending.has(name)) { throw new Error('Module "'+ name +'" is already defined'); }
-	if (arguments.length > 3) { throw new Error('define() needs 2 or 3 arguments'); }
-	if (arguments.length === 2) { module = requires; requires = [ ]; }
-	if (typeof module !== 'function') { module = function() { return this; }.bind(module); }
-	new Definition(name, requires, module);
-};
+	switch (name.name || name) {
+		case 'require': return bindContext.call(this);
+		case 'exports': return this && this.exports;
+		case 'module': return this && this.module;
+	}
 
-const require = window.require = function require(name) {
-	if (modules.has(name)) { return modules.get(name); }
-	throw new Error('Can\'t find module "'+ name +'"');
-};
-require.async = function requireAsync(name) {
-	if (async.has(name)) { return async.get(name); }
-	if (modules.has(name)) { return Promise.resolve(modules.get(name)); }
-	throw new Error('Can\'t find module "'+ name +'"');
-};
+	const id = resolveId(name, this && this.url);
+	let module = Modules.get(id); if (module) { return module; }
 
-function Definition(name, requires, module) {
-	this.name = name;
-	this.missing = 0;
-	this.requires = requires.map(name => modules.has(name) ? modules.get(name) : (++this.missing, name));
-	this.module = module;
-	async.set(name, new Promise(function(resolve, reject) { this.resolve = resolve; this.reject = reject; }.bind(this)));
-	if (this.missing) {
-		pending.set(name, this);
-	} else {
-		this.run();
+	if (this && this.initializing) { return resolved.then(() => require.call(this, name)); } // let the event loop spin once to allow multiple define() calls within the same script
+
+	Loading.add(id);
+	const path = basePath + id +'.js';
+	const promise = loadScript(path)
+	.catch(error => { throw new Error(`Failed to load script "${ path }" requested from ${ this && this.url }.js`); })
+	.then(() => {
+		if (!Loading.has(id)) { return Modules.get(id); }
+		throw new Error(`The script at "${ path }" did not call define with the expected id`);
+	});
+	return setModule(id, promise);
+}
+require.async = function() {
+	return Promise.resolve(require(...arguments));
+};
+require.toUrl = path => resolveId(path);
+
+function bindContext() {
+	const bound = require.bind(this);
+	bound.toUrl = path => resolveId(path, this && this.url);
+	return bound;
+}
+
+function parseDependancies(factory, name) {
+	const code = factory +'';
+	let index = 0; // the next position of interest
+
+	function next(exp) {
+		exp.lastIndex = index;
+		const match = exp.exec(code)[0];
+		index = exp.lastIndex;
+		return match;
+	}
+	const getWord = (/[a-zA-Z_]\w*/g);
+	const nextWord = next.bind(null, getWord);
+	const getString = (/(?:'.*?'|".*?"|`.*?`)/g);
+	const nextString = next.bind(null, getString);
+	const getLine = (/(?:\r?\n|\r)\s*/g);
+	const nextLine = next.bind(null, getLine);
+
+	function local(name) {
+		const string = './'+ name.split('').map((c, i) => {
+			const l = c.toLowerCase();
+			return l === c ? c : i === 0 ? l : '-'+ l;
+		}).join('');
+		return { name, toString() {
+			return string;
+		}, };
+	}
+
+	index = (/^\s*(?:function)\s*\*?\s*\(?\s*/).exec(code)[0].length; // skip 'function * ('
+	if (code[index] === ')') { return [ ]; } // argument list closes immediately
+	if (code[index] !== '{') { return [ ]; } // no destructuring assignment
+	const deps = [ ];
+
+	loop: do {
+		nextLine();
+		switch (code[index]) {
+			case '}': break loop; // exit
+			case '/': {
+				code[index + 1] !== '/' && unexpected();
+			} break;
+			case '[': case "'": case '"': case '`': {
+				deps.push(nextString().slice(1, -1));
+			} break;
+			default: {
+				!(/[a-zA-Z_]/).test(code[index]) && unexpected();
+				deps.push(local(nextWord()));
+			}
+		}
+	} while (true);
+
+	function unexpected() {
+		throw new Error(`Unexpected char '${ code[index] }' in destructuring module definition of "${ name }" at char ${ index }`);
+	}
+
+	return deps;
+}
+
+function resolveId(to, from) {
+	let id = to +'';
+	if (id.startsWith('.')) {
+		if (!from) { throw new Error(`Can't resolve relative module id from global require, use the one passed into the define callback instead`); }
+		id = new URL(id, from).pathname;
+		if (id.startsWith(basePath)) {
+			id = id.slice(basePath.length);
+		} else if (id.startsWith('/')) {
+			id = id.slice(1);
+		}
+	} else if (id.startsWith('/')) {
+		id = id.slice(1);
+	}
+	if (id.endsWith('/')) {
+		id += 'index';
+	}
+	return id;
+}
+
+function makeObject(names, values) { // TODO: use a Proxy to directly throw for undefined properties?
+	const object = { };
+	for (let i = 0; i < names.length; ++i) {
+		object[names[i].name || names[i]] = values[i];
+	}
+	return object;
+}
+
+function runFactory(id, factory, args) {
+	try {
+		return factory(...args);
+	} catch (error) {
+		console.error(`Definition of module ${ id } threw:`, error);
+		throw error;
 	}
 }
-Definition.prototype.check = function(done) {
-	if (!this.missing) { return; }
-	this.requires.forEach((name, index) => name === done.name && (--this.missing, this.requires[index] = done.exports));
-	!this.missing && this.run();
-};
-Definition.prototype.run = function() {
-	pending.delete(this.name);
-	try {
-		const result = this.module.apply(null, this.requires);
-		result && typeof result.then === 'function' ? result.then(this.define.bind(this)).catch(this.failed.bind(this)) : this.define(result);
-	} catch (error) { this.failed(error); }
-};
-Definition.prototype.define = function(exports) {
-	this.exports = exports;
-	modules.set(this.name, exports);
-	this.resolve(exports);
-	pending.forEach(function(other) { other.check(this); }.bind(this));
-};
-Definition.prototype.failed = function(error) {
-	console.error('Module definition of "'+ this.name +'" threw:', error);
-	this.reject(error);
-	throw error;
-};
+
+function loadScript(path) {
+	return new Promise((resolve, reject) => {
+		const script = document.createElement('script');
+		script.onload = resolve;
+		script.onerror = reject;
+		script.src = path;
+		document.documentElement.appendChild(script).remove();
+	});
+}
+
+function getCallingScript(offset = 0) {
+	let src = document.currentScript && document.currentScript.src;
+	if (!src) {
+		const stack = (new Error).stack.split(/$/m);
+		if ((/^Error/).test(stack)) { // chrome
+			const line = stack[2 + offset]; // 0: Error, 1: this function
+			src = line.match(/([^ (]*)\:\d+\:\d+\)?$/)[1];
+		} else { // firefox
+			const line = stack[1 + offset]; // 0: this function
+			src = line.match(/@(.*?)(?:\:|$)/)[1];
+		}
+	}
+	return src;
+}
+
+function spawn(iterator) {
+	const next = arg => handle(iterator.next(arg));
+	const _throw = arg => handle(iterator.throw(arg));
+	const handle = ({ done, value, }) => done ? Promise.resolve(value) : Promise.resolve(value).then(next, _throw);
+	return resolved.then(next);
+}
+
+/// run the main module if specified via < data-main="..." >
+const main = document.currentScript && document.currentScript.dataset.main;
+main && require('/'+ resolveId(main, location));
+
+window.define = define;
+window.require = require;
+require.Modules = Modules;
 
 })();

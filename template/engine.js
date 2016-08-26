@@ -1,4 +1,6 @@
-(function(exports) { 'use strict';
+define(function({ // This Source Code Form is subject to the terms of the Mozilla Public License, v. 2.0. If a copy of the MPL was not distributed with this file, You can obtain one at http://mozilla.org/MPL/2.0/.
+	exports,
+}) {
 
 /**
  * 'ForEach' control flow element, repeats all elements between this value and the corresponding
@@ -417,4 +419,4 @@ function emptyValue() { }
 function emptyValueNoStrip() { }
 emptyValue.toString = emptyValueNoStrip.toString = function() { return ''; };
 
-const moduleName = 'es6lib/template/engine'; if (typeof module !== 'undefined') { module.exports = exports; } else if (typeof define === 'function') { define(moduleName, exports); } else if (typeof window !== 'undefined' && typeof module === 'undefined') { window[moduleName] = exports; } return exports; })({ });
+});

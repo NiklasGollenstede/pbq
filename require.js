@@ -1,16 +1,21 @@
+typeof global !== 'undefined' && (global._oroginal_require_ = require);
+
 (function() { 'use strict'; // This Source Code Form is subject to the terms of the Mozilla Public License, v. 2.0. If a copy of the MPL was not distributed with this file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
 const Generator = Object.getPrototypeOf(function*(){ yield 0; }).constructor;
 function isGenerator(g) { return g instanceof Generator; }
 const resolved = Promise.resolve();
+const isNode = typeof global !== 'undefined' && typeof global.process !== 'undefined';
+const URL = isNode ? function(s) { this.pathname = s; } : window.URL;
 
 const basePath = (() => {
 	const path = getCallingScript(0);
-	const fromNM = (/\/node_modules\/(?:require|es6lib)\/require\.js$/).test(path);
+	if (isNode) { return ''; }
+	const fromNM = (/\/(?:node_)?modules\/(?:require|es6lib)\/require\.js$/).test(path);
 	return (fromNM ? new URL('../../', path) : new URL('./', location)).pathname;
 })();
 
-const Modules = new Map;
+const Exports = { };
 const Loading = new Set;
 
 function define(/* id, deps, factory */) {
@@ -34,7 +39,7 @@ function define(/* id, deps, factory */) {
 	}
 	if (id === undefined) {
 		let src = getCallingScript(1);
-		id = new URL(src).pathname.replace(/\.js$/, '');
+		id = ((/[\w-]+:\/\//).test(src) ? new URL(src).pathname : src).replace(/\.js$/, '');
 		if (id.startsWith(basePath)) {
 			id = id.slice(basePath.length);
 		} else if (id.startsWith('/')) {
@@ -47,10 +52,10 @@ function define(/* id, deps, factory */) {
 		throw new Error('Bad signature, should be define(id?, dependencies?, factory)');
 	}
 
-	if (Modules.has(id) && !Loading.has(id)) { throw new Error(`Duplicate definition of module "${ id }"`); }
+	if (Exports.hasOwnProperty(id) && !Loading.has(id)) { throw new Error(`Duplicate definition of module "${ id }"`); }
 	Loading.delete(id);
 
-	if (typeof factory !== 'function') { return setModule(id, factory); }
+	if (typeof factory !== 'function') { return setExports(id, factory); }
 
 	let special = false;
 	if (!deps) {
@@ -64,7 +69,24 @@ function define(/* id, deps, factory */) {
 		}
 	}
 
+	if (isNode) {
+		const require = global._oroginal_require_;
+		const context = {
+			require,
+			exports: { },
+			module: {
+				get exports() { context.exports; },
+				set exports(v) { context.exports = v; },
+			},
+		};
+		const modules = deps.map(dep => context[dep.name || dep] || require(dep +''));
+		const exports = runFactory(id, factory, special ? [ makeObject(deps, modules), ] : modules);
+		setExports(id, exports == null ? context.exports : exports);
+		return require(id);
+	}
+
 	const context = {
+		require,
 		id,
 		url: new URL(basePath + id, location.origin),
 		module: {
@@ -76,15 +98,15 @@ function define(/* id, deps, factory */) {
 	};
 	resolved.then(() => context.initializing = false);
 
-	const promise = Promise.all(deps.map(dep => require.call(context, dep)))
+	const promise = Promise.all(deps.map(dep => context.require(dep)))
 	.then(modules => {
 		const result = runFactory(id, factory, special ? [ makeObject(deps, modules), ] : modules);
 		return isGenerator(factory) ? spawn(result) : result;
 	})
-	// .catch(error => { console.error(`Definition of ${ id } failed:`, error); throw error; })
-	.then(exports => setModule(id, exports == null ? context.exports : exports));
+	.catch(error => { console.error(`Definition of ${ id } failed:`, error); throw error; })
+	.then(exports => setExports(id, exports == null ? context.exports : exports));
 	context.loaded = promise;
-	return setModule(id, promise);
+	return setExports(id, promise);
 }
 define.amd = {
 	destructuring: true,
@@ -93,9 +115,13 @@ define.amd = {
 	promise: true,
 };
 
-function setModule(id, module) {
-	Modules.set(id, module);
-	return module;
+function setExports(id, exports) {
+	if (isNode) {
+		global._oroginal_require_.cache[id +'.js'].exports = exports;
+	} else {
+		Exports[id] = exports;
+	}
+	return exports;
 }
 
 function require(name) {
@@ -118,19 +144,23 @@ function require(name) {
 	}
 
 	const id = resolveId(name, this && this.url);
-	let module = Modules.get(id); if (module) { return module; }
+	let module = Exports[id]; if (module) { return module; }
 
 	if (this && this.initializing) { return resolved.then(() => require.call(this, name)); } // let the event loop spin once to allow multiple define() calls within the same script
 
 	Loading.add(id);
 	const path = basePath + id +'.js';
 	const promise = loadScript(path)
-	.catch(error => { throw new Error(`Failed to load script "${ path }" requested from ${ this && this.url }.js`); })
+	.catch(() => {
+		const error = `Failed to load script "${ path }" requested from ${ this && this.url }.js`;
+		console.error(error); throw new Error(error);
+	})
 	.then(() => {
-		if (!Loading.has(id)) { return Modules.get(id); }
-		throw new Error(`The script at "${ path }" did not call define with the expected id`);
+		if (!Loading.has(id)) { return Exports[id]; }
+		const error = `The script at "${ path }" did not call define with the expected id`;
+		console.error(error); throw new Error(error);
 	});
-	return setModule(id, promise);
+	return setExports(id, promise);
 }
 require.async = function() {
 	return Promise.resolve(require(...arguments));
@@ -201,6 +231,9 @@ function parseDependancies(factory, name) {
 
 function resolveId(to, from) {
 	let id = to +'';
+	if (id.endsWith('/')) {
+		id += 'index';
+	}
 	if (id.startsWith('.')) {
 		if (!from) { throw new Error(`Can't resolve relative module id from global require, use the one passed into the define callback instead`); }
 		id = new URL(id, from).pathname;
@@ -211,9 +244,6 @@ function resolveId(to, from) {
 		}
 	} else if (id.startsWith('/')) {
 		id = id.slice(1);
-	}
-	if (id.endsWith('/')) {
-		id += 'index';
 	}
 	return id;
 }
@@ -246,7 +276,7 @@ function loadScript(path) {
 }
 
 function getCallingScript(offset = 0) {
-	let src = document.currentScript && document.currentScript.src;
+	let src = !isNode && document.currentScript && document.currentScript.src;
 	if (!src) {
 		const stack = (new Error).stack.split(/$/m);
 		if ((/^Error/).test(stack)) { // chrome
@@ -268,11 +298,17 @@ function spawn(iterator) {
 }
 
 /// run the main module if specified via < data-main="..." >
-const main = document.currentScript && document.currentScript.dataset.main;
+const main = !isNode && document.currentScript && document.currentScript.dataset.main;
 main && require('/'+ resolveId(main, location));
 
-window.define = define;
-window.require = require;
-require.Modules = Modules;
+if (isNode) {
+	global.define = define;
+} else {
+	window.define = define;
+	window.require = require;
+	require.Exports = Exports;
+}
+
+
 
 })();

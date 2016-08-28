@@ -1,4 +1,4 @@
-define(function({ // This Source Code Form is subject to the terms of the Mozilla Public License, v. 2.0. If a copy of the MPL was not distributed with this file, You can obtain one at http://mozilla.org/MPL/2.0/.
+(() => { 'use strict'; define(function({ // This Source Code Form is subject to the terms of the Mozilla Public License, v. 2.0. If a copy of the MPL was not distributed with this file, You can obtain one at http://mozilla.org/MPL/2.0/.
 	exports,
 	object: { copyProperties, },
 }) {
@@ -170,9 +170,9 @@ const getParent = exports.getParent = function getParent(element, selector) {
 };
 
 /**
- * Builds the strongest possible selector of tagNames, ids and classes for an Element (at its's current position in the document).
+ * Builds the strongest possible selector of tagNames, ids and classes for an Element (at its current position in the document).
  * @param  {Element}  element  The Element in question.
- * @return {string}            String that matches /^({{tagName}}(#{{id}})?(.{{class}})*)*$/
+ * @return {string}            String that matches /^(?!>)((?:^|>){{tagName}}(#{{id}})?(.{{class}})*)*$/
  */
 const getSelector = exports.getSelector = function getSelector(element) {
 	const document = (this || window).document, strings = [ ];
@@ -434,4 +434,4 @@ const DOMContentLoaded = exports.DOMContentLoaded = new Promise(function(resolve
 	}
 });
 
-});
+}); })();

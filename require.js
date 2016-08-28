@@ -1,4 +1,4 @@
-typeof global !== 'undefined' && (global._oroginal_require_ = require);
+typeof global !== 'undefined' && (global._original_require_ = require); // this *has* to happen in the global scope
 
 (function() { 'use strict'; // This Source Code Form is subject to the terms of the Mozilla Public License, v. 2.0. If a copy of the MPL was not distributed with this file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
@@ -8,11 +8,12 @@ const resolved = Promise.resolve();
 const isNode = typeof global !== 'undefined' && typeof global.process !== 'undefined';
 const URL = isNode ? function(s) { this.pathname = s; } : window.URL;
 
-const basePath = (() => {
+const [ basePath, baseOrigin, ] = (() => {
 	const path = getCallingScript(0);
-	if (isNode) { return ''; }
+	if (isNode) { return [ '', '', ]; }
 	const fromNM = (/\/(?:node_)?modules\/(?:require|es6lib)\/require\.js$/).test(path);
-	return (fromNM ? new URL('../../', path) : new URL('./', location)).pathname;
+	const url = (fromNM ? new URL('../../', path) : new URL('./', location));
+	return [ url.pathname, url.protocol +'//'+ (url.host || ''), ];
 })();
 
 const Exports = { };
@@ -61,7 +62,7 @@ function define(/* id, deps, factory */) {
 	if (!deps) {
 		if (
 			factory.length === 1
-			&& (deps = parseDependancies(factory, id)).length
+			&& (deps = parseDependencies(factory, id)).length
 		) {
 			special = true;
 		} else {
@@ -70,7 +71,7 @@ function define(/* id, deps, factory */) {
 	}
 
 	if (isNode) {
-		const require = global._oroginal_require_;
+		const require = global._original_require_;
 		const context = {
 			require,
 			exports: { },
@@ -80,7 +81,7 @@ function define(/* id, deps, factory */) {
 			},
 		};
 		const modules = deps.map(dep => context[dep.name || dep] || require(dep +''));
-		const exports = runFactory(id, factory, special ? [ makeObject(deps, modules), ] : modules);
+		const exports = special ? factory(makeObject(deps, modules)) : factory(...modules);
 		setExports(id, exports == null ? context.exports : exports);
 		return require(id);
 	}
@@ -100,7 +101,7 @@ function define(/* id, deps, factory */) {
 
 	const promise = Promise.all(deps.map(dep => context.require(dep)))
 	.then(modules => {
-		const result = runFactory(id, factory, special ? [ makeObject(deps, modules), ] : modules);
+		const result = special ? factory(makeObject(deps, modules)) : factory(...modules);
 		return isGenerator(factory) ? spawn(result) : result;
 	})
 	.catch(error => { console.error(`Definition of ${ id } failed:`, error); throw error; })
@@ -117,7 +118,7 @@ define.amd = {
 
 function setExports(id, exports) {
 	if (isNode) {
-		global._oroginal_require_.cache[id +'.js'].exports = exports;
+		global._original_require_.cache[id +'.js'].exports = exports;
 	} else {
 		Exports[id] = exports;
 	}
@@ -149,7 +150,7 @@ function require(name) {
 	if (this && this.initializing) { return resolved.then(() => require.call(this, name)); } // let the event loop spin once to allow multiple define() calls within the same script
 
 	Loading.add(id);
-	const path = basePath + id +'.js';
+	const path = baseOrigin + basePath + id +'.js';
 	const promise = loadScript(path)
 	.catch(() => {
 		const error = `Failed to load script "${ path }" requested from ${ this && this.url }.js`;
@@ -165,15 +166,15 @@ function require(name) {
 require.async = function() {
 	return Promise.resolve(require(...arguments));
 };
-require.toUrl = path => resolveId(path);
+require.toUrl = path => baseOrigin + basePath + resolveId(path);
 
 function bindContext() {
 	const bound = require.bind(this);
-	bound.toUrl = path => resolveId(path, this && this.url);
+	bound.toUrl = path => baseOrigin + basePath + resolveId(path, this && this.url);
 	return bound;
 }
 
-function parseDependancies(factory, name) {
+function parseDependencies(factory, name) {
 	const code = factory +'';
 	let index = 0; // the next position of interest
 
@@ -200,7 +201,7 @@ function parseDependancies(factory, name) {
 		}, };
 	}
 
-	index = (/^\s*(?:function)\s*\*?\s*\(?\s*/).exec(code)[0].length; // skip 'function * ('
+	index = (/^\s*(?:function)?\s*\*?\s*\(?\s*/).exec(code)[0].length; // skip 'function * ('
 	if (code[index] === ')') { return [ ]; } // argument list closes immediately
 	if (code[index] !== '{') { return [ ]; } // no destructuring assignment
 	const deps = [ ];
@@ -256,15 +257,6 @@ function makeObject(names, values) { // TODO: use a Proxy to directly throw for 
 	return object;
 }
 
-function runFactory(id, factory, args) {
-	try {
-		return factory(...args);
-	} catch (error) {
-		console.error(`Definition of module ${ id } threw:`, error);
-		throw error;
-	}
-}
-
 function loadScript(path) {
 	return new Promise((resolve, reject) => {
 		const script = document.createElement('script');
@@ -276,18 +268,12 @@ function loadScript(path) {
 }
 
 function getCallingScript(offset = 0) {
-	let src = !isNode && document.currentScript && document.currentScript.src;
-	if (!src) {
-		const stack = (new Error).stack.split(/$/m);
-		if ((/^Error/).test(stack)) { // chrome
-			const line = stack[2 + offset]; // 0: Error, 1: this function
-			src = line.match(/([^ (]*)\:\d+\:\d+\)?$/)[1];
-		} else { // firefox
-			const line = stack[1 + offset]; // 0: this function
-			src = line.match(/@(.*?)(?:\:|$)/)[1];
-		}
-	}
-	return src;
+	const src = !isNode && document.currentScript && document.currentScript.src;
+	if (src) { return src; }
+	const stack = (new Error).stack.split(/$/m);
+	const line = stack[(/^Error/).test(stack[0]) + 1 + offset];
+	const parts = line.split(/(?:\@|\(|\ )/g);
+	return parts[parts.length - 1].replace(/\:\d+\:\d+\)?$/, '');
 }
 
 function spawn(iterator) {
@@ -308,7 +294,5 @@ if (isNode) {
 	window.require = require;
 	require.Exports = Exports;
 }
-
-
 
 })();

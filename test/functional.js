@@ -1,10 +1,8 @@
-'use strict';
+'use strict'; /* global assert, describe, expect, it, xit */
 
-const {
-	functional: { apply, noop, },
-} = require('../');
+describe('"noop" should', () => {
 
-(noop ? describe : xdescribe)('"noop" should', () => {
+	const { noop, } = require('../functional.js');
 
 	it('always stay noop', () => {
 		assert(noop() === noop, 'call');
@@ -70,7 +68,7 @@ const {
 });
 
 describe('"apply" should', function() {
-	const sut = apply;
+	const sut = require('../functional.js').apply;
 
 	function concat(/*...*/args) {
 		args = Array.prototype.slice.call(arguments);

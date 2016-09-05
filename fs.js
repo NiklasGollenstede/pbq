@@ -1,4 +1,4 @@
-'use strict';
+'use strict'; /* global exports */
 
 const concurrent = require('./concurrent.js');
 const promisify = concurrent.promisify;
@@ -18,8 +18,8 @@ const Path = exports.Path = require('path');
  * @function listDir   asynchronous, recursive, unordered directory listing
  * @function makeDir   asynchronous direktory path creation, reimplementation of 'mkdirp' package
  */
-const FS = exports.FS = (function() {
-	const FS = Object.assign({ }, fs);
+(function() {
+	const FS = Object.assign(exports, fs);
 	const exists = FS.exists;
 	Object.keys(FS)
 	.filter(key => (/Sync$/).test(key))
@@ -30,6 +30,7 @@ const FS = exports.FS = (function() {
 	FS.makeDir = function(path, mask) {
 		return trustedMakeDir(Path.resolve(path), arguments.length < 1 ? mask : defaultMask);
 	};
+	FS.FS = FS;
 	return Object.freeze(FS);
 })();
 

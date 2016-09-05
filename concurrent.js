@@ -1,4 +1,4 @@
-(() => { 'use strict'; define(function({ // This Source Code Form is subject to the terms of the Mozilla Public License, v. 2.0. If a copy of the MPL was not distributed with this file, You can obtain one at http://mozilla.org/MPL/2.0/.
+(() => { 'use strict'; (defineNodeDestructuring || define)(function({ // This Source Code Form is subject to the terms of the Mozilla Public License, v. 2.0. If a copy of the MPL was not distributed with this file, You can obtain one at http://mozilla.org/MPL/2.0/.
 	exports,
 	Functional: { hrtime, apply, },
 }) {
@@ -8,15 +8,12 @@ const hasStream = typeof Stream === 'function';
 
 const SymbolIterator = typeof Symbol === 'function' && Symbol.iterator ? Symbol.iterator : '[[Symbol.iterator]]';
 
-/* global setTimeout */
-const timeout = exports.timeout = (typeof setTimeout !== 'undefined') ? setTimeout : require("sdk/timers").setTimeout;
-
 /**
  * @param  {uint}    ms  Time to "sleep" in milliseconds
  * @return {Promise}     Resolves to undefined after 'ms' milliseconds
  */
 const sleep = exports.sleep = function sleep(ms) {
-	return new Promise(function(done) { timeout(done, ms); });
+	return new Promise(function(done) { setTimeout(done, ms); });
 };
 
 /**
@@ -251,9 +248,9 @@ const periodic = exports.periodic = function periodic(callback, waitFor) {
 		function pong(value) {
 			if (value) { return resolve(value); }
 			try { expected += waitFor(++index); } catch (error) { return reject(error); }
-			timeout(ping, expected - hrtime());
+			setTimeout(ping, expected - hrtime());
 		}
-		timeout(ping, waitFor(0));
+		setTimeout(ping, waitFor(0));
 	});
 };
 

@@ -1,4 +1,4 @@
-(() => { 'use strict'; define(function({ // This Source Code Form is subject to the terms of the Mozilla Public License, v. 2.0. If a copy of the MPL was not distributed with this file, You can obtain one at http://mozilla.org/MPL/2.0/.
+(() => { 'use strict'; (defineNodeDestructuring || define)(function({ // This Source Code Form is subject to the terms of the Mozilla Public License, v. 2.0. If a copy of the MPL was not distributed with this file, You can obtain one at http://mozilla.org/MPL/2.0/.
 	exports,
 }) {
 
@@ -23,7 +23,7 @@
  */
 const HttpRequest = exports.HttpRequest = (function() {
 
-var XHR; try { XHR = (/* global XMLHttpRequest */ typeof XMLHttpRequest !== 'undefined') ? XMLHttpRequest : require('sdk/net/xhr'/* firefox */).XMLHttpRequest; } catch(e) { }
+var XHR = typeof XMLHttpRequest !== 'undefined' ? XMLHttpRequest : undefined;
 var ProgressEventConstruntor; try { /* global ProgressEvent */ new ProgressEvent(''); ProgressEventConstruntor = ProgressEvent; } catch (error) { ProgressEventConstruntor = function(reason) { const error = document.createEvent('ProgressEvent'); error.initEvent(reason, false, false); return error; }; }
 
 return function HttpRequest(url, options) {

@@ -1,10 +1,8 @@
-(() => { 'use strict'; define(function({ // This Source Code Form is subject to the terms of the Mozilla Public License, v. 2.0. If a copy of the MPL was not distributed with this file, You can obtain one at http://mozilla.org/MPL/2.0/.
+(() => { 'use strict'; (defineNodeDestructuring || define)(function({ // This Source Code Form is subject to the terms of the Mozilla Public License, v. 2.0. If a copy of the MPL was not distributed with this file, You can obtain one at http://mozilla.org/MPL/2.0/.
 	exports,
 	object: { copyProperties, },
 }) {
 
-const timeout = (typeof setTimeout !== 'undefined') ? setTimeout : require("sdk/timers").setTimeout;
-const unTimeout = (typeof clearTimeout !== 'undefined') ? clearTimeout : require("sdk/timers").clearTimeout;
 const interval = (typeof setInterval !== 'undefined') ? setInterval : require("sdk/timers").setInterval;
 const unInterval = (typeof clearInterval !== 'undefined') ? clearInterval : require("sdk/timers").clearInterval;
 
@@ -94,7 +92,7 @@ const saveAs = exports.saveAs = function saveAs(content, name) {
 
 	clickElement.call(win, link);
 
-	isBlob && timeout(function() { win.URL.revokeObjectURL(link.href); }, 1000);
+	isBlob && setTimeout(function() { win.URL.revokeObjectURL(link.href); }, 1000);
 };
 
 /**
@@ -120,7 +118,7 @@ const writeToClipboard = exports.writeToClipboard = function writeToClipboard(da
 				resolve();
 			} catch (error) { reject(error); }
 		}
-		timeout(function() {
+		setTimeout(function() {
 			reject(Error('Timeout after '+ (time || 1000) +'ms'));
 			doc.removeEventListener('copy', onCopy);
 		}, time || 1000);
@@ -145,16 +143,16 @@ const whileVisible = exports.whileVisible = function whileVisible(callback, time
 	var handle;
 	function check() {
 		if ((this || window).document.hidden) {
-			return handle && unInterval(handle);
+			return handle && clearInterval(handle);
 		} else {
-			!handle && (handle = intreval(callback, time));
+			!handle && (handle = setInterval(callback, time));
 		}
 	}
 	check();
 	(this || window).document.addEventListener('visibilitychange', check);
 	return function cancel() {
 		(this || window).document.addEventListener('visibilitychange', check);
-		handle && unTimeout(handle);
+		handle && clearTimeout(handle);
 	};
 };
 
@@ -222,7 +220,7 @@ const CreationObserver = exports.CreationObserver = function CreationObserver(el
 function elementCreated(listeners, element) {
 	element.matches && listeners.forEach(function(listener, index) {
 		if (element.matches(listener.selector)) {
-			timeout(listener.callback, 0, element);
+			setTimeout(listener.callback, 0, element);
 			if (listener.single) {
 				delete listeners[index];
 			}
@@ -252,7 +250,7 @@ CreationObserver.prototype.removeAll = function() {
 CreationObserver.prototype.single = function(selector, callback) {
 	const element = Self.get(this).element.querySelector(selector);
 	if (element) {
-		timeout(callback.bind(undefined, element), 0);
+		setTimeout(callback.bind(undefined, element), 0);
 	} else {
 		this.add(selector, callback, true);
 	}
@@ -262,7 +260,7 @@ CreationObserver.prototype.all = function(selector, callback) {
 	this.add(selector, callback, false);
 
 	for (var element, i = 0; (element = alreadyExisting[i]); i++) {
-		timeout(callback.bind(undefined, element), 0);
+		setTimeout(callback.bind(undefined, element), 0);
 	}
 };
 
@@ -403,7 +401,7 @@ const notify = exports.notify = function notify(options) {
 			self.onclick = resolve;
 			self.onerror = reject;
 			self.onclose = reject;
-			self.onshow = unTimeout.bind(null, timeout(reject, options.timeout || 1500));
+			self.onshow = clearTimeout.bind(null, setTimeout(reject, options.timeout || 1500));
 		}
 
 		if (Notification.permission === "granted") {

@@ -14,9 +14,7 @@
     "url": "https://github.com/NiklasGollenstede/es6lib"
   },
   "scripts": {
-    "debug": "node debug.js",
-    "start": "node start.js",
-    "test": "mocha",
+    "test": "mocha --require test/node",
     "test-debug": "node-debug _mocha --debug --require test/node"
   },
   "version": "0.0.1"

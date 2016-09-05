@@ -1,4 +1,4 @@
-'use strict';
+'use strict'; /* global assert, describe, expect, it, xit */
 
 const {
 	functional: { log, },

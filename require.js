@@ -8,7 +8,7 @@ function getCallingScript(offset = 0) {
 	const stack = (new Error).stack.split(/$/m);
 	const line = stack[(/^Error/).test(stack[0]) + 1 + offset];
 	const parts = line.split(/(?:\@|\(|\ )/g);
-	return parts[parts.length - 1].replace(/\:\d+\:\d+\)?$/, '');
+	return parts[parts.length - 1].replace(/\:\d+(?:\:\d+)\)?$/, '');
 }
 
 function parseDependencies(factory, name) {
@@ -76,6 +76,8 @@ function makeObject(names, values) { // TODO: use a Proxy to directly throw for 
 }
 
 if (isNode) {
+	if (global.defineNodeDestructuring) { return; }
+
 	global.defineNodeDestructuring = factory => {
 		const file = getCallingScript(1);
 		const deps = parseDependencies(factory, file);
@@ -161,7 +163,7 @@ function define(/* id, deps, factory */) {
 	const context = {
 		require,
 		id,
-		url: new URL(basePath + id, location.origin),
+		url: new URL(baseOrigin + basePath + id, location.origin),
 		module: {
 			get exports() { context.exports; },
 			set exports(v) { context.exports = v; },

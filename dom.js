@@ -3,9 +3,6 @@
 	object: { copyProperties, },
 }) {
 
-const interval = (typeof setInterval !== 'undefined') ? setInterval : require("sdk/timers").setInterval;
-const unInterval = (typeof clearInterval !== 'undefined') ? clearInterval : require("sdk/timers").clearInterval;
-
 /**
  * The functions in this module operate on the global windows 'document' (and URL, self, top, etc.) by default.
  * This is the default document.

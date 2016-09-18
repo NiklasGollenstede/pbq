@@ -37,6 +37,7 @@ function exportLazy(key) {
 	'network',
 	'object',
 	'polyfill',
+	'port',
 	'process',
 	'template',
 ].forEach(exportLazy);

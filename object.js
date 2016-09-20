@@ -1,7 +1,4 @@
-(() => { 'use strict'; (defineNodeDestructuring || define)(function({ // This Source Code Form is subject to the terms of the Mozilla Public License, v. 2.0. If a copy of the MPL was not distributed with this file, You can obtain one at http://mozilla.org/MPL/2.0/.
-	exports,
-	namespace: { NameSpace, },
-}) {
+(() => { 'use strict'; const factory = function es6lib_object(exports) { // This Source Code Form is subject to the terms of the Mozilla Public License, v. 2.0. If a copy of the MPL was not distributed with this file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
 /**
  * Deeply freezes an object structure by crawling the objects enumerable own properties (Object.keys()).
@@ -40,15 +37,18 @@ const checkNativeType = exports.checkNativeType = function checkNativeType(objec
  * @return {object}          target
  */
 const copyProperties = exports.copyProperties = function copyProperties(target, source) {
-	source && Object.keys(source).forEach(function(key) {
-		if (checkNativeType(source[key], "Object")) {
-			!target[key] && (target[key] = { });
-			copyProperties(target[key], source[key]);
-		} else if (Array.isArray(source[key])) {
-			!target[key] && (target[key] = [ ]);
-			copyProperties(target[key], source[key]);
+	source != null && Object.keys(source).forEach(function(key) {
+		let to = target[key]; const value = source[key];
+		if (typeof to !== 'object') {
+			target[key] = value;
+		} else if (checkNativeType(value, "Object")) {
+			to == null && (to = target[key] = { });
+			copyProperties(to, value);
+		} else if (Array.isArray(value)) {
+			to == null && (to = target[key] = [ ]);
+			copyProperties(to, value);
 		} else {
-			target[key] = source[key];
+			target[key] = value;
 		}
 	});
 	return target;
@@ -353,6 +353,18 @@ function copyPublicProperties(to, from, configurable) {
 	return to;
 }
 
+function NameSpace(proto) {
+	typeof proto === 'object' || (proto = Object.prototype);
+	const map = new WeakMap();
+	return function(key, set) {
+		var value = map.get(key);
+		if (value === undefined) {
+			map.set(key, value = set || Object.create(proto));
+		}
+		return value;
+	};
+}
+
 function idFunction(arg) { return arg; }
 
-}); })();
+}; if (typeof define === 'function' && define.amd) { define([ 'exports', ], factory); } else { const exports = { }, result = factory(exports) || exports; if (typeof exports === 'object' && typeof module === 'object') { module.exports = result; } else { window[factory.name] = result; } } })();

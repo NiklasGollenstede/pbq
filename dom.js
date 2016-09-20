@@ -1,7 +1,4 @@
-(() => { 'use strict'; (defineNodeDestructuring || define)(function({ // This Source Code Form is subject to the terms of the Mozilla Public License, v. 2.0. If a copy of the MPL was not distributed with this file, You can obtain one at http://mozilla.org/MPL/2.0/.
-	exports,
-	object: { copyProperties, },
-}) {
+(() => { 'use strict'; const factory = function es6lib_dom(exports) { // This Source Code Form is subject to the terms of the Mozilla Public License, v. 2.0. If a copy of the MPL was not distributed with this file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
 /**
  * The functions in this module operate on the global windows 'document' (and URL, self, top, etc.) by default.
@@ -25,21 +22,34 @@ const inIframe = exports.inIframe = function inIframe() {
 };
 
 /**
- * Creates a dom element and sets properties/attributes and children.
- * @param  {string}          tagName     Type of the new Element.
- * @param  {object}          properties  Optional object of properties, whisch are deeply copied onto the new element.
- * @param  {Array(Element)}  childList   Optional Array of elements set as the children of the new elenent.
- * @return {Element}                     New DOM element
+ * Creates a DOM Element and sets properties/attributes and children.
+ * @param  {string}          tagName     Type of the new Element to create.
+ * @param  {object}          properties  Optional. Object (not Array) of properties, which are deeply copied onto the new element.
+ * @param  {Array(Element)}  childList   Optional. Array of elements or strings to set as the children of the new element.
+ * @return {Element}                     The new DOM element.
  */
 const createElement = exports.createElement = function createElement(tagName, properties, childList) {
-	const element = (this || window).document.createElement(tagName);
+	const document = (this || window).document;
+	const element = document.createElement(tagName);
 	if (Array.isArray(properties)) { childList = properties; properties = null; }
-	properties && copyProperties(element, properties);
-	for (var i = 0; childList && i < childList.length; ++i) {
-		childList[i] && element.appendChild(childList[i]);
+	properties && deepAssign(element, properties);
+	if (!childList) { return element; }
+	for (var i = 0, child = childList[i]; childList && i < childList.length; child = childList[++i]) {
+		child && element.appendChild(typeof child === 'string' ? document.createTextNode(child) : child);
 	}
 	return element;
 };
+
+function deepAssign(target, source) {
+	Object.keys(source).forEach(key => {
+		const value = source[key], now = target[key];
+		if (typeof value === 'object' && (typeof now === 'object' || typeof now === 'function')) {
+			deepAssign(now, value);
+		} else {
+			target[key] = value;
+		}
+	});
+}
 
 /**
  * Creates a new style Element of the given css string.
@@ -429,4 +439,4 @@ const DOMContentLoaded = exports.DOMContentLoaded = new Promise(function(resolve
 	}
 });
 
-}); })();
+}; if (typeof define === 'function' && define.amd) { define([ 'exports', ], factory); } else { const exports = { }, result = factory(exports) || exports; if (typeof exports === 'object' && typeof module === 'object') { module.exports = result; } else { window[factory.name] = result; } } })();

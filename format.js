@@ -1,6 +1,4 @@
-(() => { 'use strict'; (defineNodeDestructuring || define)(function({ // This Source Code Form is subject to the terms of the Mozilla Public License, v. 2.0. If a copy of the MPL was not distributed with this file, You can obtain one at http://mozilla.org/MPL/2.0/.
-	exports,
-}) {
+(() => { 'use strict'; const factory = function es6lib_format(exports) { // This Source Code Form is subject to the terms of the Mozilla Public License, v. 2.0. If a copy of the MPL was not distributed with this file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
 /**
  * Turns a template string containing an extended RegExp, which may contain uninterpreted whitespaces
@@ -178,4 +176,4 @@ QueryObject.prototype.toString = function(keySep, valueSep, encoder) {
 	}).join(keySep || '&');
 };
 
-}); })();
+}; if (typeof define === 'function' && define.amd) { define([ 'exports', ], factory); } else { const exports = { }, result = factory(exports) || exports; if (typeof exports === 'object' && typeof module === 'object') { module.exports = result; } else { window[factory.name] = result; } } })();

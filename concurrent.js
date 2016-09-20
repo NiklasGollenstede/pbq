@@ -1,7 +1,4 @@
-(() => { 'use strict'; (defineNodeDestructuring || define)(function({ // This Source Code Form is subject to the terms of the Mozilla Public License, v. 2.0. If a copy of the MPL was not distributed with this file, You can obtain one at http://mozilla.org/MPL/2.0/.
-	exports,
-	Functional: { hrtime, apply, },
-}) {
+(() => { 'use strict'; const factory = function es6lib_concurrent(exports) { // This Source Code Form is subject to the terms of the Mozilla Public License, v. 2.0. If a copy of the MPL was not distributed with this file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
 const resolved = Promise.resolve();
 const hasStream = typeof Stream === 'function';
@@ -34,10 +31,9 @@ const promiseCallback = exports.promiseCallback = function promiseCallback() {
  * @return {function}              Method that returns a Promise to it's asynchronous value
  */
 const promisify = exports.promisify = function promisify(callUlater) {
-	return function(/*arguments*/) {
-		const self = this, args = arguments;
-		return new Promise(function(resolve, reject) {
-			apply(callUlater, self, args, function(err, res) { err ? reject(err) : resolve(res); });
+	return function promisifyed(/*arguments*/) {
+		return new Promise((resolve, reject) => {
+			callUlater.call(this, ...arguments, (err, res) => err ? reject(err) : resolve(res));
 		});
 	};
 };
@@ -58,7 +54,7 @@ const promisifyAll = exports.promisifyAll = function promisifyAll(object, prefix
 const promised = exports.promised = function promised(promiser) {
 	return function(/*...args, callback*/) {
 		const callback = Array.prototype.pop.call(arguments);
-		apply(promiser, this, arguments)
+		promiser.apply(this, arguments)
 		.then(callback.bind(null, null), callback);
 	};
 };
@@ -71,7 +67,7 @@ const promised = exports.promised = function promised(promiser) {
  * @return {Promise}               Promise of the return value of the generator
  */
 const spawn = exports.spawn = function spawn(generator, thisArg, args) {
-	const iterator = apply(generator, thisArg, args);
+	const iterator = generator.apply(thisArg, args);
 
 	function next(arg) {
 		return handle(iterator.next(arg));
@@ -253,6 +249,15 @@ const periodic = exports.periodic = function periodic(callback, waitFor) {
 		setTimeout(ping, waitFor(0));
 	});
 };
+const hrtime = (function() { /* global process */
+	if (typeof performance !== 'undefined') {
+		return performance.now.bind(performance); // browser
+	} else if (typeof process !== 'undefined' && typeof process.hrtime === 'function') {
+		return function () { const pair = process.hrtime(); return pair[0] * 1e3 + pair[1] / 1e6; }; // node
+	} else {
+		return require("chr" + "ome").Cu.now; // firefox
+	}
+})();
 
 /**
  * Instantly asynchronously executes a callback as soon as possible.
@@ -262,4 +267,4 @@ const instantly = exports.instantly = function instantly(callback) {
 	resolved.then(callback);
 };
 
-}); })();
+}; if (typeof define === 'function' && define.amd) { define([ 'exports', ], factory); } else { const exports = { }, result = factory(exports) || exports; if (typeof exports === 'object' && typeof module === 'object') { module.exports = result; } else { window[factory.name] = result; } } })();

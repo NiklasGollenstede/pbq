@@ -1,36 +1,33 @@
-(() => { 'use strict'; (defineNodeDestructuring || define)(function({ // This Source Code Form is subject to the terms of the Mozilla Public License, v. 2.0. If a copy of the MPL was not distributed with this file, You can obtain one at http://mozilla.org/MPL/2.0/.
-	exports,
-}) {
+(() => { 'use strict'; const factory = function es6lib_functional(exports) { // This Source Code Form is subject to the terms of the Mozilla Public License, v. 2.0. If a copy of the MPL was not distributed with this file, You can obtain one at http://mozilla.org/MPL/2.0/.
 /* global performance */
 
 /**
- * Object/Function that returns itself on execution and every property access. Stateless
+ * Object/Function that returns itself when called and on every property access.
+ * Turns into the empty string or NaN when casted to a primitive,
+ * simulates a .__proto__ of null and ignores any property assignments or definitions.
+ * But it throws when called as a constructoror when preventExtensions is called on it.
  */
 const noop = exports.noop = (typeof Proxy !== 'undefined') && (function(noop) {
-	const keys = [ 'arguments', 'caller', 'prototype', ];
-	const target = function target() { return noop; };
-	target.prototype = undefined;
-	return noop = new Proxy(target, {
-		deleteProperty:    function() { return false; },
-		getPrototypeOf:    function() { return null; },
-		setPrototypeOf:    function() { return true; },
-		preventExtensions: function() { return true; }, // throws (would need to freeze the target)
-		defineProperty:    function() { return true; },
-		ownKeys:           function() { return keys; },
-		apply:             function() { return noop; },
-		construct:         function() { return noop; },
-		set:               function() { return true; },
-		has:               function(_, key) { return key === 'arguments' || key === 'prototype'; },
-		get:               function(_, key) { switch (key) {
+	const keys = [ ];
+	const target = () => noop;
+	delete target.name; delete target.length;
+
+	return (noop = new Proxy(target, {
+		setPrototypeOf     () { return true; },
+		getPrototypeOf     () { return null; },
+		preventExtensions  () { throw new TypeError(`noop needs to be extensible`); }, // need to freeze the target or throw
+		defineProperty     () { return true; },
+		apply              () { return noop; },
+		construct          () { return noop; }, // throws (handler is ignored because arrow functions are no constructors)
+		set                () { return true; },
+		has                () { return false; },
+		get                (_, key) { switch (key) {
 			case Symbol.toPrimitive: return function(type) { return type === 'number' ? NaN : ''; };
 			case Symbol.toStringTag: return 'no-op';
-			case '__proto__': return undefined;
+			case '__proto__': return null;
 			default: return noop;
 		} },
-		getOwnPropertyDescriptor: function(_, key) {
-			return keys.includes(key) ? Object.getOwnPropertyDescriptor(target, key) : undefined;
-		},
-	});
+	}));
 })();
 
 /**
@@ -219,4 +216,4 @@ const cached = exports.cached = function cached(func, cache) {
 	return ret;
 };
 
-}); })();
+}; if (typeof define === 'function' && define.amd) { define([ 'exports', ], factory); } else { const exports = { }, result = factory(exports) || exports; if (typeof exports === 'object' && typeof module === 'object') { module.exports = result; } else { window[factory.name] = result; } } })();

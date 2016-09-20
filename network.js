@@ -1,13 +1,11 @@
-(() => { 'use strict'; (defineNodeDestructuring || define)(function({ // This Source Code Form is subject to the terms of the Mozilla Public License, v. 2.0. If a copy of the MPL was not distributed with this file, You can obtain one at http://mozilla.org/MPL/2.0/.
-	exports,
-}) {
+(() => { 'use strict'; const factory = function es6lib_network(exports) { // This Source Code Form is subject to the terms of the Mozilla Public License, v. 2.0. If a copy of the MPL was not distributed with this file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
 /**
  * Constructs an XMLHttpRequest from the given url and options and returns a Promise
  * that is fulfilled with the request once the result is loaded or canceld with an ProgressEvent if an error occurs.
- * @param {string} url     Destination url, may be omited in favor of the url or src property of the options object.
+ * @param {string} url     Destination url, may be omitted in favor of the url or src property of the options object.
  * @param {Object} options optional object of:
- *     @property {string}  url || src        Optional replacement for the url panameter
+ *     @property {string}  url || src        Optional replacement for the url parameter
  *     @property {string}  method            HTTP request method
  *     @property {bool}    needAbort         If trueisch, the returned Promise has an abort() method that aborts the XHR and rejects the Promise
  *     @property {bool}    xhr               Set to false to not set the 'X-Requested-With' header to 'XMLHttpRequest'
@@ -24,7 +22,7 @@
 const HttpRequest = exports.HttpRequest = (function() {
 
 var XHR = typeof XMLHttpRequest !== 'undefined' ? XMLHttpRequest : undefined;
-var ProgressEventConstruntor; try { /* global ProgressEvent */ new ProgressEvent(''); ProgressEventConstruntor = ProgressEvent; } catch (error) { ProgressEventConstruntor = function(reason) { const error = document.createEvent('ProgressEvent'); error.initEvent(reason, false, false); return error; }; }
+var ProgressEventConstructor; try { /* global ProgressEvent */ new ProgressEvent(''); ProgressEventConstructor = ProgressEvent; } catch (error) { ProgressEventConstructor = function(reason) { const error = document.createEvent('ProgressEvent'); error.initEvent(reason, false, false); return error; }; }
 
 return function HttpRequest(url, options) {
 	var request, cancel;
@@ -61,7 +59,7 @@ return function HttpRequest(url, options) {
 	return promise;
 };
 function cancelWith(reject, reason) {
-	const error = new ProgressEventConstruntor(reason);
+	const error = new ProgressEventConstructor(reason);
 	this.dispatchEvent(error);
 	reject(error);
 }
@@ -110,4 +108,6 @@ const mimeTypes = exports.mimeTypes = {
 	xhtml: 'application/xhtml+xml',
 };
 
-}); })();
+return exports;
+
+}; if (typeof define === 'function' && define.amd) { define([ 'exports', ], factory); } else { const exports = { }, result = factory(exports) || exports; if (typeof exports === 'object' && typeof module === 'object') { module.exports = result; } else { window[factory.name] = result; } } })();

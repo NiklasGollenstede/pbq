@@ -1,12 +1,10 @@
-(() => { 'use strict'; (defineNodeDestructuring || define)(function({ // This Source Code Form is subject to the terms of the Mozilla Public License, v. 2.0. If a copy of the MPL was not distributed with this file, You can obtain one at http://mozilla.org/MPL/2.0/.
-	module,
-}) {
+(() => { 'use strict'; const factory = function es6lib_port() { // This Source Code Form is subject to the terms of the Mozilla Public License, v. 2.0. If a copy of the MPL was not distributed with this file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
 /**
  * Wrapper class for browser WebSockets, node js Streams, web-extension runtime.Ports and similar ports,
  * to provide a more high level API with requests to named handlers and Promises to their replies.
  */
-const Port = module.exports = class Port {
+const Port = class Port {
 
 	/**
 	 * Takes one end of a communication channel and prepares it to send and receive requests.
@@ -345,4 +343,6 @@ function fromJson(string) {
 	});
 }
 
-}); })();
+return Port;
+
+}; if (typeof define === 'function' && define.amd) { define([ 'exports', ], factory); } else { const exports = { }, result = factory(exports) || exports; if (typeof exports === 'object' && typeof module === 'object') { module.exports = result; } else { window[factory.name] = result; } } })();

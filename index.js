@@ -21,16 +21,15 @@ function exportLazy(key) {
 [
 	'concurrent',
 	'dom',
-	'format',
 	'functional',
 	'fs',
-	'graph',
 	'namespace',
 	'network',
 	'object',
 	'polyfill',
 	'port',
 	'process',
+	'string',
 	'template',
 ].forEach(exportLazy);
 

@@ -5,7 +5,7 @@ const hasStream = typeof Stream === 'function';
 
 const SymbolIterator = typeof Symbol === 'function' && Symbol.iterator ? Symbol.iterator : '[[Symbol.iterator]]';
 
-const setTimeout = global.setTimeout || (function() { try { return require('sdk/timers').setTimeout; } catch (_) { } });
+const setTimeout = global.setTimeout || (function() { try { return require('sdk/'+'timers').setTimeout; } catch (_) { } });
 
 /**
  * @param  {uint}    ms  Time to "sleep" in milliseconds

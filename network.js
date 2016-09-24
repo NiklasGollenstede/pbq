@@ -23,9 +23,9 @@ const HttpRequest = exports.HttpRequest = (function() {
 
 var XHR, ProgressEvent;
 if (global.process && global.process.versions && global.process.versions.node) {
-	try { XHR = require('xhr2'); ProgressEvent = XHR.ProgressEvent; } catch(_) { }
+	try { XHR = require('xhr'+'2'); ProgressEvent = XHR.ProgressEvent; } catch(_) { }
 } else {
-	XHR = global.XMLHttpRequest || (function() { try { return require('sdk/net/xhr').XMLHttpRequest; } catch(_) { } })();
+	XHR = global.XMLHttpRequest || (function() { try { return require('sdk/net'+'/xhr').XMLHttpRequest; } catch(_) { } })();
 	try { /* global ProgressEvent */
 		new global.ProgressEvent(''); ProgressEvent = global.ProgressEvent;
 	} catch (error) {

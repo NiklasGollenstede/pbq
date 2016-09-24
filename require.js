@@ -1,14 +1,14 @@
 (function() { 'use strict'; // This Source Code Form is subject to the terms of the Mozilla Public License, v. 2.0. If a copy of the MPL was not distributed with this file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
-const isNode = typeof global !== 'undefined' && typeof global.process !== 'undefined';
+const browser = typeof document !== 'undefined';
 
 function getCallingScript(offset = 0) {
-	const src = !isNode && document.currentScript && document.currentScript.src;
+	const src = browser && document.currentScript && document.currentScript.src;
 	if (src) { return src; }
 	const stack = (new Error).stack.split(/$/m);
 	const line = stack[(/^Error/).test(stack[0]) + 1 + offset];
 	const parts = line.split(/(?:\@|\(|\ )/g);
-	return parts[parts.length - 1].replace(/\:\d+(?:\:\d+)\)?$/, '');
+	return parts[parts.length - 1].replace(/\:\d+(?:\:\d+)?\)?$/, '');
 }
 
 function parseDependencies(factory, name) {
@@ -74,25 +74,6 @@ function makeObject(names, values) { // TODO: use a Proxy to directly throw for 
 	}
 	return object;
 }
-
-if (isNode) {
-	if (global.defineNodeDestructuring) { return; }
-
-	global.defineNodeDestructuring = factory => {
-		const file = getCallingScript(1);
-		const deps = parseDependencies(factory, file);
-		const context = { require, exports: { }, module: {
-			get exports() { context.exports; },
-			set exports(v) { context.exports = v; },
-		}, };
-		const modules = deps.map(dep => context[dep.name || dep] || require(dep +''));
-		const exports = factory(makeObject(deps, modules));
-		require.cache[file].exports = exports == null ? context.exports : exports;
-	};
-	return;
-}
-
-(function() { // not in node js
 
 const Generator = Object.getPrototypeOf(function*(){ yield 0; }).constructor;
 function isGenerator(g) { return g instanceof Generator; }
@@ -304,7 +285,5 @@ window.require = require;
 require.Exports = Exports;
 require.Loading = Loading;
 window.defineNodeDestructuring = window.defineNodeDestructuring || null;
-
-})();
 
 })();

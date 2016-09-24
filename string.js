@@ -1,4 +1,4 @@
-(() => { 'use strict'; const factory = function es6lib_string(exports) { // This Source Code Form is subject to the terms of the Mozilla Public License, v. 2.0. If a copy of the MPL was not distributed with this file, You can obtain one at http://mozilla.org/MPL/2.0/.
+(function(global) { 'use strict'; const factory = function es6lib_string(exports) { // This Source Code Form is subject to the terms of the Mozilla Public License, v. 2.0. If a copy of the MPL was not distributed with this file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
 /// RegExpX has been removed
 Object.defineProperty(exports, 'RegExpX', { get() { throw new Error(`'RegExpX' has been removed from this file, use the 'regexpx' module instead`); }, });
@@ -25,19 +25,20 @@ const toFixedLength = exports.toFixedLength = function toFixedLength(string, len
  * @param {number}  base   Optional. The numerical base of the random characters, encoded as [1-9a-z], must be <= 36. Default: 16.
  */
 const randomHex = exports.randomHex = (function() { try {
-	if (typeof window !== 'undefined' && window.crypto) {
-		const rand = window.crypto.getRandomValues.bind(window.crypto);
-		const Uint32Array = window.Uint32Array;
-		return function randomHex(chars, base) {
-			base = +base || 16;
-			const data = rand(new Uint32Array(Math.ceil(chars * Math.log2(base) / 28)));
-			return toFixedLength(Array.prototype.map.call(data, _=>_.toString(base)).join(''), chars);
-		};
-	} else {
+	if (global.process && global.process.versions && global.process.versions.node) {
 		const rand = require('crypto').randomBytes;
 		return function randomHex(chars, base) {
 			base = +base || 16;
 			const data = rand(Math.ceil(chars * Math.log2(base) / 7));
+			return toFixedLength(Array.prototype.map.call(data, _=>_.toString(base)).join(''), chars);
+		};
+	} else {
+		if (!global.crypto) { require('chr'+'ome').Cu.importGlobalProperties([ 'crypto', ]); }
+		const rand = global.crypto.getRandomValues.bind(global.crypto);
+		const Uint32Array = global.Uint32Array;
+		return function randomHex(chars, base) {
+			base = +base || 16;
+			const data = rand(new Uint32Array(Math.ceil(chars * Math.log2(base) / 28)));
 			return toFixedLength(Array.prototype.map.call(data, _=>_.toString(base)).join(''), chars);
 		};
 	}
@@ -176,10 +177,13 @@ try {
 /**
  * Escapes a string so that it can be placed within another string when generating JavaScript code.
  * @param  {string}  string  String that should be placed within another string.
- * @return {string}          Escaped string that, when pared, gives the same sequence of characters as the input string.
+ * @return {string}          Escaped string such that eval('"'+ result +'"') === string
  */
-const escapeString = exports.escapeString = function escapeString(string) {
-	return String.prototype.replace.call(string != null ? string : '', /([\\\n\$\`\'\"])/g, '\\$1');
+const escapeForString = exports.escapeForString = exports.escapeString = function escapeForString(string) {
+	return String.prototype.replace.call(string != null ? string : '', /([\\\$\`\'\"])/g, '\\$1').replace(/\n/g, '\\n\\\n');
+};
+const escapeForTemplateString = exports.escapeForTemplateString = function escapeForTemplateString(string) {
+	return String.prototype.replace.call(string != null ? string : '', /(\\|\$\{|\`)/g, '\\$1');
 };
 
 const unescapeUrl = exports.unescapeUrl = function unescapeUrl(string) {
@@ -223,4 +227,4 @@ const removeEmptyLines = exports.removeEmptyLines = function removeEmptyLines(st
 	String.prototype.replace.call(string != null ? string : '', (/(\n|\r|\r\n)([ \t]*(\n|\r|\r\n))+/g), '$1');
 };
 
-}; if (typeof define === 'function' && define.amd) { define([ 'exports', ], factory); } else { const exports = { }, result = factory(exports) || exports; if (typeof exports === 'object' && typeof module === 'object') { module.exports = result; } else { window[factory.name] = result; } } })();
+}; if (typeof define === 'function' && define.amd) { define([ 'exports', ], factory); } else { const exports = { }, result = factory(exports) || exports; if (typeof exports === 'object' && typeof module === 'object') { module.exports = result; } else { global[factory.name] = result; } } })((function() { return this; })());

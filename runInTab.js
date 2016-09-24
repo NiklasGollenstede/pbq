@@ -1,42 +1,42 @@
 (function () { 'use strict';
+/* global module, self, */
+
 
 /**
  * Loaded in the main process, provides a single function that allows to run functions in a tab process.
- * @param  {Tab}           tab      The tab to run in
- * @param  {...string}     modules  Modules to load before executing
- * @param  {function}      script   The function to execute
- * @param  {...any}        args     Arguments to the function
- * @async
- * @return {Promise(any)}  Promise to the value (or the value of the promise) returned by 'script'
+ * @param  {Tab}           tab      The tab to run in.
+ * @param  {...string}     files    Files to load before executing `script`.
+ * @param  {function}      script   The function to execute.
+ * @param  {...any}        args     Arguments to the function.
+ * @return {Promise(any)}  Promise to the value (or the value of the promise) returned by 'script'.
  */
 
 if (typeof module !== 'undefined') {
 	// main process
 	const __FILE__ = new Error().fileName.match(/ -> (resource:\/\/.*?)$/)[1];
-	const __REQUIRE__ = __FILE__.replace(/[^\/]*$/, 'require.js');
 
 	module.exports = (tab, ...args) => new Promise((resolve, reject) => {
-		const modules = [ __REQUIRE__, ];
+		const modules = [ ];
 		let i = 0;
 		while (typeof args[i] !== 'function' && i < args.length) {
 			modules.push(args[i++]);
 		}
 		modules.push(__FILE__);
 		const script = args[i];
-		if (!script) { throw new TypeError('Can\'t find \'script\' argument'); }
+		if (!script) { throw new TypeError(`Can't find 'script' parameter`); }
 		args.splice(0, i + 1);
 
 		const worker = tab.attach({
 			contentScriptFile: modules,
 			contentScriptOptions: { script: `return (${ script }).apply(this, arguments)`, args, },
 		});
-		worker.port.on("resolve", value => {
-			worker.destroy();
+		worker.port.once('resolve', value => {
 			resolve(value);
-		});
-		worker.port.on("reject", value => {
 			worker.destroy();
+		});
+		worker.port.once('reject', value => {
 			reject(value);
+			worker.destroy();
 		});
 	});
 } else {

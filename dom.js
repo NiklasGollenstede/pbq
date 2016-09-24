@@ -1,4 +1,4 @@
-(() => { 'use strict'; const factory = function es6lib_dom(exports) { // This Source Code Form is subject to the terms of the Mozilla Public License, v. 2.0. If a copy of the MPL was not distributed with this file, You can obtain one at http://mozilla.org/MPL/2.0/.
+(function(global) { 'use strict'; const factory = function es6lib_dom(exports) { // This Source Code Form is subject to the terms of the Mozilla Public License, v. 2.0. If a copy of the MPL was not distributed with this file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
 /**
  * The functions in this module operate on the global windows 'document' (and URL, self, top, etc.) by default.
@@ -6,19 +6,14 @@
  * To have any of the functions of this module operate on a different scope, call them with that scope as this,
  * e.g. `cerateElement.call(iframe.contentWindow, 'a', { ...});` to create an Element in an iframe.
  */
-if (typeof window !== 'undefined') {
-	exports.defaultWindow = window;
-	exports.document = window.document;
-	exports.URL = window.URL;
-	exports.MutationObserver = window.MutationObserver;
-}
+exports.document = global.document;
 
 /**
  * Returns true, if the current execution context is not a browser top level context.
  * I.e the current script is executed in an iframe.
  */
 const inIframe = exports.inIframe = function inIframe() {
-	try { return ((this || window).self !== (this || window).top); } catch (e) { return true; }
+	try { return ((this || global).self !== (this || global).top); } catch (e) { return true; }
 };
 
 /**
@@ -29,7 +24,7 @@ const inIframe = exports.inIframe = function inIframe() {
  * @return {Element}                     The new DOM element.
  */
 const createElement = exports.createElement = function createElement(tagName, properties, childList) {
-	const document = (this || window).document;
+	const document = (this || global).document;
 	const element = document.createElement(tagName);
 	if (Array.isArray(properties)) { childList = properties; properties = null; }
 	properties && deepAssign(element, properties);
@@ -55,7 +50,7 @@ function deepAssign(target, source) {
  * Creates a new style Element of the given css string.
  */
 const createStyleElement = exports.createStyleElement = function createStyleElement(css) {
-	const element = (this || window).document.createElement("style");
+	const element = (this || global).document.createElement("style");
 	element.type = "text/css";
 	element.textContent = css;
 	return element;
@@ -67,7 +62,7 @@ const createStyleElement = exports.createStyleElement = function createStyleElem
  * @return {Element}     The new style Element.
  */
 const addStyle = exports.addStyle = function addStyle(css) {
-	return (this || window).document.querySelector("head").appendChild(createStyleElement(css));
+	return (this || global).document.querySelector("head").appendChild(createStyleElement(css));
 };
 
 /**
@@ -75,7 +70,7 @@ const addStyle = exports.addStyle = function addStyle(css) {
  * @return {Element}         The clicked Element
  */
 const clickElement = exports.clickElement = function clickElement(element) {
-	const evt = (this || window).document.createEvent('MouseEvents');
+	const evt = (this || global).document.createEvent('MouseEvents');
 	evt.initEvent('click', true, true);
 	element.dispatchEvent(evt);
 	return element;
@@ -88,7 +83,7 @@ const clickElement = exports.clickElement = function clickElement(element) {
  * @return {void}
  */
 const saveAs = exports.saveAs = function saveAs(content, name) {
-	const win = this || window;
+	const win = this || global;
 	const isBlob = typeof content.type === 'string';
 
 	const link = Object.assign(win.document.createElement('a'), {
@@ -110,7 +105,7 @@ const saveAs = exports.saveAs = function saveAs(content, name) {
  */
 const writeToClipboard = exports.writeToClipboard = function writeToClipboard(data, time) {
 	return new Promise(function(resolve, reject) {
-		const doc = (this || window).document;
+		const doc = (this || global).document;
 		function onCopy(event) {
 			try {
 				doc.removeEventListener('copy', onCopy);
@@ -149,16 +144,16 @@ const once = exports.once = function once(element, event, callback, capture) {
 const whileVisible = exports.whileVisible = function whileVisible(callback, time) {
 	var handle;
 	function check() {
-		if ((this || window).document.hidden) {
+		if ((this || global).document.hidden) {
 			return handle && clearInterval(handle);
 		} else {
 			!handle && (handle = setInterval(callback, time));
 		}
 	}
 	check();
-	(this || window).document.addEventListener('visibilitychange', check);
+	(this || global).document.addEventListener('visibilitychange', check);
 	return function cancel() {
-		(this || window).document.addEventListener('visibilitychange', check);
+		(this || global).document.addEventListener('visibilitychange', check);
 		handle && clearTimeout(handle);
 	};
 };
@@ -180,7 +175,7 @@ const getParent = exports.getParent = function getParent(element, selector) {
  * @return {string}            String that matches /^(?!>)((?:^|>){{tagName}}(#{{id}})?(.{{class}})*)*$/
  */
 const getSelector = exports.getSelector = function getSelector(element) {
-	const document = (this || window).document, strings = [ ];
+	const document = (this || global).document, strings = [ ];
 	while (element && element !== document) {
 		strings.add(
 			element.tagName
@@ -193,7 +188,7 @@ const getSelector = exports.getSelector = function getSelector(element) {
 };
 
 const onElementChanged = exports.onElementChanged = function onElementChanged(element, attributeFilter, callback) {
-	return new (this || window).MutationObserver(function(mutations, observer) {
+	return new (this || global).MutationObserver(function(mutations, observer) {
 		mutations.forEach(function(mutation) {
 			if (mutation.target.getAttribute(mutation.attributeName) != mutation.oldValue) {
 				try { callback(mutation.target, mutation.oldValue); } catch(e) {  }
@@ -377,7 +372,7 @@ Object.assign(RemoveObserverPrivate.prototype, {
 	// listens for the removal of children and of the node from it's parent
 	attach() {
 		const check = this.check;
-		this.observer = new MutationObserver(function(mutations, observer) {
+		this.observer = new node.ownerDocument.defaultView.MutationObserver(function(mutations, observer) {
 			mutations.forEach(function(mutation) {
 				const rn = mutation.removedNodes;
 				for (var j = 0, length = rn.length; j < length; j++) { check(rn[j]); }
@@ -402,9 +397,10 @@ Object.assign(RemoveObserverPrivate.prototype, {
 });
 
 const notify = exports.notify = function notify(options) {
+	const win = (this || global);
 	return new Promise(function(resolve, reject) {
 		function doIt() {
-			const self = new Notification(options.title, options);
+			const self = new win.Notification(options.title, options);
 			self.onclick = resolve;
 			self.onerror = reject;
 			self.onclose = reject;
@@ -439,4 +435,4 @@ const DOMContentLoaded = exports.DOMContentLoaded = new Promise(function(resolve
 	}
 });
 
-}; if (typeof define === 'function' && define.amd) { define([ 'exports', ], factory); } else { const exports = { }, result = factory(exports) || exports; if (typeof exports === 'object' && typeof module === 'object') { module.exports = result; } else { window[factory.name] = result; } } })();
+}; if (typeof define === 'function' && define.amd) { define([ 'exports', ], factory); } else { const exports = { }, result = factory(exports) || exports; if (typeof exports === 'object' && typeof module === 'object') { module.exports = result; } else { global[factory.name] = result; } } })((function() { return this; })());

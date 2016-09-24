@@ -1,4 +1,4 @@
-(() => { 'use strict'; const factory = function es6lib_network(exports) { // This Source Code Form is subject to the terms of the Mozilla Public License, v. 2.0. If a copy of the MPL was not distributed with this file, You can obtain one at http://mozilla.org/MPL/2.0/.
+(function(global) { 'use strict'; const factory = function es6lib_network(exports) { // This Source Code Form is subject to the terms of the Mozilla Public License, v. 2.0. If a copy of the MPL was not distributed with this file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
 /**
  * Constructs an XMLHttpRequest from the given url and options and returns a Promise
@@ -21,8 +21,17 @@
  */
 const HttpRequest = exports.HttpRequest = (function() {
 
-var XHR = typeof XMLHttpRequest !== 'undefined' ? XMLHttpRequest : undefined;
-var ProgressEventConstructor; try { /* global ProgressEvent */ new ProgressEvent(''); ProgressEventConstructor = ProgressEvent; } catch (error) { ProgressEventConstructor = function(reason) { const error = document.createEvent('ProgressEvent'); error.initEvent(reason, false, false); return error; }; }
+var XHR, ProgressEvent;
+if (global.process && global.process.versions && global.process.versions.node) {
+	try { XHR = require('xhr2'); ProgressEvent = XHR.ProgressEvent; } catch(_) { }
+} else {
+	XHR = global.XMLHttpRequest || (function() { try { return require('sdk/net/xhr').XMLHttpRequest; } catch(_) { } })();
+	try { /* global ProgressEvent */
+		new global.ProgressEvent(''); ProgressEvent = global.ProgressEvent;
+	} catch (error) {
+		ProgressEvent = function(reason) { const error = global.document.createEvent('ProgressEvent'); error.initEvent(reason, false, false); return error; };
+	}
+}
 
 return function HttpRequest(url, options) {
 	var request, cancel;
@@ -110,4 +119,4 @@ const mimeTypes = exports.mimeTypes = {
 
 return exports;
 
-}; if (typeof define === 'function' && define.amd) { define([ 'exports', ], factory); } else { const exports = { }, result = factory(exports) || exports; if (typeof exports === 'object' && typeof module === 'object') { module.exports = result; } else { window[factory.name] = result; } } })();
+}; if (typeof define === 'function' && define.amd) { define([ 'exports', ], factory); } else { const exports = { }, result = factory(exports) || exports; if (typeof exports === 'object' && typeof module === 'object') { module.exports = result; } else { global[factory.name] = result; } } })((function() { return this; })());

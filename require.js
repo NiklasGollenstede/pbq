@@ -86,10 +86,10 @@ const [ basePath, baseOrigin, ] = (() => {
 	return [ url.pathname, url.protocol +'//'+ (url.host || ''), ];
 })();
 
-const Exports = { };
-const Loading = { };
+const Modules = { };
 
 function define(/* id, deps, factory */) {
+	// parse arguments
 	let id, deps, factory;
 	switch (arguments.length) {
 		case 3: {
@@ -108,6 +108,8 @@ function define(/* id, deps, factory */) {
 			badArg();
 		}
 	}
+
+	// get id
 	if (id === undefined) {
 		let src = getCallingScript(1);
 		id = ((/[\w-]+:\/\//).test(src) ? new URL(src).pathname : src).replace(/\.js$/, '');
@@ -120,15 +122,24 @@ function define(/* id, deps, factory */) {
 	if (typeof id !== 'string') { badArg(); }
 	if ((/^[\.\\\/]/).test(id)) { throw new Error('The module id must be an absolute path'); }
 	function badArg () {
-		throw new Error('Bad signature, should be define(id?, dependencies?, factory)');
+		throw new Error('Bad signature, should be define(id?: string, dependencies?: Array<string>, factory: function|any)');
 	}
 
-	const loading = Loading[id] || (Loading[id] = new PromiseCapability());
-	if (Exports.hasOwnProperty(id) || loading.active) { throw new Error(`Duplicate definition of module "${ id }"`); }
-	loading.active = true;
+	// get/create Module
+	const module = Modules[id] || (Modules[id] = new Module(null, null, id));
+	if (module.loaded) { throw new Error(`Duplicate definition of module "${ id }"`); }
+	module.loaded = true;
 
-	if (typeof factory !== 'function') { resolved.then(() => setExports(id, factory)); return loading.promise; }
+	if (typeof factory !== 'function') {
+		resolved.then(() => {
+			module.exports = factory;
+			module.resolved = true;
+			module.promise.resolve(module);
+		});
+		return module.promise.then(() => module.exports);
+	}
 
+	// get deps
 	let special = false;
 	if (!deps) {
 		if (
@@ -141,31 +152,24 @@ function define(/* id, deps, factory */) {
 		}
 	}
 
-	const context = {
-		require,
-		id,
-		url: new URL(baseOrigin + basePath + id, location.origin),
-		module: {
-			get exports() { context.exports; },
-			set exports(v) { context.exports = v; },
-		},
-		exports: { },
-		initializing: true,
-	};
-	resolved.then(() => context.initializing = false);
-
-	// const resolving = ;
-	// console.log('resolving', id, deps.map(_=>_+''), 'to', resolving);
-
-	const promise = Promise.all(deps.map(dep => context.require(dep)))
+	const promise = resolved.then(() => Promise.all(deps.map(dep => { switch (dep.name || dep) {
+		case 'require': return module.require;
+		case 'exports': return module.exports;
+		case 'module': return module;
+		default: return module.requireAsync(dep, true);
+	} })))
 	.then(modules => {
 		const result = special ? factory(makeObject(deps, modules)) : factory(...modules);
 		return isGenerator(factory) ? spawn(result) : result;
 	})
 	.catch(error => { console.error(`Definition of ${ id } failed:`, error); throw error; })
-	.then(exports => setExports(id, exports == null ? context.exports : exports))
-	.catch(loading.reject);
-	return loading.promise;
+	.then(exports => {
+		exports != null && (module.exports = exports);
+		module.resolved = true;
+		module.promise.resolve(module);
+	})
+	.catch(module.promise.reject);
+	return module.promise;
 }
 define.amd = {
 	destructuring: true,
@@ -174,69 +178,97 @@ define.amd = {
 	promise: true,
 };
 
-function setExports(id, exports) {
-	Exports[id] = exports;
-	const loading = Loading[id]; if (loading) {
-		loading.resolve(exports);
-		delete Loading[id];
-	}
-	return exports;
-}
+let mainModule;
 
-function require(name) {
-	if (typeof arguments[1] === 'function') {
-		if (Array.isArray(name)) {
-			const modules = name.map(name => require.call(this, name));
-			Promise.resolve(Promise.all(modules)).then(modules => arguments[1](...modules));
-			return modules;
+class Module {
+	constructor(parent, url, id) {
+		this.url = new URL(url || baseOrigin + basePath + id +'.js');
+		this.id = id;
+		this.parent = parent;
+		this.exports = { };
+		this._children = new Set;
+		this.promise = new PromiseCapability();
+		this.loaded = false;
+		this.resolved = false;
+
+		this._require = null;
+		Object.defineProperty(this, 'require', { get() {
+			if (this._require) { return this._require; }
+			const require = this._require = Module.prototype.require.bind(this);
+			require.async = Module.prototype.requireAsync.bind(this);
+			require.toUrl = Module.prototype.requireToUrl.bind(this);
+			require.cache = Modules;
+			Object.defineProperty(require, 'main', {
+				get() { return mainModule; },
+				set(module) { mainModule = module; },
+				enumerable: true, configurable: true,
+			});
+			return require;
+		}, enumerable: true, configurable: true, });
+	}
+
+	require(name) {
+		if (typeof name === 'string') {
+			const id = resolveId(name, this.url);
+			const module = Modules[id];
+			if (module && module.loaded) {
+				this._children.add(module);
+				return module.exports;
+			}
+			throw new Error(`The module "${ name }" is not defined (yet)`);
+		}
+		const [ names, done, ] = arguments;
+		if (Array.isArray(names) && typeof done === 'function') {
+			Promise.all(names.map(name => this.requireAsync(name)))
+			.then(result => done(...result))
+			.catch(error => { console.error(`Failed to require([ ${ names }, ], ...)`); throw error; });
 		} else {
-			const module = require.call(this, name);
-			Promise.resolve(module).then(arguments[1]);
-			return module;
+			throw new Error(`require must be called with (string) or (Array, function)`);
 		}
 	}
 
-	switch (name.name || name) {
-		case 'require': return bindContext.call(this);
-		case 'exports': return this && this.exports;
-		case 'module': return this && this.module;
+	requireAsync(name, fast) {
+		const id = resolveId(name, this.url);
+
+		let module = Modules[id]; if (module) {
+			this._children.add(module);
+			return fast && module.resolved ? module.exports : module.promise.then(() => module.exports);
+		}
+
+		const url = baseOrigin + basePath + id +'.js';
+		module = Modules[id] = new Module(this, url, id);
+		this._children.add(module);
+
+		loadScript(url)
+		.then(() => {
+			if (module.loaded) { return; }
+			const error = `The script at "${ url }" did not call define with the expected id`;
+			console.error(error); module.promise.reject(new Error(error));
+		})
+		.catch(() => {
+			const error = `Failed to load script "${ url }" first requested from ${ this.url }.js`;
+			console.error(error); module.promise.reject(new Error(error));
+		});
+		return module.promise.then(() => module.exports);
 	}
 
-	const id = resolveId(name, this && this.url);
-	let module = Exports[id]; if (module) { return module; }
+	requireToUrl(path) {
+		return baseOrigin + basePath + resolveId(path, this.url);
+	}
 
-	if (this && this.initializing) { return resolved.then(() => require.call(this, name)); } // let the event loop spin once to allow multiple define() calls within the same script
-
-	let loading = Loading[id]; if (loading) { return loading.promise; }
-	loading = Loading[id] = new PromiseCapability();
-
-	const path = baseOrigin + basePath + id +'.js';
-	loadScript(path)
-	.then(() => {
-		const loading = Loading[id]; if (!loading || loading.active) { return; }
-		const error = `The script at "${ path }" did not call define with the expected id`;
-		console.error(error); loading.reject(new Error(error));
-	})
-	.catch(() => {
-		const error = `Failed to load script "${ path }" requested from ${ this && this.url }.js`;
-		console.error(error); loading.reject(new Error(error));
-	});
-	return loading.promise;
+	get children() {
+		return Array.from(this._children);
+	}
 }
-require.async = function() {
-	return Promise.resolve(require(...arguments));
-};
-require.toUrl = path => baseOrigin + basePath + resolveId(path);
+
+const globalModule = new Module(null, '', '');
+const require = globalModule.require;
 
 function PromiseCapability() {
-	this.promise = new Promise((resolve, reject) => { this.resolve = resolve; this.reject = reject; });
-	this.active = false;
-}
-
-function bindContext() {
-	const bound = require.bind(this);
-	bound.toUrl = path => baseOrigin + basePath + resolveId(path, this && this.url);
-	return bound;
+	let y, n, promise = new Promise((_y, _n) => (y = _y, n = _n));
+	promise.resolve = y;
+	promise.reject = n;
+	return promise;
 }
 
 function resolveId(to, from) {
@@ -277,13 +309,14 @@ function spawn(iterator) {
 
 /// run the main module if specified via < data-main="..." >
 const main = document.currentScript && document.currentScript.dataset.main;
-main && require('/'+ resolveId(main, location));
-
+if (main) {
+	const id = resolveId(main, location);
+	require.async(id); // TODO: .catch ?
+	require.main = require.cache[id];
+	require.main.parent = null;
+}
 
 window.define = define;
 window.require = require;
-require.Exports = Exports;
-require.Loading = Loading;
-window.defineNodeDestructuring = window.defineNodeDestructuring || null;
 
 })();

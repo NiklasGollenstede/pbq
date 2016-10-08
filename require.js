@@ -1,9 +1,9 @@
-(function() { 'use strict'; // This Source Code Form is subject to the terms of the Mozilla Public License, v. 2.0. If a copy of the MPL was not distributed with this file, You can obtain one at http://mozilla.org/MPL/2.0/.
+(function(global) { 'use strict'; // This Source Code Form is subject to the terms of the Mozilla Public License, v. 2.0. If a copy of the MPL was not distributed with this file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
-const browser = typeof document !== 'undefined';
+const document = typeof window !== 'undefined' && window.navigator && window.document;
 
 function getCallingScript(offset = 0) {
-	const src = browser && document.currentScript && document.currentScript.src;
+	const src = document && document.currentScript && document.currentScript.src;
 	if (src) { return src; }
 	const stack = (new Error).stack.split(/$/m);
 	const line = stack[(/^Error/).test(stack[0]) + 1 + offset];
@@ -11,7 +11,7 @@ function getCallingScript(offset = 0) {
 	return parts[parts.length - 1].replace(/\:\d+(?:\:\d+)?\)?$/, '');
 }
 
-function parseDependencies(factory, name) {
+function parseDepsDestr(factory, name) {
 	const code = factory +'';
 	let index = 0; // the next position of interest
 
@@ -65,6 +65,67 @@ function parseDependencies(factory, name) {
 	}
 
 	return deps;
+}
+
+function parseDepsBody(factory, name) {
+	if (factory.length === 0) { return [ ]; }
+	let code = factory +'';
+	const isId = (/^[\w\-\.\\\/]*$/);
+	const require = (/require\s*\(\s*(?:"([\w-.]*?)"|'([\w-.]*?)'|`([\w-.]*?)`)\s*\)/g);
+	const whitespace = (/\s*/g);
+
+	// try to find an early way out
+	let match, found = false;
+	while ((match = require.exec(code))) {
+		const requireAt = match.index;
+		const dotAt = code.lastIndexOf('.', requireAt);
+		whitespace.lastIndex = dotAt;
+		if (dotAt + whitespace.exec(code)[0].length === requireAt) { continue; }
+		found = true; break;
+	}
+	const deps = [ 'require', 'exports', 'module', ];
+	if (!found) { return deps.slice(0, factory.length); }
+
+	const stringsAndComments = (/(\'[^]*?(?:\\\\)*[^\\]\'|\"[^]*?(?:\\\\)*[^\\]\"|\`[^]*?(?:\\\\)*[^\\]\`)|(?:\/\/[^]*?$|\/\*[^]*?\*\/)|(?:\/[^]*?(?:\\\\)*[^\\]\/)/gm);
+	/* which (using the 'regexpx' module) is: RegExpX('gms')`
+		(		# strings, allow multiple lines
+				# these need to be put back if they are 'simple'
+			  \' .*?(?:\\\\)*[^\\] \'
+			| \" .*?(?:\\\\)*[^\\] \"
+				# substitutions in template strings should be put back too,
+				# but even just finding the closing bracket is not trivial,
+				# especially because the expressions themselves can contain strings and comments
+				# so they are (currently) ignored
+			| \` .*?(?:\\\\)*[^\\] \`
+		) | (?:  # RegExp literals
+			  \/\/ .*? $ # line comments
+			| \/\* .*? \*\/ # block comments
+		) | (?:  # RegExp literals
+			  \/ .*?(?:\\\\)*[^\\] \/
+		)
+	`;*/
+
+	code = code.replace(stringsAndComments, (_, s) => (s && (s = s.slice(1, -1)) && isId.test(s) ? '"'+ s +'"' : ''));
+
+	require.lastIndex = 0;
+	while ((match = require.exec(code))) {
+		const requireAt = match.index;
+		const dotAt = code.lastIndexOf('.', requireAt);
+		whitespace.lastIndex = dotAt;
+		if (dotAt + whitespace.exec(code)[0].length === requireAt) { continue; }
+		deps.push(match[1]);
+	}
+
+	return deps.length === 3 ? deps.slice(0, factory.length) : deps;
+}
+
+function hasPendingPath(from, to) {
+	if (from._children.size === 0) { return false; }
+	return from.children.some(child => {
+		if (child.resolved) { return false; }
+		if (child === to) { return true; }
+		return hasPendingPath(child, to);
+	});
 }
 
 function makeObject(names, values) { // TODO: use a Proxy to directly throw for undefined properties?
@@ -144,11 +205,11 @@ function define(/* id, deps, factory */) {
 	if (!deps) {
 		if (
 			factory.length === 1
-			&& (deps = parseDependencies(factory, id)).length
+			&& (deps = parseDepsDestr(factory, id)).length
 		) {
 			special = true;
 		} else {
-			deps = [ 'require', 'exports', 'module', ].slice(0, factory.length);
+			deps = parseDepsBody(factory, id);
 		}
 	}
 
@@ -188,8 +249,8 @@ class Module {
 		this.exports = { };
 		this._children = new Set;
 		this.promise = new PromiseCapability();
-		this.loaded = false;
-		this.resolved = false;
+		this.loaded = false; // TODO: make these read-only
+		this.resolved = false; // TODO: make these read-only
 
 		this._require = null;
 		Object.defineProperty(this, 'require', { get() {
@@ -219,7 +280,7 @@ class Module {
 		}
 		const [ names, done, ] = arguments;
 		if (Array.isArray(names) && typeof done === 'function') {
-			Promise.all(names.map(name => this.requireAsync(name)))
+			Promise.all(names.map(name => this.requireAsync(name, true)))
 			.then(result => done(...result))
 			.catch(error => { console.error(`Failed to require([ ${ names }, ], ...)`); throw error; });
 		} else {
@@ -232,7 +293,20 @@ class Module {
 
 		let module = Modules[id]; if (module) {
 			this._children.add(module);
-			return fast && module.resolved ? module.exports : module.promise.then(() => module.exports);
+			if (module.resolved) {
+				if (fast) { return module.exports; }
+				return Promise.resolve(module.exports);
+			}
+			if (hasPendingPath(module, this)) {
+				console.warn(`Found cyclic dependency to "${ id }", passing it's unfinished exports to "${ this.id }"`);
+				this._children.delete(module);
+				if (fast) {
+					this.promise.then(() => this._children.add(module));
+					return module.exports;
+				}
+				return Promise.reject(Error(`Asynchronously requiring "${ name }" from "${ this.id }" would create a cyclic waiting condition`));
+			}
+			return module.promise.then(() => module.exports);
 		}
 
 		const url = baseOrigin + basePath + id +'.js';
@@ -316,7 +390,7 @@ if (main) {
 	require.main.parent = null;
 }
 
-window.define = define;
-window.require = require;
+global.define = define;
+global.require = require;
 
-})();
+})((function() { return this; })());

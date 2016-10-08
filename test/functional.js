@@ -7,8 +7,8 @@ describe('"noop" should', () => {
 	it('always stay noop', () => {
 		assert(noop() === noop, 'call');
 		assert(noop.apply(null, [ ]) === noop, 'apply');
-		// assert(new noop === noop, 'new'); // would throw 'noop is not a constructor'
-		// assert(Reflect.construct(noop, [ ]) === noop, 'constuct');
+		assert(new noop === noop, 'new');
+		assert(Reflect.construct(noop, [ ]) === noop, 'constuct');
 		assert(noop.blob === noop, 'property');
 		assert(noop.prototype === noop, '.prototype');
 		assert(noop.blob() === noop, 'member');

@@ -372,7 +372,8 @@ Object.assign(RemoveObserverPrivate.prototype, {
 	// listens for the removal of children and of the node from it's parent
 	attach() {
 		const check = this.check;
-		this.observer = new node.ownerDocument.defaultView.MutationObserver(function(mutations, observer) {
+		this.observer = new (this.node.ownerDocument || this.node).defaultView
+		.MutationObserver(function(mutations, observer) {
 			mutations.forEach(function(mutation) {
 				const rn = mutation.removedNodes;
 				for (var j = 0, length = rn.length; j < length; j++) { check(rn[j]); }

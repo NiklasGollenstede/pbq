@@ -38,7 +38,6 @@ describe('"toFixedLength" should', function() {
 	it('work', () => {
 		for (let i = 0; i < 100; ++i) {
 			const id = Guid();
-			console.log('giud', id);
 			id.should.match(/^[\da-f]{8}-[\da-f]{4}-4[\da-f]{3}-8[\da-f]{3}-[\da-f]{12}/);
 		}
 	});

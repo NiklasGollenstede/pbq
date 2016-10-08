@@ -1,4 +1,4 @@
-(() => { 'use strict'; const factory = function es6lib_port() { // This Source Code Form is subject to the terms of the Mozilla Public License, v. 2.0. If a copy of the MPL was not distributed with this file, You can obtain one at http://mozilla.org/MPL/2.0/.
+(function(global) { 'use strict'; const factory = function es6lib_port(exports) { // This Source Code Form is subject to the terms of the Mozilla Public License, v. 2.0. If a copy of the MPL was not distributed with this file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
 /**
  * Wrapper class for browser WebSockets, node js Streams, web-extension runtime.Ports and similar ports,
@@ -330,13 +330,12 @@ function toJson(value) {
 		return value;
 	});
 }
-const _global = typeof window !== 'undefined' ? window : global;
 function fromJson(string) {
 	if (typeof string !== 'string') { return string; }
 	return JSON.parse(string, (key, value) => {
 		if (!value || typeof value !== 'string' || !value.startsWith('$_ERROR_$')) { return value; }
 		const object = JSON.parse(value.slice(9));
-		const Constructor = object.name ? _global[object.name] || Error : Error;
+		const Constructor = object.name ? global[object.name] || Error : Error;
 		const error = Object.create(Constructor.prototype);
 		Object.assign(error, object);
 		return error;
@@ -345,4 +344,4 @@ function fromJson(string) {
 
 return Port;
 
-}; if (typeof define === 'function' && define.amd) { define([ 'exports', ], factory); } else { const exports = { }, result = factory(exports) || exports; if (typeof exports === 'object' && typeof module === 'object') { module.exports = result; } else { window[factory.name] = result; } } })();
+}; if (typeof define === 'function' && define.amd) { define([ 'exports', ], factory); } else { const exp = { }, result = factory(exp) || exp; if (typeof exports === 'object' && typeof module === 'object') { module.exports = result; } else { global[factory.name] = result; } } })((function() { return this; })());

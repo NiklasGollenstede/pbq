@@ -5,11 +5,11 @@
  * Object/Function that returns itself when called and on every property access.
  * Turns into the empty string or NaN when casted to a primitive,
  * simulates a .__proto__ of null and ignores any property assignments or definitions.
- * But it throws when called as a constructoror when preventExtensions is called on it.
+ * But it throws when preventExtensions is called on it.
  */
 const noop = exports.noop = (typeof Proxy !== 'undefined') && (function(noop) {
 	const keys = [ ];
-	const target = () => noop;
+	const target = function() { return noop; }.bind();
 	delete target.name; delete target.length;
 
 	return (noop = new Proxy(target, {
@@ -17,8 +17,6 @@ const noop = exports.noop = (typeof Proxy !== 'undefined') && (function(noop) {
 		getPrototypeOf     () { return null; },
 		preventExtensions  () { throw new TypeError(`noop needs to be extensible`); }, // need to freeze the target or throw
 		defineProperty     () { return true; },
-		apply              () { return noop; },
-		construct          () { return noop; }, // throws (handler is ignored because arrow functions are no constructors)
 		set                () { return true; },
 		has                () { return false; },
 		get                (_, key) { switch (key) {
@@ -216,4 +214,4 @@ const cached = exports.cached = function cached(func, cache) {
 	return ret;
 };
 
-}; if (typeof define === 'function' && define.amd) { define([ 'exports', ], factory); } else { const exports = { }, result = factory(exports) || exports; if (typeof exports === 'object' && typeof module === 'object') { module.exports = result; } else { window[factory.name] = result; } } })();
+}; if (typeof define === 'function' && define.amd) { define([ 'exports', ], factory); } else { const exp = { }, result = factory(exp) || exp; if (typeof exports === 'object' && typeof module === 'object') { module.exports = result; } else { global[factory.name] = result; } } })((function() { return this; })());

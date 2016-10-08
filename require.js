@@ -71,7 +71,7 @@ function parseDepsBody(factory, name) {
 	if (factory.length === 0) { return [ ]; }
 	let code = factory +'';
 	const isId = (/^[\w\-\.\\\/]*$/);
-	const require = (/require\s*\(\s*(?:"([\w-.]*?)"|'([\w-.]*?)'|`([\w-.]*?)`)\s*\)/g);
+	const require = (/require\s*\(\s*(?:"([\w\-\.\\\/]*?)"|'([\w\-\.\\\/]*?)'|`([\w\-\.\\\/]*?)`)\s*\)/g);
 	const whitespace = (/\s*/g);
 
 	// try to find an early way out
@@ -80,30 +80,36 @@ function parseDepsBody(factory, name) {
 		const requireAt = match.index;
 		const dotAt = code.lastIndexOf('.', requireAt);
 		whitespace.lastIndex = dotAt;
-		if (dotAt + whitespace.exec(code)[0].length === requireAt) { continue; }
+		if (dotAt < 0 || dotAt + whitespace.exec(code)[0].length === requireAt) { continue; }
 		found = true; break;
 	}
 	const deps = [ 'require', 'exports', 'module', ];
 	if (!found) { return deps.slice(0, factory.length); }
 
-	const stringsAndComments = (/(\'[^]*?(?:\\\\)*[^\\]\'|\"[^]*?(?:\\\\)*[^\\]\"|\`[^]*?(?:\\\\)*[^\\]\`)|(?:\/\/[^]*?$|\/\*[^]*?\*\/)|(?:\/[^]*?(?:\\\\)*[^\\]\/)/gm);
-	/* which (using the 'regexpx' module) is: RegExpX('gms')`
+	const stringsAndComments = (/(\'(?:[^\\]|\\[^\\]|(?:\\\\)*)*?\'|\"(?:[^\\]|\\[^\\]|(?:\\\\)*)*?\"|\`(?:[^\\]|\\[^\\]|(?:\\\\)*)*?\`)|\/\/[^]*?$|\/\*[^]*?\*\/|\/(?:[^\\]|\\[^\\]|(?:\\\\)*)*?\//gm);
+	/* which (using the 'regexpx' module) is: RegExpX('gmsX')`
 		(		# strings, allow multiple lines
 				# these need to be put back if they are 'simple'
-			  \' .*?(?:\\\\)*[^\\] \'
-			| \" .*?(?:\\\\)*[^\\] \"
+			  \' (?:[^\\]|\\[^\\]|(?:\\\\)*)*? \'
+			| \" (?:[^\\]|\\[^\\]|(?:\\\\)*)*? \"
 				# substitutions in template strings should be put back too,
 				# but even just finding the closing bracket is not trivial,
 				# especially because the expressions themselves can contain strings and comments
 				# so they are (currently) ignored
-			| \` .*?(?:\\\\)*[^\\] \`
-		) | (?:  # RegExp literals
-			  \/\/ .*? $ # line comments
-			| \/\* .*? \*\/ # block comments
-		) | (?:  # RegExp literals
-			  \/ .*?(?:\\\\)*[^\\] \/
+			| \` (?:[^\\]|\\[^\\]|(?:\\\\)*)*? \`
 		)
-	`;*/
+        |   \/\/ .*? $ # line comments
+        |   \/\* .*? \*\/ # block comments
+        |     \/ (?:[^\\]|\\[^\\]|(?:\\\\)*)*? \/ # RegExp literals
+	`;
+	and the expression between the quotes is: RegExpX`
+		(?:
+			  [^\\] # something that's not a backslash
+			| \\ [^\\] # a backslash followed by something that's not
+			| (?: \\\\ )* # an even number of backslashes
+		)*?
+	`;
+	*/
 
 	code = code.replace(stringsAndComments, (_, s) => (s && (s = s.slice(1, -1)) && isId.test(s) ? '"'+ s +'"' : ''));
 
@@ -112,7 +118,7 @@ function parseDepsBody(factory, name) {
 		const requireAt = match.index;
 		const dotAt = code.lastIndexOf('.', requireAt);
 		whitespace.lastIndex = dotAt;
-		if (dotAt + whitespace.exec(code)[0].length === requireAt) { continue; }
+		if (dotAt < 0 || dotAt + whitespace.exec(code)[0].length === requireAt) { continue; }
 		deps.push(match[1]);
 	}
 
@@ -124,6 +130,7 @@ function hasPendingPath(from, to) {
 	return from.children.some(child => {
 		if (child.resolved) { return false; }
 		if (child === to) { return true; }
+		// unless somebody messes with the .resolved property, this traverses a directed acyclic graph
 		return hasPendingPath(child, to);
 	});
 }

@@ -1,6 +1,20 @@
 (function(global) { 'use strict'; // This Source Code Form is subject to the terms of the Mozilla Public License, v. 2.0. If a copy of the MPL was not distributed with this file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
 const document = typeof window !== 'undefined' && window.navigator && window.document;
+const importScripts = typeof window === 'undefined' && typeof navigator === 'object' && typeof importScripts === 'function';
+const isGenerator = code => (/^function\s*\*/).test(code);
+const resolved = Promise.resolve();
+
+const Modules = { }; // id ==> Module
+const Loading =  { }; // url ==> Module (with .loading === true)
+
+let mainModule = null;
+let baseUrl = '';
+let prefixMap = { };
+let modIdMap = null;
+let defIdMap = null;
+let shimMap = null;
+let loadScript = url => { throw new Error(`No JavaScript loader available to load "${ url }"`); };
 
 function getCallingScript(offset = 0) {
 	const src = document && document.currentScript && document.currentScript.src;
@@ -11,8 +25,7 @@ function getCallingScript(offset = 0) {
 	return parts[parts.length - 1].replace(/\:\d+(?:\:\d+)?\)?$/, '');
 }
 
-function parseDepsDestr(factory, name) {
-	const code = factory +'';
+function parseDepsDestr(factory, name, code) {
 	let index = 0; // the next position of interest
 
 	function next(exp) {
@@ -67,11 +80,9 @@ function parseDepsDestr(factory, name) {
 	return deps;
 }
 
-function parseDepsBody(factory, name) {
+function parseDepsBody(factory, name, code) {
 	if (factory.length === 0) { return [ ]; }
-	let code = factory +'';
-	const isId = (/^[\w\-\.\\\/]*$/);
-	const require = (/require\s*\(\s*(?:"([\w\-\.\\\/]*?)"|'([\w\-\.\\\/]*?)'|`([\w\-\.\\\/]*?)`)\s*\)/g);
+	const require = (/require\s*\(\s*(?:"(.*?)"|'.*?'|`.*?`)\s*\)/g);
 	const whitespace = (/\s*/g);
 
 	// try to find an early way out
@@ -80,7 +91,7 @@ function parseDepsBody(factory, name) {
 		const requireAt = match.index;
 		const dotAt = code.lastIndexOf('.', requireAt);
 		whitespace.lastIndex = dotAt;
-		if (dotAt < 0 || dotAt + whitespace.exec(code)[0].length === requireAt) { continue; }
+		if (dotAt >= 0 && dotAt + whitespace.exec(code)[0].length === requireAt) { continue; }
 		found = true; break;
 	}
 	const deps = [ 'require', 'exports', 'module', ];
@@ -111,14 +122,14 @@ function parseDepsBody(factory, name) {
 	`;
 	*/
 
-	code = code.replace(stringsAndComments, (_, s) => (s && (s = s.slice(1, -1)) && isId.test(s) ? '"'+ s +'"' : ''));
+	code = code.replace(stringsAndComments, (_, s) => (s && (s = s.slice(1, -1)) && !require.test(s) ? '"'+ s +'"' : ''));
 
 	require.lastIndex = 0;
 	while ((match = require.exec(code))) {
 		const requireAt = match.index;
 		const dotAt = code.lastIndexOf('.', requireAt);
 		whitespace.lastIndex = dotAt;
-		if (dotAt < 0 || dotAt + whitespace.exec(code)[0].length === requireAt) { continue; }
+		if (dotAt >= 0 && dotAt + whitespace.exec(code)[0].length === requireAt) { continue; }
 		deps.push(match[1]);
 	}
 
@@ -143,19 +154,6 @@ function makeObject(names, values) { // TODO: use a Proxy to directly throw for 
 	return object;
 }
 
-const Generator = Object.getPrototypeOf(function*(){ yield 0; }).constructor;
-function isGenerator(g) { return g instanceof Generator; }
-const resolved = Promise.resolve();
-
-const [ basePath, baseOrigin, ] = (() => {
-	const path = getCallingScript(0);
-	const fromNM = (/\/node_modules\/(?:require|es6lib)\/require\.js$/).test(path);
-	const url = (fromNM ? new URL('../../', path) : new URL('./', location));
-	return [ url.pathname, url.protocol +'//'+ (url.host || ''), ];
-})();
-
-const Modules = { };
-
 function define(/* id, deps, factory */) {
 	// parse arguments
 	let id, deps, factory;
@@ -178,11 +176,14 @@ function define(/* id, deps, factory */) {
 	}
 
 	// get id
+	let src = '';
 	if (id === undefined) {
-		let src = getCallingScript(1);
-		id = ((/[\w-]+:\/\//).test(src) ? new URL(src).pathname : src).replace(/\.js$/, '');
-		if (id.startsWith(basePath)) {
-			id = id.slice(basePath.length);
+		src = getCallingScript(1);
+		const url = new URL(src);
+		src = url.href.slice(0, url.href.length - url.hash.length - url.search.length);
+		id = src.replace(/\.js$/, '');
+		if (id.startsWith(baseUrl)) {
+			id = id.slice(baseUrl.length);
 		} else if (id.startsWith('/')) {
 			id = id.slice(1);
 		}
@@ -190,33 +191,36 @@ function define(/* id, deps, factory */) {
 	if (typeof id !== 'string') { badArg(); }
 	if ((/^[\.\\\/]/).test(id)) { throw new Error('The module id must be an absolute path'); }
 	function badArg () {
-		throw new Error('Bad signature, should be define(id?: string, dependencies?: Array<string>, factory: function|any)');
+		throw new TypeError('Bad signature, should be define(id?: string, dependencies?: Array<string>, factory: function|any)');
 	}
 
 	// get/create Module
-	const module = Modules[id] || (Modules[id] = new Module(null, null, id));
+	const module = src && Loading[src] || Modules[id] || (Modules[id] = new Module(null, null, id));
 	if (module.loaded) { throw new Error(`Duplicate definition of module "${ id }"`); }
 	module.loaded = true;
+	delete Loading[src];
 
 	if (typeof factory !== 'function') {
 		resolved.then(() => {
 			module.exports = factory;
 			module.resolved = true;
-			module.promise.resolve(module);
+			module.promise.resolve(module.exports);
 		});
 		return module.promise.then(() => module.exports);
 	}
+
+	const code = factory +'';
 
 	// get deps
 	let special = false;
 	if (!deps) {
 		if (
 			factory.length === 1
-			&& (deps = parseDepsDestr(factory, id)).length
+			&& (deps = parseDepsDestr(factory, id, code)).length
 		) {
 			special = true;
 		} else {
-			deps = parseDepsBody(factory, id);
+			deps = parseDepsBody(factory, id, code);
 		}
 	}
 
@@ -224,11 +228,11 @@ function define(/* id, deps, factory */) {
 		case 'require': return module.require;
 		case 'exports': return module.exports;
 		case 'module': return module;
-		default: return module.requireAsync(dep, true);
+		default: return module.requireAsync(dep +'', true);
 	} })))
 	.then(modules => {
 		const result = special ? factory(makeObject(deps, modules)) : factory(...modules);
-		return isGenerator(factory) ? spawn(result) : result;
+		return isGenerator(code) ? spawn(result) : result;
 	})
 	.catch(error => { console.error(`Definition of ${ id } failed:`, error); throw error; })
 	.then(exports => {
@@ -242,15 +246,12 @@ function define(/* id, deps, factory */) {
 define.amd = {
 	destructuring: true,
 	generator: true,
-	promises: true,
 	promise: true,
 };
 
-let mainModule;
-
 class Module {
 	constructor(parent, url, id) {
-		this.url = new URL(url || baseOrigin + basePath + id +'.js');
+		this.url = url ? new URL(url) : id ? new URL(resolveUrl(id) +'.js') : '';
 		this.id = id;
 		this.parent = parent;
 		this.exports = { };
@@ -258,6 +259,7 @@ class Module {
 		this.promise = new PromiseCapability();
 		this.loaded = false; // TODO: make these read-only
 		this.resolved = false; // TODO: make these read-only
+		this.isShim = false;
 
 		this._require = null;
 		Object.defineProperty(this, 'require', { get() {
@@ -266,9 +268,13 @@ class Module {
 			require.async = Module.prototype.requireAsync.bind(this);
 			require.toUrl = Module.prototype.requireToUrl.bind(this);
 			require.cache = Modules;
+			require.config = config;
 			Object.defineProperty(require, 'main', {
 				get() { return mainModule; },
-				set(module) { mainModule = module; },
+				set(module) {
+					if (module instanceof Module) { mainModule = module; }
+					else { throw new Error(`require.main must be a Module`); }
+				},
 				enumerable: true, configurable: true,
 			});
 			return require;
@@ -277,13 +283,23 @@ class Module {
 
 	require(name) {
 		if (typeof name === 'string') {
-			const id = resolveId(name, this.url);
-			const module = Modules[id];
-			if (module && module.loaded) {
-				this._children.add(module);
-				return module.exports;
+			let split = 0, id = '';
+			if ((split = name.indexOf('!')) >= 0) { // get the plugin
+				const pluginId = resolveId(this.id, name.slice(0, split));
+				const plugin = Modules[pluginId];
+				if (!plugin || !plugin.resolved) {
+					throw new Error(`The plugin "${ pluginId }" is not defined (yet)`);
+				}
+				id = pluginId +'!'+ resolveByPlugin(plugin, this.id, name.slice(split + 1));
+			} else {
+				id = resolveId(this.id, name);
 			}
-			throw new Error(`The module "${ name }" is not defined (yet)`);
+			const module = Modules[id];
+			if (!module || !module.resolved) {
+				throw new Error(`The module "${ id }" is not defined (yet)`);
+			}
+			this._children.add(module);
+			return module.exports;
 		}
 		const [ names, done, ] = arguments;
 		if (Array.isArray(names) && typeof done === 'function') {
@@ -295,8 +311,25 @@ class Module {
 		}
 	}
 
-	requireAsync(name, fast) {
-		const id = resolveId(name, this.url);
+	requireAsync(name, fast, plugin) {
+		let split = 0, id = '';
+		if (plugin) {
+			id = name;
+		} else if ((split = name.indexOf('!')) >= 0) { // get the plugin
+			const pluginId = resolveId(this.id, name.slice(0, split));
+			const resName = name.slice(split + 1);
+			if (fast && (plugin = Modules[pluginId]) && plugin.resolved) {
+				id = resolveByPlugin(plugin, this.id, resName);
+			} else {
+				return this.requireAsync(pluginId)
+				.then(() => {
+					const plugin = Modules[pluginId];
+					return this.requireAsync(resolveByPlugin(plugin, this.id, resName), true, plugin);
+				});
+			}
+		} else {
+			id = resolveId(this.id, name);
+		}
 
 		let module = Modules[id]; if (module) {
 			this._children.add(module);
@@ -316,25 +349,42 @@ class Module {
 			return module.promise.then(() => module.exports);
 		}
 
-		const url = baseOrigin + basePath + id +'.js';
-		module = Modules[id] = new Module(this, url, id);
+		if (plugin) {
+			const fullId = plugin.id +'!'+ id;
+			module = new Module(this, 'plugin:'+ fullId, fullId);
+			!plugin.exports.dynamic && (Modules[fullId] = module) && this._children.add(module);
+			plugin.exports.load(id, this.require, module.promise.resolve, { cancel: module.promise.reject, });
+			module.promise.then(exports => {
+				module.exports = exports;
+				module.loaded = module.resolved = true;
+			});
+			return module.promise;
+		}
+
+		const url = resolveUrl(id) +'.js';
+		module = Modules[id] = Loading[url] = new Module(this, url, id);
 		this._children.add(module);
 
 		loadScript(url)
 		.then(() => {
 			if (module.loaded) { return; }
+			if (this.isShim) {
+				module.loaded = module.resolved = module.isShim = true;
+				module.promise.resolve(module.exports);
+				return console.info(`The shim dependency "${ url }" of "${ this.id }" didn't call define`);
+			}
 			const error = `The script at "${ url }" did not call define with the expected id`;
 			console.error(error); module.promise.reject(new Error(error));
 		})
 		.catch(() => {
-			const error = `Failed to load script "${ url }" first requested from ${ this.url }.js`;
+			const error = `Failed to load script "${ url }" first requested from "${ this.url }"`;
 			console.error(error); module.promise.reject(new Error(error));
 		});
 		return module.promise.then(() => module.exports);
 	}
 
 	requireToUrl(path) {
-		return baseOrigin + basePath + resolveId(path, this.url);
+		return resolveUrl(resolveId(this.id, path));
 	}
 
 	get children() {
@@ -352,33 +402,82 @@ function PromiseCapability() {
 	return promise;
 }
 
-function resolveId(to, from) {
+function resolveId(from, to) {
 	let id = to +'';
 	if (id.endsWith('/')) {
 		id += 'index';
 	}
 	if (id.startsWith('.')) {
 		if (!from) { throw new Error(`Can't resolve relative module id from global require, use the one passed into the define callback instead`); }
-		id = new URL(id, from).pathname;
-		if (id.startsWith(basePath)) {
-			id = id.slice(basePath.length);
+		const url = new URL(id, typeof from === 'string' ? baseUrl + from : from);
+		id = url.href.slice(0, url.href.length - url.hash.length - url.search.length);
+		if (id.startsWith(baseUrl)) {
+			id = id.slice(baseUrl.length);
 		} else if (id.startsWith('/')) {
 			id = id.slice(1);
 		}
 	} else if (id.startsWith('/')) {
 		id = id.slice(1);
 	}
+	if (!modIdMap && !defIdMap || typeof from !== 'string') { return id; }
+	const maps = Object.keys(modIdMap || { })
+	.filter(prefix => isIdPrefix(from, prefix))
+	.sort((a, b) => b.length - a.length)
+	.map(key => modIdMap[key])
+	.concat(defIdMap || [ ]);
+	for (let map of maps) {
+		const prefix = Object.keys(map)
+		.filter(prefix => isIdPrefix(id, prefix))
+		.reduce((a, b) => a.length > b.length ? a : b, '');
+		if (prefix) {
+			return map[prefix] + id.slice(prefix.length);
+		}
+	}
 	return id;
 }
 
-function loadScript(path) {
-	return new Promise((resolve, reject) => {
+function resolveUrl(id) {
+	const prefix = Object.keys(prefixMap)
+	.filter(prefix => isIdPrefix(id, prefix))
+	.reduce((a, b) => a.length > b.length ? a : b, '');
+	if (!prefix) { return baseUrl + id; }
+	return prefixMap[prefix] + id.slice(prefix.length);
+}
+
+function isIdPrefix(id, prefix) {
+	return (
+		id === prefix
+		|| id.length > prefix.length && id.startsWith(prefix) && (
+			prefix.endsWith('/') || id[prefix.length] === '/'
+			|| (/^\.[^\\\/]+$/).test(id.slice(prefix.length))
+		)
+	);
+}
+
+function resolveByPlugin(plugin, from, id) {
+	if (plugin.exports && plugin.exports.normalize) {
+		return plugin.exports.normalize(id, resolveId.bind(null, from));
+	}
+	return resolveId(from, id);
+}
+
+if (document /*&& document.currentScript*/) {
+	loadScript = url =>	new Promise((resolve, reject) => {
 		const script = document.createElement('script');
 		script.onload = resolve;
 		script.onerror = reject;
-		script.src = path;
+		script.src = url;
 		document.documentElement.appendChild(script).remove();
 	});
+} else if (importScripts) { // for WebWorkers, untested
+	const requested = [ ];
+	loadScript = url => {
+		requested.push(url);
+		resolved.then(
+			() => requested.length
+			&& importScripts(requested.splice(0, Infinity))
+		);
+	};
 }
 
 function spawn(iterator) {
@@ -388,14 +487,87 @@ function spawn(iterator) {
 	return resolved.then(next);
 }
 
-/// run the main module if specified via < data-main="..." >
-const main = document.currentScript && document.currentScript.dataset.main;
-if (main) {
-	const id = resolveId(main, location);
-	require.async(id); // TODO: .catch ?
-	require.main = require.cache[id];
-	require.main.parent = null;
+function config(options) {
+	if (options == null || typeof options !== 'object') { return; }
+
+	if ('baseUrl' in options) {
+		const url = new URL(options.baseUrl.replace(/^"(.*)"$/g, '$1'), location);
+		baseUrl = url.href.slice(0, url.href.length - url.hash.length - url.search.length);
+	}
+
+	/// Set an id to be the main module. Loads the module if needed.
+	if ('main' in options) {
+		const id = resolveId(location, options.main.replace(/^"(.*)"$/g, '$1'));
+		require.async(id); // TODO: .catch ?
+		require.main = require.cache[id];
+		require.main.parent = null;
+	}
+
+	if ('paths' in options) {
+		const paths = typeof options.paths === 'string' ? JSON.parse(options.paths) : options.paths;
+		Object.keys(paths).forEach(prefix => {
+			const url = new URL(paths[prefix], baseUrl);
+			prefixMap[prefix] = url.href.slice(0, url.href.length - url.hash.length - url.search.length);
+		});
+	}
+
+	if ('map' in options) {
+		const map = typeof options.map === 'string' ? JSON.parse(options.map) : options.map;
+		Object.keys(map).forEach(id => {
+			const idMap = Object.assign(map[id]);
+			if (typeof idMap !== 'object') { return; }
+			if (id === '*') {
+				defIdMap = idMap;
+			} else {
+				modIdMap = modIdMap || { };
+				modIdMap[id] = idMap;
+			}
+		});
+	}
+
+	if ('shim' in options) {
+		const shims = typeof options.shim === 'string' ? JSON.parse(options.shim) : options.shim;
+		Object.keys(shims).forEach(id => {
+			const shim = shims[id];
+			if (!shim || typeof shim !== 'object') { return; }
+			const isArray = Array.isArray(shim);
+			const deps = ((isArray ? shim : shim.deps) || [ ]).slice();
+			const globalPath = !isArray && typeof shim.exports === 'string' && shim.exports.split('.') || [ ];
+			const init = !isArray && typeof shim.init === 'function' ? shim.init : shim.exports === 'function' ? shim.exports : undefined;
+
+			id = resolveId('', id);
+			const url = resolveUrl(id) +'.js';
+
+			define(id, deps, function*() {
+				(yield loadScript(url).catch(() => {
+					const error = `Failed to load script "${ url }" first requested from ${ this.url }.js`;
+					console.error(error); throw new Error(error);
+				}));
+				Modules[id].loaded = true;
+				const exports = globalPath.reduce((object, key) => object != null && object[key], global);
+				if (!exports) {
+					const error = `The script at "${ url }" did not set the global variable "${ globalPath.join('.') }"`;
+					console.error(error); throw new Error(error);
+				}
+				const result = init && (yield init.apply(global, arguments));
+				return result !== undefined ? result : globalPath.length ? exports : undefined;
+			});
+			Modules[id].loaded = false;
+			Modules[id].isShim = true;
+		});
+	}
+
 }
+
+{ // set default baseUrl
+	const path = getCallingScript(0);
+	const fromNM = (/\/node_modules\/(?:require|es6lib)\/require\.js$/).test(path);
+	const url = (fromNM ? new URL('../../', path) : new URL('./', location));
+	baseUrl = url.href.slice(0, url.href.length - url.hash.length - url.search.length);
+}
+
+/// set the config specified in the script tag via < data-...="..." >
+config(document.currentScript && document.currentScript.dataset);
 
 global.define = define;
 global.require = require;

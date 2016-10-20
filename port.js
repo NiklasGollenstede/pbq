@@ -11,9 +11,10 @@ const Port = class Port {
 	 * @param  {object}  port     The low-level port object that is connected to the communication channel.
 	 * @param  {class}   adapter  Optional. A simple adapter class to provide a common interface for different types of low level ports.
 	 *                            This can ether be one of
-	 *                                Port.web_Port      for  browser MessageChannels and WebSockets,
-	 *                                Port.web_ext_Port  for  (browser/chrome).runtime.Port object in Chromium, Firefox and Opera extensions,
-	 *                                Port.node_Stream   for  node js DuplexSteams,
+	 *                                Port.web_Port         for  browser MessageChannels and WebSockets,
+	 *                                Port.web_ext_Port     for  (browser/chrome).runtime.Port object in Chromium, Firefox and Opera extensions,
+	 *                                Port.web_ext_Runtime  for  browser.runtime/tabs.on/sendMessage API in Firefox extensions (in Chromium and Opera this needs to be Promise-wrapped),
+	 *                                Port.node_Stream      for  node js DuplexSteams,
 	 *                            or any other class that implements the PortAdapter interface.
 	 *                            Defaults to Port.web_Port, so that browser and node js 'ws' WebSockets and MessageChannels can be handled.
 	 * @return {Port}             The new Port instance.
@@ -75,10 +76,11 @@ const Port = class Port {
 
 	/**
 	 * Calls a handler on the other end of this port and returns a Promise to its return value.
-	 * @param  {string}  name  Name of the remote handler to call.
-	 * @param  {...any}  args  Additional arguments whose JSON-clones are passed to the remote handler.
-	 * @return {Promise}       Promise that rejects if the request wasn't handled or if the handler threw
-	 *                         and otherwise resolves to the handlers return value.
+	 * @param  {object}  options  Optional, may be omitted. If specified, it will be passed as 4th argument to PortAdapter.send().
+	 * @param  {string}  name     Name of the remote handler to call.
+	 * @param  {...any}  args     Additional arguments whose JSON-clones are passed to the remote handler.
+	 * @return {Promise}          Promise that rejects if the request wasn't handled or if the handler threw
+	 *                            and otherwise resolves to the handlers return value.
 	 */
 	request(/*name, ...args*/) {
 		const self = Self.get(this);
@@ -87,8 +89,9 @@ const Port = class Port {
 
 	/**
 	 * Calls a handler on the other end of this port without waiting for its return value and without guarantee that a handler has in fact been called.
-	 * @param  {string}  name  Name of the remote handler to call.
-	 * @param  {...any}  args  Additional arguments whose JSON-clones are passed to the remote handler.
+	 * @param  {object}  options  Optional, may be omitted. If specified, it will be passed as 4th argument to PortAdapter.send().
+	 * @param  {string}  name     Name of the remote handler to call.
+	 * @param  {...any}  args     Additional arguments whose JSON-clones are passed to the remote handler.
 	 */
 	post(/*name, ...args*/) {
 		const self = Self.get(this);
@@ -97,7 +100,7 @@ const Port = class Port {
 	}
 
 	/**
-	 * Destroys the Port instance and closes/disconnects the underlying low level port.
+	 * Destroys the Port instance and the underlying PortAdapter.
 	 * Gets automatically called when the underlying port closes.
 	 * After the instance is destroyed, all other methods on this instance will throw. Any further calls to .destroy() will be ignored.
 	 * @return {[type]} [description]
@@ -116,7 +119,8 @@ class PortAdapter {
 
 	/**
 	 * The constructor gets called with three arguments.
-	 * @param  {any}       port    The value that was passed as the first argument to the new Port() call where this class was the second argument. Should be the low level port object.
+	 * @param  {any}       port    The value that was passed as the first argument to the new Port() call where this class was the second argument.
+	 *                             Should be the low level port object.
 	 * @param  {function}  onData  Function that gets called exactly once for every call to .send() on the other end of the channel.
 	 *                             The arguments must be JSON clones of the arguments provided to .call().
 	 * @param  {function}  onEnd   Function that should be called at least once when the underlying port closes.
@@ -126,11 +130,12 @@ class PortAdapter {
 
 	/**
 	 * Needs to serialize and send it's arguments to make them available to the onData() callback on the other end of the channel.
-	 * @param  {string}   name  Arbitrary utf8 string.
-	 * @param  {integer}  id    Signed 32-bit integer.
-	 * @param  {Array}    args  Array of object that should be JSONable.
+	 * @param  {string}   name     Arbitrary utf8 string.
+	 * @param  {number}   id       A 64-bit float.
+	 * @param  {Array}    args     Array of object that should be JSONable.
+	 * @param  {object}   options  The options object passed as the first argument to Port.send/post(), or null.
 	 */
-	send(name, id, args) { }
+	send(name, id, args, options) { }
 
 	/**
 	 * Gets called exactly once when the Port object gets .destroy()ed.
@@ -172,7 +177,7 @@ Port.web_ext_Port = class web_ext_Port /*implements PortAdapter*/ {
 
 	constructor(port, onData, onEnd) {
 		this.port = port;
-		port.onMessage.addListener(this.onData = data => onData.apply(null,data));
+		port.onMessage.addListener(this.onData = data => onData.apply(null, data));
 		port.onDisconnect.addListener(this.onEnd = () => onEnd());
 	}
 
@@ -181,9 +186,39 @@ Port.web_ext_Port = class web_ext_Port /*implements PortAdapter*/ {
 	}
 
 	destroy() {
-		this.port.onMessage.removeListener(this.onData = onData);
-		this.port.onDisconnect.removeListener(this.onEnd = onEnd);
+		this.port.onMessage.removeListener(this.onData);
+		this.port.onDisconnect.removeListener(this.onEnd);
 		this.port.disconnect();
+	}
+};
+
+/**
+ * PortAdapter implementation to wrap (browser/chrome).runtime.Port object in Chromium, Firefox and Opera extensions.
+ */
+Port.web_ext_Runtime = class web_ext_Runtime /*implements PortAdapter*/ {
+
+	constructor(api, onData) {
+		this.api = api;
+		this.onData = (data, sender, reply) => onData(...data, sender, (...args) => reply(args)) !== false;
+		api.runtime.onMessage.addListener(this.onData);
+		this.sendMessage = api.runtime.sendMessage;
+		this.sendMessageTab = api.tabs ? api.tabs.sendMessage : () => { throw new Error(`Can't send messages to tabs (from within a tab)`); };
+	}
+
+	send(name, id, args, tab) {
+		let promise;
+		if (tab !== null) {
+			const { tabId, frameId, } = tab;
+			promise = this.sendMessageTab(tabId, [ name, id, args, ], frameId ? { frameId, } : { });
+		} else {
+			promise = this.sendMessage([ name, id, args, ]);
+		}
+		if (id === 0) { return; } // is post
+		promise.then(this.onData).catch(error => this.onData('', -id, [ error, ]));
+	}
+
+	destroy() {
+		this.api.runtime.onMessage.removeListener(this.onData);
 	}
 };
 
@@ -265,11 +300,19 @@ class _Port {
 		const request = new PromiseCapability;
 		const id = this.nextId();
 		this.requests.set(id, request);
-		this.port.send(name, id, args);
+		let options = null;
+		if (typeof name === 'object') {
+			options = name; name = args.shift();
+		}
+		this.port.send(name, id, args, options);
 		return request.promise;
 	}
 	post(name, ...args) {
-		this.port.send(name, 0, args);
+		let options = null;
+		if (typeof name === 'object') {
+			options = name; name = args.shift();
+		}
+		this.port.send(name, 0, args, options);
 	}
 	destroy() {
 		const self = Self.get(this);
@@ -284,15 +327,16 @@ class _Port {
 	}
 }
 
-function onData(name, id, args) { try {
+function onData(name, id, args, altThis, reply) { try {
 	if (name) {
 		if (!this.handlers.has(name)) { throw new Error(`No such handler "${ name }"`); }
 		const [ handler, thisArg, ] = this.handlers.get(name);
-		const value = handler.apply(thisArg, args);
-		if (!id) { return; }
+		const value = handler.apply(thisArg != null ? thisArg : altThis, args);
+		if (id === 0) { return false; }
+		reply || (reply = this.port.send.bind(this.port));
 		Promise.resolve(value).then(
-			value => this.port.send('', +id, [ value, ]),
-			error => this.port.send('', -id, [ toJson(error), ])
+			value => reply('', +id, [ value, ]),
+			error => reply('', -id, [ toJson(error), ])
 		);
 	} else {
 		if (!id) { throw new Error(`Bad request`); }
@@ -335,7 +379,7 @@ function fromJson(string) {
 	return JSON.parse(string, (key, value) => {
 		if (!value || typeof value !== 'string' || !value.startsWith('$_ERROR_$')) { return value; }
 		const object = JSON.parse(value.slice(9));
-		const Constructor = object.name ? global[object.name] || Error : Error;
+		const Constructor = typeof object.name === 'string' && typeof global[object.name] === 'function' ? global[object.name] : Error;
 		const error = Object.create(Constructor.prototype);
 		Object.assign(error, object);
 		return error;

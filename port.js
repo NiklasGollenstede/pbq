@@ -351,7 +351,8 @@ function onData(name, id, args, altThis, reply) { try {
 	}
 } catch (error) {
 	if (id) {
-		this.port.send('', -id, [ toJson(error), ]);
+		reply ? reply('', -id, [ toJson(error), ])
+		: this.port.send('', -id, [ toJson(error), ]);
 	} else {
 		console.log('Uncaught error in handler (post)', error);
 	}

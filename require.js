@@ -139,9 +139,9 @@ function parseDepsBody(factory, name, code) {
 function hasPendingPath(from, to) {
 	if (from._children.size === 0) { return false; }
 	return from.children.some(child => {
-		if (child.resolved) { return false; }
+		if (child._resolved) { return false; }
 		if (child === to) { return true; }
-		// unless somebody messes with the .resolved property, this traverses a directed acyclic graph
+		// unless somebody messes with the ._resolved property, this traverses a directed acyclic graph
 		return hasPendingPath(child, to);
 	});
 }
@@ -196,14 +196,14 @@ function define(/* id, deps, factory */) {
 
 	// get/create Module
 	const module = src && Loading[src] || Modules[id] || (Modules[id] = new Module(null, null, id));
-	if (module.loaded) { throw new Error(`Duplicate definition of module "${ id }"`); }
-	module.loaded = true;
+	if (module._loaded) { throw new Error(`Duplicate definition of module "${ id }"`); }
+	module._loaded = true;
 	delete Loading[src];
 
 	if (typeof factory !== 'function') {
 		resolved.then(() => {
 			module.exports = factory;
-			module.resolved = true;
+			module._resolved = true;
 			module.promise.resolve(module.exports);
 		});
 		return module.promise.then(() => module.exports);
@@ -237,7 +237,7 @@ function define(/* id, deps, factory */) {
 	.catch(error => { console.error(`Definition of ${ id } failed:`, error); throw error; })
 	.then(exports => {
 		exports != null && (module.exports = exports);
-		module.resolved = true;
+		module._resolved = true;
 		module.promise.resolve(module);
 	})
 	.catch(module.promise.reject);
@@ -257,8 +257,8 @@ class Module {
 		this.exports = { };
 		this._children = new Set;
 		this.promise = new PromiseCapability();
-		this.loaded = false; // TODO: make these read-only
-		this.resolved = false; // TODO: make these read-only
+		this._loaded = false;
+		this._resolved = false;
 		this.isShim = false;
 
 		this._require = null;
@@ -267,6 +267,7 @@ class Module {
 			const require = this._require = Module.prototype.require.bind(this);
 			require.async = Module.prototype.requireAsync.bind(this);
 			require.toUrl = Module.prototype.requireToUrl.bind(this);
+			require.resolve = resolveId.bind(null, this.id);
 			require.cache = Modules;
 			require.config = config;
 			Object.defineProperty(require, 'main', {
@@ -287,7 +288,7 @@ class Module {
 			if ((split = name.indexOf('!')) >= 0) { // get the plugin
 				const pluginId = resolveId(this.id, name.slice(0, split));
 				const plugin = Modules[pluginId];
-				if (!plugin || !plugin.resolved) {
+				if (!plugin || !plugin._resolved) {
 					throw new Error(`The plugin "${ pluginId }" is not defined (yet)`);
 				}
 				id = pluginId +'!'+ resolveByPlugin(plugin, this.id, name.slice(split + 1));
@@ -295,7 +296,7 @@ class Module {
 				id = resolveId(this.id, name);
 			}
 			const module = Modules[id];
-			if (!module || !module.resolved) {
+			if (!module || !module._resolved) {
 				throw new Error(`The module "${ id }" is not defined (yet)`);
 			}
 			this._children.add(module);
@@ -318,7 +319,7 @@ class Module {
 		} else if ((split = name.indexOf('!')) >= 0) { // get the plugin
 			const pluginId = resolveId(this.id, name.slice(0, split));
 			const resName = name.slice(split + 1);
-			if (fast && (plugin = Modules[pluginId]) && plugin.resolved) {
+			if (fast && (plugin = Modules[pluginId]) && plugin._resolved) {
 				id = resolveByPlugin(plugin, this.id, resName);
 			} else {
 				return this.requireAsync(pluginId)
@@ -333,7 +334,7 @@ class Module {
 
 		let module = Modules[id]; if (module) {
 			this._children.add(module);
-			if (module.resolved) {
+			if (module._resolved) {
 				if (fast) { return module.exports; }
 				return Promise.resolve(module.exports);
 			}
@@ -354,11 +355,11 @@ class Module {
 			module = new Module(this, 'plugin:'+ fullId, fullId);
 			!plugin.exports.dynamic && (Modules[fullId] = module) && this._children.add(module);
 			plugin.exports.load(id, this.require, module.promise.resolve, { cancel: module.promise.reject, });
-			module.promise.then(exports => {
+			return module.promise.then(exports => {
 				module.exports = exports;
-				module.loaded = module.resolved = true;
+				module._loaded = module._resolved = true;
+				return exports;
 			});
-			return module.promise;
 		}
 
 		const url = resolveUrl(id) +'.js';
@@ -367,9 +368,9 @@ class Module {
 
 		loadScript(url)
 		.then(() => {
-			if (module.loaded) { return; }
+			if (module._loaded) { return; }
 			if (this.isShim) {
-				module.loaded = module.resolved = module.isShim = true;
+				module._loaded = module._resolved = module.isShim = true;
 				module.promise.resolve(module.exports);
 				return console.info(`The shim dependency "${ url }" of "${ this.id }" didn't call define`);
 			}
@@ -387,9 +388,9 @@ class Module {
 		return resolveUrl(resolveId(this.id, path));
 	}
 
-	get children() {
-		return Array.from(this._children);
-	}
+	get children  () { return Array.from(this._children); }
+	get loaded    () { return this._loaded; }
+	get resolved  () { return this._resolved; }
 }
 
 const globalModule = new Module(null, '', '');
@@ -404,9 +405,6 @@ function PromiseCapability() {
 
 function resolveId(from, to) {
 	let id = to +'';
-	if (id.endsWith('/')) {
-		id += 'index';
-	}
 	if (id.startsWith('.')) {
 		if (!from) { throw new Error(`Can't resolve relative module id from global require, use the one passed into the define callback instead`); }
 		const url = new URL(id, typeof from === 'string' ? baseUrl + from : from);
@@ -418,6 +416,9 @@ function resolveId(from, to) {
 		}
 	} else if (id.startsWith('/')) {
 		id = id.slice(1);
+	}
+	if (id.endsWith('/')) {
+		id += 'index';
 	}
 	if (!modIdMap && !defIdMap || typeof from !== 'string') { return id; }
 	const maps = Object.keys(modIdMap || { })
@@ -543,7 +544,7 @@ function config(options) {
 					const error = `Failed to load script "${ url }" first requested from ${ this.url }.js`;
 					console.error(error); throw new Error(error);
 				}));
-				Modules[id].loaded = true;
+				Modules[id]._loaded = true;
 				const exports = globalPath.reduce((object, key) => object != null && object[key], global);
 				if (!exports) {
 					const error = `The script at "${ url }" did not set the global variable "${ globalPath.join('.') }"`;
@@ -552,7 +553,7 @@ function config(options) {
 				const result = init && (yield init.apply(global, arguments));
 				return result !== undefined ? result : globalPath.length ? exports : undefined;
 			});
-			Modules[id].loaded = false;
+			Modules[id]._loaded = false;
 			Modules[id].isShim = true;
 		});
 	}

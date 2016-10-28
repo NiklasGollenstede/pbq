@@ -33,7 +33,7 @@ describe('"toFixedLength" should', function() {
 
 });
 
-describe('"toFixedLength" should', function() {
+describe('"Guid" should', function() {
 
 	it('work', () => {
 		for (let i = 0; i < 100; ++i) {

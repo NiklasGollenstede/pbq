@@ -41,7 +41,7 @@ function* pointlessGenerator(values) {
 	return out;
 }
 
-const EvebtEmitter = require('events');
+const EventEmitter = require('events');
 
 describe('"promisify"ed should', () => {
 	const sut = promisify;
@@ -132,8 +132,8 @@ describe('"spawn"ed should', () => {
 describe('"StreamIterator" should', () => {
 
 	it('directly end on end', async(function*() {
-		const emitter = new EvebtEmitter, values = [ ];
-		const sut = StreamIterator(emitter);
+		const emitter = new EventEmitter, values = [ ];
+		const sut = new StreamIterator(emitter);
 
 		emitter.emit('end', 'blob');
 
@@ -150,8 +150,8 @@ describe('"StreamIterator" should', () => {
 	}));
 
 	it('iterate data and end events', async(function*() {
-		const emitter = new EvebtEmitter, values = [ ];
-		const sut = StreamIterator(emitter);
+		const emitter = new EventEmitter, values = [ ];
+		const sut = new StreamIterator(emitter);
 
 		const promise = spawn(function*() {
 			let pair; while ((pair = sut.next()) && !pair.done) {
@@ -183,18 +183,24 @@ describe('"forOn" should', () => {
 	const sut = forOn;
 
 	it('directly return on end', async(function*() {
-		const emitter = new EvebtEmitter, values = [ ];
-		const promise = sut(StreamIterator(emitter), value => values.push(value));
+		const emitter = new EventEmitter, values = [ ];
+		const iterable = new StreamIterator(emitter);
+		const promise = sut(iterable, value => values.push(value));
+
+		// let destroyed = false;
+		// iterable.destroy = () => destroyed = true;
 
 		emitter.emit('end');
 
-		(yield promise).should.equal(true);
+		expect(yield promise).to.equal(undefined);
+
+		// assert(destroyed, 'iterable was not destroyed');
 		values.should.deep.equal([ ]);
 	}));
 
 	it('directly throw on error', async(function*() {
-		const emitter = new EvebtEmitter, values = [ ];
-		const promise = sut(StreamIterator(emitter), value => values.push(value));
+		const emitter = new EventEmitter, values = [ ];
+		const promise = sut(new StreamIterator(emitter), value => values.push(value));
 
 		emitter.emit('error', 17);
 
@@ -206,8 +212,8 @@ describe('"forOn" should', () => {
 	}));
 
 	it('throw on error later on', async(function*() {
-		const emitter = new EvebtEmitter, values = [ ];
-		const promise = sut(StreamIterator(emitter), value => values.push(value));
+		const emitter = new EventEmitter, values = [ ];
+		const promise = sut(new StreamIterator(emitter), value => values.push(value));
 
 		emitter.emit('data', -1);
 		emitter.emit('data', -2);
@@ -221,8 +227,8 @@ describe('"forOn" should', () => {
 	}));
 
 	it('directly rethrow', async(function*() {
-		const emitter = new EvebtEmitter, values = [ ];
-		const promise = sut(StreamIterator(emitter), value => { throw 23; });
+		const emitter = new EventEmitter, values = [ ];
+		const promise = sut(new StreamIterator(emitter), value => { throw 23; });
 
 		emitter.emit('data', 42);
 
@@ -234,8 +240,8 @@ describe('"forOn" should', () => {
 	}));
 
 	it('iterate data and end events', async(function*() {
-		const emitter = new EvebtEmitter, values = [ ];
-		const promise = sut(StreamIterator(emitter), value => values.push(value));
+		const emitter = new EventEmitter, values = [ ];
+		const promise = sut(new StreamIterator(emitter), value => values.push(value));
 
 		emitter.emit('data', 1);
 		emitter.emit('data', 2);
@@ -249,9 +255,95 @@ describe('"forOn" should', () => {
 			emitter.emit('end', 7);
 		}, 3);
 
-		(yield promise).should.equal(true);
+		expect(yield promise).to.equal(undefined);
 
 		values.should.deep.equal([ 1, 2, 3, 4, 5, 6, 7, ]);
+	}));
+
+});
+
+describe('"forOn.reduce" should with initial value', () => {
+	const sut = forOn.reduce;
+
+	it('directly return on end', async(function*() {
+		const emitter = new EventEmitter, values = [ ];
+		const promise = sut(new StreamIterator(emitter), value => values.push(value), 23);
+
+		emitter.emit('end');
+
+		expect(yield promise).to.equal(23);
+		values.should.deep.equal([ ]);
+	}));
+
+	it('throw on emty streams without initial value', async(function*() {
+		const emitter = new EventEmitter, values = [ ];
+		const promise = sut(new StreamIterator(emitter), value => values.push(value));
+
+		emitter.emit('end');
+
+		let cought;
+		(yield promise.catch(error => cought = error));
+		expect(cought).to.be.instanceOf(TypeError);
+
+		values.should.deep.equal([ ]);
+	}));
+
+	it('directly throw on error', async(function*() {
+		const emitter = new EventEmitter, values = [ ];
+		const promise = sut(new StreamIterator(emitter), value => values.push(value), null);
+
+		emitter.emit('error', 17);
+
+		let cought;
+		(yield promise.catch(error => cought = error));
+		expect(cought).to.equal(17);
+
+		values.should.deep.equal([ ]);
+	}));
+
+	it('throw on error later on', async(function*() {
+		const emitter = new EventEmitter, values = [ ];
+		const promise = sut(new StreamIterator(emitter), (prev, value) => (values.push(value - prev), 0.5), 0.5);
+
+		emitter.emit('data', -1);
+		emitter.emit('data', -2);
+		emitter.emit('error', 17);
+
+		let cought;
+		(yield promise.catch(error => cought = error));
+		expect(cought).to.equal(17);
+
+		values.should.deep.equal([ -1.5, -2.5, ]);
+	}));
+
+	it('directly rethrow', async(function*() {
+		const emitter = new EventEmitter;
+		const promise = sut(new StreamIterator(emitter), value => { throw value + 23; }, 19);
+
+		emitter.emit('data', null);
+
+		let cought;
+		(yield promise.catch(error => cought = error));
+		cought.should.equal(42);
+	}));
+
+	it('iterate data and end events', async(function*() {
+		const emitter = new EventEmitter;
+		const promise = sut(new StreamIterator(emitter), (a, b) => a + b);
+
+		emitter.emit('data', 1);
+		emitter.emit('data', 2);
+		setTimeout(() => {
+			emitter.emit('data', 3);
+			emitter.emit('data', 4);
+		});
+		setTimeout(() => {
+			emitter.emit('data', 5);
+			emitter.emit('data', 6);
+			emitter.emit('end', 7);
+		}, 3);
+
+		expect(yield promise).to.equal([ 1, 2, 3, 4, 5, 6, 7, ].reduce((a, b) => a + b));
 	}));
 
 });

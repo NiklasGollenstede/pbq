@@ -1,11 +1,12 @@
 (function(global) { 'use strict'; const factory = function es6lib_concurrent(exports) { // This Source Code Form is subject to the terms of the Mozilla Public License, v. 2.0. If a copy of the MPL was not distributed with this file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
 const resolved = Promise.resolve();
-const hasStream = typeof Stream === 'function';
 
-const SymbolIterator = typeof Symbol === 'function' && Symbol.iterator ? Symbol.iterator : '[[Symbol.iterator]]';
+const SymbolIterator = typeof Symbol === 'function' && typeof Symbol.iterator === 'symbol' ? Symbol.iterator : '[[Symbol.iterator]]';
 
 const setTimeout = global.setTimeout || (function() { try { return require('sdk/'+'timers').setTimeout; } catch (_) { } });
+
+const Self = new WeakMap;
 
 /**
  * @param  {uint}    ms  Time to "sleep" in milliseconds
@@ -105,124 +106,139 @@ const async = exports.async = function async(generator, catcher) {
 };
 
 /**
- * Turns a readable Stream into an asynchronous iterator over ist's 'data' and 'end' events.
+ * Turns a readable Stream into an asynchronous iterator over it's 'data' and 'end' events.
  * Receives and yields the values of 'data' events until after ether 'end' or 'error' is emitted.
  * If the Stream ends due to 'error', a Promise.reject(error) is returned as the last value.
  * If the Stream ends due to 'end', that events data is returned as the last value.
  * To stop listening on the stream, end the iterator and clear it's data, call throw().
  * Do not call next() while the previous promise is pending.
  * @param   {stream}    stream  EventEmitter, that emits 'data' and an 'end' event.
- * @return  {iterator}          Object{ next(), throw(), }.
  */
-const StreamIterator = exports.StreamIterator = function StreamIterator(stream) {
-	const self = { };
-	self.stream = stream;
-	self.data = [ ];
-	self.done = false;
+const StreamIterator = exports.StreamIterator = class StreamIterator {
 
-	stream.on('data', self.ondata = function(data) {
-		if (self.promise) {
-			self.resolve(data);
-			self.promise = null;
-		} else {
-			self.data.push(data);
-		}
-	});
-	stream.once('error', self.onerror = function(error) {
-		if (self.promise) {
-			self.reject(error);
-			self.promise = null;
-		} else {
-			self.data.push(Promise.reject(error));
-		}
-	});
-	stream.once('end', self.onend = function(data) {
-		if (self.promise) {
-			self.resolve(data);
-			self.promise = null;
-		} else {
-			self.data.push(data);
-		}
-		destroy();
-	});
+	// TODO: re-write class and constructor documentation block
+	constructor(stream, options = { }) {
+		options.setStream !== false && Object.defineProperty(this, 'stream', { value: stream, enumerable: true, });
+		const self = {
+			events: {
+				next  : options.next   ? Array.isArray(options.next)   ? options.next   : [ options.next,   ] : [ 'data', ],
+				throw : options.throw  ? Array.isArray(options.throw)  ? options.throw  : [ options.throw,  ] : [ 'error', ],
+				return: options.return ? Array.isArray(options.return) ? options.return : [ options.return, ] : [ 'end', ],
+			},
+			stream: stream,
+			buffer: [ ],
+			done: false,
 
-	function destroy(error) {
-		self.done = true;
-		self.reject && self.reject(error);
-		self.promise = null;
-		self.stream.removeListener('data', self.ondata);
-		self.stream.removeListener('error', self.onerror);
-		self.stream.removeListener('end', self.onend);
+			promise: null,
+			nextData: null,
+
+			next(data) {
+				if (self.done) { return; }
+				if (self.promise) {
+					self.nextData(data);
+					self.promise = self.nextData = null;
+				} else {
+					self.buffer.push(Promise.resolve(data));
+				}
+			},
+			throw(error) {
+				self.return(Promise.reject(error));
+			},
+			return(data) {
+				if (self.done) { return; }
+				if (data != null) { self.next(data); }
+				self.done = true;
+				self.promise = self.nextData = null;
+				const { stream, } = self;
+				Object.keys(self.events).forEach(type => self.events[type].forEach(event => stream.on(event, self[type])));
+			},
+		};
+		Self.set(this, self);
+
+		Object.keys(self.events).forEach(type => self.events[type].forEach(event => stream.on(event, self[type])));
+
+		stream.resume && stream.resume(); // TODO: should this stay?
 	}
 
-	stream.resume && stream.resume();
+	/**
+	 * Returns an iteration result containing a Promise to the next value that was or will be emitted by this.stream.
+	 * If the stream emits an error event, the returned 'value' is a Promise rejected with that error exactly once, after all previously emitted data has been consumed.
+	 * After ended or emitted an error, the 'value' will be null, not a Promise to null, and 'done' will me true.
+	 * The value/error emitted in the last event will not have 'done' set to true.
+	 * @return  {IteratorResult}  Object literal of { value, done, }.
+	 * @throws  {Error}           If .next() is called while the previously returned value is still pending.
+	 */
+	next() {
+		const self = Self.get(this);
+		if (self.buffer.length) {
+			return { value: self.buffer.shift(), done: false, };
+		}
+		if (self.done) {
+			return { value: null, done: true, };
+		}
+		if (!self.promise) {
+			self.promise = new Promise(done => self.nextData = done);
+			return { value: self.promise, done: false, };
+		}
+		return { value: Promise.reject(new Error('No data available, await previous promise before iterating')), done: false, };
+	}
 
-	const ret = {
-		next: function() {
-			if (self.data.length) {
-				return { value: self.data.shift(), done: false, };
-			} else {
-				if (self.done) {
-					return { value: null, done: true, };
-				}
-				if (!self.promise) {
-					self.promise = new Promise(function(resolve, reject) {
-						self.resolve = resolve;
-						self.reject = reject;
-					});
-					return { value: self.promise, done: false, };
-				} else {
-					return { value: Promise.reject(new Error('No data available, await previous promise before iterating')), done: false, };
-				}
-			}
-		},
+	/**
+	 * Closes the iteration and removes all listeners from this.stream.
+	 * @param  {any}   error  Optional. If != null, the iteration will terminate abnormally with this error.
+	 */
+	destroy(error) {
+		Self.get(this).return(error);
+	}
 
-		throw: function(error) {
-			self.data.length = 0;
-			destroy(error);
-			return { value: Promise.reject(error), done: false, };
-		},
-	};
-	ret[SymbolIterator] = function() {
-		return self;
-	};
-	return ret;
+	[SymbolIterator]() {
+		return this;
+	}
+
+	get [Symbol.toStringTag]() {
+		return 'Stream Iterator';
+	}
+
+	/* // it would be nice if these were called when the iteration gets cancelled, but they are not.
+	retrun() {
+		this.destroy(); return { value: null, done: true, };
+	}
+	throw() {
+		this.destroy(); return { value: null, done: true, };
+	}
+	*/
 };
 
 /**
- * Iterates an iterator of Promises and calls the callback with each trueisch value.
- * @param  {iterator}  iterator  Iterator that can return Promises as values. next() will not be called before the previous value resolved. If a Promise is rejected, the iteration gets aborted, rejected with that error and the error gets throw()'n into the iterator.
- * @param  {Function}  callback  Called with each trueisch, resolved value the iterator yields. If it throws an error, the iteration gets aborted, rejected with that error and the error gets throw()'n into the iterator.
- * @param  {any}       thisArg   'this' in 'callback'
- * @return {Promise}              Promise(true), resolved when the iterator is done.
+ * Iterates an iterator of Promises and calls the callback with each resolved value.
+ * @param  {iterable|ReadableStream}  iterable  Iterable over Promises. If it is not an iterable, it is assumed to be a ReadableStream and will be wrapped in a StreamIterator.
+ *                                              .next() will not be called before the previous value resolved.
+ *                                              If a Promise is rejected, the iteration gets aborted, rejected with that error and the error gets throw()'n into the iterator.
+ * @param  {Function}                 callback  Called with each resolved value the iterator yields.
+ *                                              If it throws an error, the iteration gets aborted, rejected with that error and the error gets throw()'n into the iterator.
+ * @return {Promise}                            Promise(undefined), resolved when the iterator is done.
  */
-const forOn = exports.forOn = function forOn(iterator, callback, thisArg) {
-
-	function next() {
-		const result = iterator.next();
-
-		if (result.done) {
-			return Promise.resolve(result.value)
-			.then(function(value) {
-				return true;
-			});
-		} else {
-			return Promise.resolve(result.value)
-			.then(function(value) {
-				return value != null && (thisArg ? callback.call(thisArg, value) : callback(value));
-			}).then(next);
-		}
+const forOn = exports.forOn = async(function*(iterable, callback) {
+	const isIterable = typeof iterable[SymbolIterator] === 'function'; // TODO: this doesn't work ...
+	for (let value of isIterable ? iterable : new StreamIterator(iterable)) {
+		(yield callback((yield value)));
 	}
+});
 
-	return (!iterator.throw) ? resolved.then(next) : resolved.then(next)
-	.then(function(value) {
-		iterator.throw();
-		return value;
-	})
-	.catch(function(error) {
-		iterator.throw(error);
-		throw error;
-	});
+/**
+ * Iterates 'iterable' the same way 'forOn' does, but accumulated the values of the iterable like Array.prototype.reduce does.
+ * @param  {iterable|ReadableStream}  iterable  @see forOn.iterable
+ * @param  {Function}                 callback  Function (previous, current) => next. @see forOn.callback and @see Array.prototype.reduce
+ * @param  {any}                      initial   Optional. Initial accumulator value. @see Array.prototype.reduce
+ * @return {Promise<any>}                       Promise to the final accumulated value.
+ * @throws {TypeError}                          If the iteration ends without yielding a single value and 'initial' was not supplied.
+ */
+forOn.reduce = function(iterable, callback, initial) {
+	let value = initial, first = arguments.length <= 2;
+	return forOn(iterable, (data) => {
+		if (first) { value = data; first = false; return; }
+		return Promise.resolve(callback(value, data)).then(done => value = done);
+	}).then(() => first ? Promise.reject(new TypeError('reduce of empty iterable with no initial value')) : value);
 };
 
 /**

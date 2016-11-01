@@ -62,6 +62,24 @@ const apply = exports.apply = function apply(callback, self, args, arg) {
 };
 
 /**
+ * Tests whether a function can be used as a constructor, without attempting to call that function.
+ * @param  {function}  func  Function object to test.
+ * @return {Boolean}         True iff func has a [[Construct]] internal slot.
+ *                           That is, if it returns false, then func is not a function or construction it with new would throw 'TypeError: <local id> is not a constructor'.
+ *                           If it returns true, it may still throw 'TypeError: Illegal constructor.', but is is a constructor.
+ */
+const isConstructable = exports.isConstructable = function isConstructable(func) {
+	try {
+		construct(Ctor, [ ], func);
+		return true;
+	} catch (_) {
+		return false;
+	}
+};
+class Ctor { }
+const { construct, } = Reflect;
+
+/**
  * console.log's it's arguments
  * @return {any} the last argument
  */

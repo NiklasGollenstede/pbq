@@ -70,7 +70,7 @@ const promised = exports.promised = function promised(promiser) {
  * @return {Promise}               Promise of the return value of the generator
  */
 const spawn = exports.spawn = function spawn(generator, thisArg, args) {
-	const iterator = generator.apply(thisArg, args);
+	const iterator = apply(generator, thisArg, args);
 
 	function next(arg) {
 		return handle(iterator.next(arg));
@@ -88,10 +88,11 @@ const spawn = exports.spawn = function spawn(generator, thisArg, args) {
 
 	return resolved.then(next);
 };
+const { apply, } = Reflect;
 
 /**
  * Asynchronous task spawner. Subset of Task.js. Executes when called. Forwards this and arguments.
- * @param  {function*}  generator  Generator function that yields promises to asynchronous values which are returned to the generator once the promises are fullfilled
+ * @param  {function*}  generator  Generator function that yields promises to asynchronous values which are returned to the generator once the promises are fulfilled.
  * @param  {function}   catcher    Function that can .catch() exceptions thrown in generator
  * @return {Promise}               Async (member) function
  */
@@ -104,6 +105,59 @@ const async = exports.async = function async(generator, catcher) {
 		return spawn(generator, this, arguments);
 	};
 };
+
+/**
+ * Creates an async class constructor with async methods and accessors.
+ * @param  {function}        constructor  Optional, may be omitted. The class constructor. If it is a GeneratorFunction, it will be wrapped in a class
+ *                                        (with a new prototype) that spawns that Generator, otherwise it will be used directly as a normal constructor.
+ *                                        If omitted, the `.constructor` property of `prototype` will be used instead.
+ * @param  {function|null}   extending    Optional, may be omitted, only allowed if `constructor` is a Generator. The base class that should be extended.
+ * @param  {object}          prototype    Object whose propertyDescriptors will be copied onto the resulting classes .prototype.
+ *                                        Any Generators as value, getter or setter will be wrapped with `async()`.
+ *                                        The new Properties will be created as non-enumerable.
+ *                                        If `constructor` and `extending` are omitted, the `.constructor` and `.extends` properties of `prototype`
+ *                                        will be used instead and be deleted afterwards.
+ * @return {class|function}               The new or modified constructor. @see `constructor` param
+ */
+const asyncClass = exports.asyncClass = function asyncClass(constructor, extending, prototype) {
+	if (arguments.length === 1) {
+		prototype = constructor; constructor = prototype.constructor;
+		extending = prototype.extends === undefined ? Object : prototype.extends;
+		delete prototype.constructor; delete prototype.extends;
+	}
+	if (arguments.length === 2) { prototype = extending; extending = Object; }
+
+	const ctor = !isGenerator(constructor) ? constructor
+	: class ctor extends extending {
+		constructor(/*arguments*/) {
+			return Promise.resolve(extending ? super() : null)
+			.then(() => spawn(constructor, this, arguments))
+			.then(value =>
+				value != null && (typeof value === 'object' || typeof value === 'function')
+				? value : this
+			);
+		}
+	};
+	Object.defineProperty(ctor, 'name', { value: constructor.name, });
+	Object.defineProperty(ctor, 'length', { value: constructor.length, });
+	Object.keys(prototype).forEach(key => {
+		const desc = Object.getOwnPropertyDescriptor(prototype, key);
+		if ('value' in desc) {
+			const { value, } = desc;
+			if (isGenerator(value)) { desc.value = async(value); }
+		} else { // accessors
+			const { get, set, } = desc;
+			if (isGenerator(get)) { desc.get = async(get); }
+			if (isGenerator(set)) { desc.set = async(set); }
+		}
+		desc.enumerable = false;
+		Object.defineProperty(ctor.prototype, key, desc);
+	});
+	return ctor;
+};
+function isGenerator(func) {
+	return typeof func === 'function' && func.constructor && func.constructor.name === 'GeneratorFunction';
+}
 
 /**
  * Turns a readable Stream into an asynchronous iterator over it's 'data' and 'end' events.

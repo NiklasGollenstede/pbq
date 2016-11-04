@@ -43,7 +43,7 @@ const Port = class Port {
 	 * Adds multiple named message handlers.
 	 * @param  {string}        prefix    Optional prefix to prepend to all handler names specified in `handlers`.
 	 * @param  {object|array}  handlers  Ether an array of named functions or an object with methods. Array entries / object properties that are no functions will be ignores.
-	 * @param  {any}           thisArg   Optional. `this` to pass to the handler when called. Defaults to `handlers` argument in undefined.
+	 * @param  {any}           thisArg   `this` to pass to the handler when called.
 	 * @return {MessageHandler}          Self reference for chaining.
 	 * @throws {Error}                   If there is already a handler registered for any `prefix` + handler.name; no handlers have been added.
 	 */
@@ -122,7 +122,11 @@ class PortAdapter {
 	 * @param  {any}       port    The value that was passed as the first argument to the new Port() call where this class was the second argument.
 	 *                             Should be the low level port object.
 	 * @param  {function}  onData  Function that gets called exactly once for every call to .send() on the other end of the channel.
-	 *                             The arguments must be JSON clones of the arguments provided to .call().
+	 *                             The first three arguments must be JSON clones of the [ name, id, args, ] arguments provided to .send().
+	 *                             The 4th argument may be an alternative value for `this` in the handler for this message,
+	 *                             which is used if the `thisArg` for the listener is == null.
+	 *                             The 5th argument may be a function that is used once instead of .send() to reply to this single message.
+	 *                             Returns whether the reply function will be called asynchronously.
 	 * @param  {function}  onEnd   Function that should be called at least once when the underlying port closes.
 	 * @return {object}            Any object with .send() and .destroy() methods as specified below.
 	 */
@@ -134,6 +138,7 @@ class PortAdapter {
 	 * @param  {number}   id       A 64-bit float.
 	 * @param  {Array}    args     Array of object that should be JSONable.
 	 * @param  {object}   options  The options object passed as the first argument to Port.send/post(), or null.
+	 * @return {Promise}           If the .send() function returns a value other than `undefined` it is assumed to be (a Promise to) the messages reply and is returned from port.request().
 	 */
 	send(name, id, args, options) { }
 
@@ -155,8 +160,8 @@ Port.web_Port = class web_Port /*implements PortAdapter*/ {
 
 	constructor(port, onData, onEnd) {
 		this.port = port;
-		port.onmessage = ({ data, }) => onData.apply(null, JSON.parse(data));
-		port.onclose = () => onEnd();
+		this.port.addEventListener('message', this.onMessage = ({ data, }) => onData.apply(null, JSON.parse(data)));
+		this.port.addEventListener('close', this.onClose = () => onEnd());
 	}
 
 	send(name, id, args) {
@@ -164,8 +169,8 @@ Port.web_Port = class web_Port /*implements PortAdapter*/ {
 	}
 
 	destroy() {
-		this.port.onmessage = null;
-		this.port.onclose = null;
+		this.port.removeEventListener('message', this.onMessage);
+		this.port.removeEventListener('close', this.onClose);
 		this.port.close();
 	}
 };
@@ -177,8 +182,8 @@ Port.web_ext_Port = class web_ext_Port /*implements PortAdapter*/ {
 
 	constructor(port, onData, onEnd) {
 		this.port = port;
-		port.onMessage.addListener(this.onData = data => onData.apply(null, data));
-		port.onDisconnect.addListener(this.onEnd = () => onEnd());
+		this.port.onMessage.addListener(this.onMessage = data => onData.apply(null, data));
+		this.port.onDisconnect.addListener(this.onDisconnect = () => onEnd());
 	}
 
 	send(name, id, args) {
@@ -186,21 +191,23 @@ Port.web_ext_Port = class web_ext_Port /*implements PortAdapter*/ {
 	}
 
 	destroy() {
-		this.port.onMessage.removeListener(this.onData);
-		this.port.onDisconnect.removeListener(this.onEnd);
+		this.port.onMessage.removeListener(this.onMessage);
+		this.port.onDisconnect.removeListener(this.onDisconnect);
 		this.port.disconnect();
 	}
 };
 
 /**
  * PortAdapter implementation to wrap (browser/chrome).runtime.Port object in Chromium, Firefox and Opera extensions.
+ * The `port` parameter to new Port() must be the `browser` global of Firefox or a promisified version of the `chrome`/`browser` global of Chromium/Edge.
+ * The `options` parameter of port.request()/.post() can be an object of { tabId, frameId?, } to send to tabs.
  */
 Port.web_ext_Runtime = class web_ext_Runtime /*implements PortAdapter*/ {
 
 	constructor(api, onData) {
 		this.api = api;
-		this.onData = (data, sender, reply) => onData(...data, sender, (...args) => reply(args)) !== false;
-		api.runtime.onMessage.addListener(this.onData);
+		this.onMessage = (data, sender, reply) => onData(...data, sender, (...args) => reply(args));
+		this.api.runtime.onMessage.addListener(this.onMessage);
 		this.sendMessage = api.runtime.sendMessage;
 		this.sendMessageTab = api.tabs ? api.tabs.sendMessage : () => { throw new Error(`Can't send messages to tabs (from within a tab)`); };
 	}
@@ -209,16 +216,67 @@ Port.web_ext_Runtime = class web_ext_Runtime /*implements PortAdapter*/ {
 		let promise;
 		if (tab !== null) {
 			const { tabId, frameId, } = tab;
-			promise = this.sendMessageTab(tabId, [ name, id, args, ], frameId ? { frameId, } : { });
+			promise = this.sendMessageTab(tabId, [ name, id, args, ], frameId != null ? { frameId, } : { });
 		} else {
 			promise = this.sendMessage([ name, id, args, ]);
 		}
 		if (id === 0) { return; } // is post
-		promise.then(this.onData).catch(error => this.onData('', -id, [ error, ]));
+		return promise.then(handleReply);
 	}
 
 	destroy() {
-		this.api.runtime.onMessage.removeListener(this.onData);
+		this.api.runtime.onMessage.removeListener(this.onMessage);
+	}
+};
+
+/**
+ * PortAdapter implementation to send and receive messages in a namespace of nsIMessageListenerManagers.
+ */
+Port.moz_nsIMessageListenerManager = class moz_nsIMessageListenerManager /*implements PortAdapter*/ {
+
+	constructor(options, onData) {
+		this.in = options.in || options.mm;
+		this.out = options.out || options.mm;
+		const name = this.name = options.name || options.namespace;
+		this.broadcast = 'broadcast' in options ? options.broadcast : this.out && !this.out.sendAsyncMessage;
+		this.sync = !!options.sync;
+		this.onMessage = ({ sync, target, data, }) => {
+			const sender = target.messageManager || target;
+			let retVal;
+			const reply = sync ? ((...args) => retVal = args) : ((...args) => sender.sendAsyncMessage(name, args));
+			const async = onData(...data, target, reply);
+			if (sync && async) { try { reportError(new Error(`ignoring asynchronous reply to synchronous request`)); } catch (_) { } }
+			return retVal;
+		};
+		this.in.addMessageListener(this.name, this.onMessage);
+	}
+
+	send(name, id, args, options) {
+		const sync = options && ('sync' in options) ? options.sync : this.sync;
+		if (sync) {
+			const replies = this.out.sendSyncMessage(this.name, [ name, id, args, ]).filter(Array.isArray);
+			if (replies.length < 1) { throw new Error(`Request was not handled`); }
+			if (replies.length > 1) { throw new Error(`Request was handled more than once`); }
+			const retVal = handleReply(replies[0]);
+			return retVal === undefined ? null : retVal;
+		} else {
+			const broadcast = options && ('broadcast' in options) ? options.broadcast : this.broadcast;
+			if (broadcast && id) { throw new Error(`Can't broadcast request, use post() instead`); }
+			const sender = options && options.sender;
+			if (sender && id) { // listen to this reply
+				const onReply = event => {
+					if (!event.data || Math.abs(event.data[1]) !== id) { return; }
+					sender.removeMessageListener(this.name, onReply);
+					this.onMessage(event);
+				};
+				sender.addMessageListener(this.name, onReply);
+			}
+			(sender || this.out)[broadcast ? 'broadcastAsyncMessage' : 'sendAsyncMessage'](this.name, [ name, id, args, ]);
+		}
+	}
+
+	destroy() {
+		this.in.removeMessageListener(this.name, this.onMessage);
 	}
 };
 
@@ -281,8 +339,6 @@ class _Port {
 			}
 		} else if (typeof handlers !== 'object') {
 			throw new TypeError(`'handlers' argument must be an object (or Array)`);
-		} else {
-			thisArg === undefined && (thisArg = handlers);
 		}
 
 		const add = (
@@ -297,14 +353,15 @@ class _Port {
 		add.forEach(([ name, handler, ]) => this.handlers.set(prefix + name, [ handler, thisArg, ]));
 	}
 	request(name, ...args) {
-		const request = new PromiseCapability;
-		const id = this.nextId();
-		this.requests.set(id, request);
 		let options = null;
 		if (typeof name === 'object') {
 			options = name; name = args.shift();
 		}
-		this.port.send(name, id, args, options);
+		const id = this.nextId();
+		const promise = this.port.send(name, id, args, options);
+		if (promise !== undefined) { return promise; }
+		const request = new PromiseCapability;
+		this.requests.set(id, request);
 		return request.promise;
 	}
 	post(name, ...args) {
@@ -333,39 +390,64 @@ function onData(name, id, args, altThis, reply) { try {
 		const [ handler, thisArg, ] = this.handlers.get(name);
 		const value = handler.apply(thisArg != null ? thisArg : altThis, args);
 		if (id === 0) { return false; }
-		reply || (reply = this.port.send.bind(this.port));
-		Promise.resolve(value).then(
-			value => reply('', +id, [ value, ]),
-			error => reply('', -id, [ toJson(error), ])
-		);
+		if (!isPromise(value)) {
+			reply ? reply('', +id, [ value, ]) : this.port.send('', +id, [ value, ]);
+			return false;
+		} else {
+			Promise.resolve(value).then(
+				value => reply ? reply('', +id, [ value, ]) : this.port.send('', +id, [ value, ]),
+				error => reply ? reply('', -id, [ toJson(error), ]) : this.port.send('', -id, [ toJson(error), ])
+			);
+			return true;
+		}
 	} else {
 		if (!id) { throw new Error(`Bad request`); }
-		const threw = id < 0;
-		const request = this.requests.get(threw ? -id : id);
-		if (!request) { throw new Error(`Bad response id`); }
+		const threw = id < 0; threw && (id = -id);
+		const request = this.requests.get(id); this.requests.delete(id);
+		if (!request) { throw new Error(`Bad or duplicate response id`); }
 		if (threw) {
 			request.reject(fromJson(args[0]));
 		} else {
 			request.resolve(args[0]);
 		}
+		return false;
 	}
 } catch (error) {
 	if (id) {
-		reply ? reply('', -id, [ toJson(error), ])
-		: this.port.send('', -id, [ toJson(error), ]);
+		reply ? reply('', -id, [ toJson(error), ]) : this.port.send('', -id, [ toJson(error), ]);
 	} else {
-		console.log('Uncaught error in handler (post)', error);
+		try { reportError('Uncaught error in handler (post)', error); } catch (_) { }
 	}
+	return false;
 } }
 
 function onEnd() {
 	this.destroy();
 }
 
+function handleReply([ _, id, [ value, ], ]) {
+	if (id < 0) {
+		throw fromJson(value);
+	} else {
+		return value;
+	}
+}
+
 
 function PromiseCapability() {
 	this.promise = new Promise((resolve, reject) => { this.resolve = resolve; this.reject = reject; });
 }
+
+function isPromise(value) { try {
+	if (!value || typeof value !== 'object' || typeof value.then !== 'function') { return false; }
+	const ctor = value.constructor;
+	if (typeof ctor !== 'function') { return false; }
+	if (PromiseCtors.has(ctor)) { return PromiseCtors.get(ctor); }
+	let is = false; try { new ctor((a, b) => is = typeof a === 'function' && typeof b === 'function'); } finally { }
+	PromiseCtors.set(ctor, is);
+	return is;
+} catch (_) { return false; } }
+const PromiseCtors = new WeakMap;
 
 // TODO: document the use of these functions:
 function toJson(value) {
@@ -387,6 +469,8 @@ function fromJson(string) {
 	});
 }
 
+const reportError = typeof console === 'object' ? console.error.bind(console) : typeof Components === 'object' ? (...args) => args.forEach(Components.utils.reportError) : () => 0;
+
 return Port;
 
-}; if (typeof define === 'function' && define.amd) { define([ 'exports', ], factory); } else { const exp = { }, result = factory(exp) || exp; if (typeof exports === 'object' && typeof module === 'object') { module.exports = result; } else { global[factory.name] = result; } } })((function() { return this; })());
+}; if (typeof define === 'function' && define.amd) { define([ 'exports', ], factory); } else { const exp = { }, result = factory(exp) || exp; if (typeof exports === 'object' && typeof module === 'object') { module.exports = result; } else { global[factory.name] = result; if (typeof QueryInterface === 'function') { global.EXPORTED_SYMBOLS = [ factory.name, ]; } } } })((function() { return this; })());

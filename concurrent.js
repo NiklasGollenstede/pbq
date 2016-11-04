@@ -96,7 +96,7 @@ const { apply, } = Reflect;
  * @param  {function}   catcher    Function that can .catch() exceptions thrown in generator
  * @return {Promise}               Async (member) function
  */
-const async = exports.async = function async(generator, catcher) {
+const _async = exports.async = exports._async = function _async(generator, catcher) {
 	return catcher
 	? function async(/*arguments*/) {
 		return spawn(generator, this, arguments).catch(catcher);
@@ -144,11 +144,11 @@ const asyncClass = exports.asyncClass = function asyncClass(constructor, extendi
 		const desc = Object.getOwnPropertyDescriptor(prototype, key);
 		if ('value' in desc) {
 			const { value, } = desc;
-			if (isGenerator(value)) { desc.value = async(value); }
+			if (isGenerator(value)) { desc.value = _async(value); }
 		} else { // accessors
 			const { get, set, } = desc;
-			if (isGenerator(get)) { desc.get = async(get); }
-			if (isGenerator(set)) { desc.set = async(set); }
+			if (isGenerator(get)) { desc.get = _async(get); }
+			if (isGenerator(set)) { desc.set = _async(set); }
 		}
 		desc.enumerable = false;
 		Object.defineProperty(ctor.prototype, key, desc);
@@ -272,7 +272,7 @@ const StreamIterator = exports.StreamIterator = class StreamIterator {
  *                                              If it throws an error, the iteration gets aborted, rejected with that error and the error gets throw()'n into the iterator.
  * @return {Promise}                            Promise(undefined), resolved when the iterator is done.
  */
-const forOn = exports.forOn = async(function*(iterable, callback) {
+const forOn = exports.forOn = _async(function*(iterable, callback) {
 	const isIterable = typeof iterable[SymbolIterator] === 'function'; // TODO: this doesn't work ...
 	for (let value of isIterable ? iterable : new StreamIterator(iterable)) {
 		(yield callback((yield value)));

@@ -9,6 +9,24 @@ const setTimeout = global.setTimeout || (function() { try { return require('sdk/
 const Self = new WeakMap;
 
 /**
+ * Returns a new Promise that has its `resolve` and `reject` functions as own properties.
+ */
+const Resolvable = exports.Resolvable = function Resolvable() {
+	let resolve, reject, promise = new Promise((_y, _n) => (resolve = _y, reject = _n));
+	promise.resolve = resolve;
+	promise.reject = reject;
+	return promise;
+};
+
+/**
+ * Returns a new Promise with its `resolve` and `reject` functions as an object of { promise, resolve, reject, }.
+ */
+const PromiseCapability = exports.PromiseCapability = function PromiseCapability() {
+	let resolve, reject, promise = new Promise((_y, _n) => (resolve = _y, reject = _n));
+	return { promise, resolve, reject, };
+};
+
+/**
  * @param  {uint}    ms  Time to "sleep" in milliseconds
  * @return {Promise}     Resolves to undefined after 'ms' milliseconds
  */
@@ -69,7 +87,7 @@ const promised = exports.promised = function promised(promiser) {
  * @param  {Arguments}  args       Arguments for generator
  * @return {Promise}               Promise of the return value of the generator
  */
-const spawn = exports.spawn = function spawn(generator, thisArg, args) {
+const spawn = exports.spawn = function spawn(generator, thisArg, args, callSync) {
 	const iterator = apply(generator, thisArg, args);
 
 	function next(arg) {
@@ -86,23 +104,25 @@ const spawn = exports.spawn = function spawn(generator, thisArg, args) {
 		}
 	}
 
-	return resolved.then(next);
+	return callSync ? next(undefined) : resolved.then(next);
 };
 const { apply, } = Reflect;
 
 /**
  * Asynchronous task spawner. Subset of Task.js. Executes when called. Forwards this and arguments.
- * @param  {function*}  generator  Generator function that yields promises to asynchronous values which are returned to the generator once the promises are fulfilled.
- * @param  {function}   catcher    Function that can .catch() exceptions thrown in generator
- * @return {Promise}               Async (member) function
+ * @param  {function*}         generatorFunc      Generator function that yields promises to asynchronous values which are returned to the generator once the promises are fulfilled.
+ * @param  {function|object}   options
+ * @param  {function}          options.catch      Function that can .catch() exceptions thrown in generator. Default if `options` is a function.
+ * @param  {bool}              options.callSync   If trueisch, the first step into the `generatorFunc` will happen synchronously (and may throw synchronously);
+ * @return {function}                     Async (member) function.
  */
-const _async = exports.async = exports._async = function _async(generator, catcher) {
-	return catcher
+const _async = exports.async = exports._async = function _async(generator, options = { }) {
+	return options.catch
 	? function async(/*arguments*/) {
-		return spawn(generator, this, arguments).catch(catcher);
+		return spawn(generator, this, arguments, options.callSync).catch(options.catch);
 	}
 	: function async(/*arguments*/) {
-		return spawn(generator, this, arguments);
+		return spawn(generator, this, arguments, options.callSync);
 	};
 };
 
@@ -326,8 +346,11 @@ const hrtime = (function() { /* global process */
 		return performance.now.bind(performance); // browser
 	} else if (typeof process !== 'undefined' && typeof process.hrtime === 'function') {
 		return function () { const pair = process.hrtime(); return pair[0] * 1e3 + pair[1] / 1e6; }; // node
-	} else {
-		return require("chr" + "ome").Cu.now; // firefox
+	} else { // firefox
+		try {
+			return Components.utils.now;
+		} catch (_) { }
+		return require("chr" + "ome").Cu.now;
 	}
 })();
 
@@ -339,4 +362,4 @@ const instantly = exports.instantly = function instantly(callback) {
 	resolved.then(callback);
 };
 
-}; if (typeof define === 'function' && define.amd) { define([ 'exports', ], factory); } else { const exports = { }, result = factory(exports) || exports; if (typeof exports === 'object' && typeof module === 'object') { module.exports = result; } else { global[factory.name] = result; } } })((function() { return this; })());
+}; if (typeof define === 'function' && define.amd) { define([ 'exports', ], factory); } else { const exp = { }, result = factory(exp) || exp; if (typeof exports === 'object' && typeof module === 'object') { module.exports = result; } else { global[factory.name] = result; if (typeof QueryInterface === 'function') { global.exports = result; global.EXPORTED_SYMBOLS = [ 'exports', ]; } } } })((function() { return this; })());

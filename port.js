@@ -235,7 +235,7 @@ Port.web_ext_Runtime = class web_ext_Runtime /*implements PortAdapter*/ {
 Port.moz_nsIMessageListenerManager = class moz_nsIMessageListenerManager /*implements PortAdapter*/ {
 
 	constructor(options, onData) {
-		this.in = options.in || options.mm;
+		this.in = options.in || options.mm; if (!Array.isArray(this.in)) { this.in = [ this.in, ]; }
 		this.out = options.out || options.mm;
 		const name = this.name = options.name || options.namespace;
 		this.broadcast = 'broadcast' in options ? options.broadcast : this.out && !this.out.sendAsyncMessage;
@@ -248,7 +248,7 @@ Port.moz_nsIMessageListenerManager = class moz_nsIMessageListenerManager /*imple
 			if (sync && async) { try { reportError(new Error(`ignoring asynchronous reply to synchronous request`)); } catch (_) { } }
 			return retVal;
 		};
-		this.in.addMessageListener(this.name, this.onMessage);
+		this.in.forEach(_=>_.addMessageListener(this.name, this.onMessage));
 	}
 
 	send(name, id, args, options) {
@@ -276,7 +276,7 @@ Port.moz_nsIMessageListenerManager = class moz_nsIMessageListenerManager /*imple
 	}
 
 	destroy() {
-		this.in.removeMessageListener(this.name, this.onMessage);
+		this.in.forEach(_=>_.removeMessageListener(this.name, this.onMessage));
 	}
 };
 
@@ -374,7 +374,7 @@ class _Port {
 	destroy() {
 		const self = Self.get(this);
 		if (!self) { return; }
-		const destroyed = new Error('Port destroyed');
+		const destroyed = new Error('The Port this request is waiting on was destroyed');
 		this.requests.forEach(_=>_.reject(destroyed));
 		this.requests.clear();
 		this.handlers.clear();
@@ -473,4 +473,4 @@ const reportError = typeof console === 'object' ? console.error.bind(console) : 
 
 return Port;
 
-}; if (typeof define === 'function' && define.amd) { define([ 'exports', ], factory); } else { const exp = { }, result = factory(exp) || exp; if (typeof exports === 'object' && typeof module === 'object') { module.exports = result; } else { global[factory.name] = result; if (typeof QueryInterface === 'function') { global.EXPORTED_SYMBOLS = [ factory.name, ]; } } } })((function() { return this; })());
+}; if (typeof define === 'function' && define.amd) { define([ 'exports', ], factory); } else { const exp = { }, result = factory(exp) || exp; if (typeof exports === 'object' && typeof module === 'object') { module.exports = result; } else { global[factory.name] = result; if (typeof QueryInterface === 'function') { global.exports = result; global.EXPORTED_SYMBOLS = [ 'exports', ]; } } } })((function() { return this; })());

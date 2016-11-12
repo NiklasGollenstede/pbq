@@ -88,7 +88,7 @@ const promised = exports.promised = function promised(promiser) {
  * @return {Promise}               Promise of the return value of the generator
  */
 const spawn = exports.spawn = function spawn(generator, thisArg, args, callSync) {
-	const iterator = apply(generator, thisArg, args);
+	const iterator = apply(generator, thisArg, args || [ ]);
 
 	function next(arg) {
 		return handle(iterator.next(arg));

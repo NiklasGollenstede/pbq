@@ -102,12 +102,14 @@ const Port = class Port {
 	/**
 	 * Destroys the Port instance and the underlying PortAdapter.
 	 * Gets automatically called when the underlying port closes.
-	 * After the instance is destroyed, all other methods on this instance will throw. Any further calls to .destroy() will be ignored.
-	 * @return {[type]} [description]
+	 * After the instance is destroyed, all other methods on this instance will throw.
+	 * Never throws and any further calls to .destroy() will be ignored.
 	 */
 	destroy() {
-		const self = Self.get(this);
-		self && self.destroy();
+		try {
+			const self = Self.get(this);
+			self && self.destroy();
+		} catch (error) { try { reportError(error); } catch (_) { } }
 	}
 };
 
@@ -263,7 +265,7 @@ Port.moz_nsIMessageListenerManager = class moz_nsIMessageListenerManager /*imple
 			const broadcast = options && ('broadcast' in options) ? options.broadcast : this.broadcast;
 			if (broadcast && id) { throw new Error(`Can't broadcast request, use post() instead`); }
 			const sender = options && options.sender;
-			if (sender && id) { // listen to this reply
+			if (sender && id && !this.in.includes(sender)) { // listen to this reply
 				const onReply = event => {
 					if (!event.data || Math.abs(event.data[1]) !== id) { return; }
 					sender.removeMessageListener(this.name, onReply);
@@ -294,7 +296,8 @@ Port.node_Stream = class node_Stream /*implements PortAdapter*/ {
 	}
 
 	send(name, id, args) {
-		this.port.write(JSON.stringify([ name, id, args, ]), 'utf8');
+		const data = JSON.stringify([ name, id, args, ]);
+		(global.setImmediate || global.setTimeout)(() => this.port.write(data, 'utf8'));
 	}
 
 	destroy() {
@@ -314,7 +317,7 @@ class _Port {
 		this.port = new adapter(port, onData.bind(this), onEnd.bind(this));
 		this.requests = new Map; // id ==> PromiseCapability
 		this.handlers = new Map; // name ==> [ function, thisArg, ]
-		this.lastId = 0;
+		this.lastId = 1; // `1` will never be used
 		Self.set(this, self);
 		Self.set(self, this);
 	}
@@ -413,7 +416,7 @@ function onData(name, id, args, altThis, reply) { try {
 		return false;
 	}
 } catch (error) {
-	if (id) {
+	if (name && id) {
 		reply ? reply('', -id, [ toJson(error), ]) : this.port.send('', -id, [ toJson(error), ]);
 	} else {
 		try { reportError('Uncaught error in handler (post)', error); } catch (_) { }

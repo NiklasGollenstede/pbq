@@ -48,8 +48,8 @@ const randomHex = exports.randomHex = (function() { try {
  * Generates a cryptographically random GUID, e.g.: 6f2e78a1-c4f3-4895-858b-347f92fb2d14
  */
 const Guid = exports.Guid = function Guid() {
-	var data = randomHex(34);
-	return [ data.slice(0, 8), data.slice(8, 12), '4'+ data.slice(12, 15), '8'+ data.slice(15, 18), data.slice(18), ].join('-');
+	var data = randomHex(32);
+	return [ data.slice(0, 8), data.slice(8, 12), '4'+ data.slice(13, 16), '8'+ data.slice(17, 20), data.slice(20, 32), ].join('-');
 };
 
 /**

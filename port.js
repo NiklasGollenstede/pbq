@@ -8,19 +8,20 @@ const Port = class Port {
 
 	/**
 	 * Takes one end of a communication channel and prepares it to send and receive requests.
-	 * @param  {object}  port     The low-level port object that is connected to the communication channel.
-	 * @param  {class}   adapter  Optional. A simple adapter class to provide a common interface for different types of low level ports.
-	 *                            This can ether be one of
-	 *                                Port.web_Port         for  browser MessageChannels and WebSockets,
+	 * @param  {any}     port     The low-level port object that is connected to the communication channel. Its only use is as the argument to `Adapter`.
+	 * @param  {class}   Adapter  A simple adapter class to provide a common interface for different types of low level ports.
+	 *                            This can ether be one of (for details see below)
+	 *                                Port.WebSocket        for  browser WebSockets,
+	 *                                Port.MessagePort      for  browser MessagePorts,
+	 *                                Port.node_Stream      for  node.js DuplexSteams,
 	 *                                Port.web_ext_Port     for  (browser/chrome).runtime.Port object in Chromium, Firefox and Opera extensions,
 	 *                                Port.web_ext_Runtime  for  browser.runtime/tabs.on/sendMessage API in Firefox extensions (in Chromium and Opera this needs to be Promise-wrapped),
-	 *                                Port.node_Stream      for  node js DuplexSteams,
+	 *                                Port.moz_nsIMessageListenerManager for Firefox MessageManagers,
 	 *                            or any other class that implements the PortAdapter interface.
-	 *                            Defaults to Port.web_Port, so that browser and node js 'ws' WebSockets and MessageChannels can be handled.
 	 * @return {Port}             The new Port instance.
 	 */
-	constructor(port, adapter = Port.web_Port) {
-		const self = new _Port(this, port, adapter);
+	constructor(port, Adapter = Port.web_Port) { // default Adapter will be removed
+		new _Port(this, port, Adapter);
 	}
 
 	/**
@@ -60,7 +61,7 @@ const Port = class Port {
 	 */
 	removeHandler(name) {
 		const self = Self.get(this);
-		self.handlers.delete(name);
+		self.removeHandler(name);
 		return this;
 	}
 
@@ -71,7 +72,7 @@ const Port = class Port {
 	 */
 	hasHandler(name) {
 		const self = Self.get(this);
-		return self.handlers.has(name);
+		return self.hasHandler(name);
 	}
 
 	/**
@@ -95,8 +96,7 @@ const Port = class Port {
 	 */
 	post(/*name, ...args*/) {
 		const self = Self.get(this);
-		self.post(...arguments);
-		return this;
+		return self.post(...arguments);
 	}
 
 	/**
@@ -112,6 +112,47 @@ const Port = class Port {
 		} catch (error) { try { reportError(error); } catch (_) { } }
 	}
 };
+
+/**
+ * Details on the Provided PortAdapter implementations:
+ *
+ *     Port.WebSocket:        Wraps WebSockets.
+ *                            Uses JSON encoding.
+ *
+ *     Port.MessagePort:      Wraps MessagePorts.
+ *                            Calls .start().
+ *                            NOTE: There is no 'close' event, the application must take care to close BOTH ends of the channel.
+ *
+ *     Port.node_Stream:      Wraps node.js DuplexSteams.
+ *                            Uses JSON encoding, reads and writes UTF-8 strings.
+ *                            Calls onEnd() from both 'end' and 'close' events.
+ *                            Always sends asynchronously.
+ *
+ *     Port.web_ext_Port:     Wraps (browser/chrome).runtime.Port object in Chromium, Firefox and Opera extensions.
+ *
+ *     Port.web_ext_Runtime:  Wraps the global browser/chrome api object in Chromium, Firefox and Opera extensions.
+ *                            Listens for messages on api.runtime.onMessage and can
+ *                            send messages via api.runtime.sendMessage and api.tabs.sendMessage, if available.
+ *                            The `port` parameter to new Port() must be the `browser` global in Firefox
+ *                            or a promisified version of the `chrome`/`browser` global in Chromium/Edge/Opera.
+ *                            The `options` parameter of port.request()/.post() can be an object of { tabId, frameId?, } to send to tabs.
+ *                            The Port is never closed automatically.
+ *
+ *     Port.moz_nsIMessageListenerManager:
+ *                            PortAdapter implementation to send and receive messages in a namespace of nsIMessageListenerManagers.
+ *                            The `port` parameter to the Port constructor must be an object of:
+ *                                @property {string}                     name       The namespace to listen on and send in.
+ *                                @property {string}                     namespace  Alias for `name`.
+ *                                @property {nsIMessageListenerManager}  in         Optional. An (Array of) message managers to permanently listen for requests on.
+ *                                @property {nsIMessage*}                out        Optional. Default message manager to send messages from.
+ *                                @property {nsIMessage*}                mm         Optional. Fallback for both `in` and `out`.
+ *                                @property {boolean}                    broadcast  Optional. If true, uses `broadcastAsyncMessage` to send. If not set, it defaults to true iff `out` has no `sendAsyncMessage` method.
+ *                                @property {boolean}                    sync       Optional. If true, uses `sendSyncMessage` to send.
+ *                            The `options` parameter to <Port>.request()/.post() can be an optional object of:
+ *                                @property {nsIMessage*}                sender     Optional. Overwrites `out` for this message. If it is not in `in` and .request() was used, it will be listened on for the reply.
+ *                                @property {boolean}                    broadcast  Optional. If set overwrites the constructor parameter for this message.
+ *                                @property {boolean}                    sync       Optional. If set overwrites the constructor parameter for this message.
+ */
 
 /**
  * Interface class that can be implemented to provide compatibility for low level ports that don't work with any of the predefined adapters.
@@ -155,15 +196,14 @@ class PortAdapter {
 
 ///////// start of private implementation /////////
 
-/**
- * PortAdapter implementation to wrap MessageChannels and WebSockets.
- */
-Port.web_Port = class web_Port /*implements PortAdapter*/ {
+Port.WebSocket = class WebSocket {
 
 	constructor(port, onData, onEnd) {
 		this.port = port;
-		this.port.addEventListener('message', this.onMessage = ({ data, }) => onData.apply(null, JSON.parse(data)));
-		this.port.addEventListener('close', this.onClose = () => onEnd());
+		this.onMessage = ({ data, }) => onData.apply(null, JSON.parse(data));
+		this.onClose = () => onEnd();
+		this.port.addEventListener('message', this.onMessage);
+		this.port.addEventListener('close', this.onClose);
 	}
 
 	send(name, id, args) {
@@ -177,15 +217,62 @@ Port.web_Port = class web_Port /*implements PortAdapter*/ {
 	}
 };
 
-/**
- * PortAdapter implementation to wrap (browser/chrome).runtime.Port object in Chromium, Firefox and Opera extensions.
- */
-Port.web_ext_Port = class web_ext_Port /*implements PortAdapter*/ {
+Port.web_Port = class extends Port.WebSocket { constructor() {
+	super(...arguments);
+	console.warn('The default Port.web_Port is deprecated, explicitly use Port.WebSocket instead');
+} };
+
+Port.MessagePort = class MessagePort {
 
 	constructor(port, onData, onEnd) {
 		this.port = port;
-		this.port.onMessage.addListener(this.onMessage = data => onData.apply(null, data));
-		this.port.onDisconnect.addListener(this.onDisconnect = () => onEnd());
+		this.onMessage = ({ data, }) => onData.apply(null, data);
+		this.port.addEventListener('message', this.onMessage);
+		this.port.start();
+	}
+
+	send(name, id, args) {
+		this.port.postMessage([ name, id, args, ]);
+	}
+
+	destroy() {
+		this.port.removeEventListener('message', this.onMessage);
+		this.port.close();
+	}
+};
+
+Port.node_Stream = class node_Stream {
+
+	constructor(port, onData, onEnd) {
+		this.port = port;
+		this.onData = data => onData.apply(null, JSON.parse(data.toString('utf8')));
+		this.onEnd = () => onEnd();
+		port.on('data', this.onData);
+		port.once('end', this.onEnd);
+		port.once('close', this.onEnd);
+	}
+
+	send(name, id, args) {
+		const data = JSON.stringify([ name, id, args, ]);
+		(global.setImmediate || global.setTimeout)(() => this.port.write(data, 'utf8'));
+	}
+
+	destroy() {
+		this.port.removeListener('data', this.onData);
+		this.port.removeListener('end', this.onEnd);
+		this.port.removeListener('close', this.onEnd);
+		this.port.end();
+	}
+};
+
+Port.web_ext_Port = class web_ext_Port {
+
+	constructor(port, onData, onEnd) {
+		this.port = port;
+		this.onMessage = data => onData.apply(null, data);
+		this.onDisconnect = () => onEnd();
+		this.port.onMessage.addListener(this.onMessage);
+		this.port.onDisconnect.addListener(this.onDisconnect);
 	}
 
 	send(name, id, args) {
@@ -199,19 +286,14 @@ Port.web_ext_Port = class web_ext_Port /*implements PortAdapter*/ {
 	}
 };
 
-/**
- * PortAdapter implementation to wrap (browser/chrome).runtime.Port object in Chromium, Firefox and Opera extensions.
- * The `port` parameter to new Port() must be the `browser` global of Firefox or a promisified version of the `chrome`/`browser` global of Chromium/Edge.
- * The `options` parameter of port.request()/.post() can be an object of { tabId, frameId?, } to send to tabs.
- */
-Port.web_ext_Runtime = class web_ext_Runtime /*implements PortAdapter*/ {
+Port.web_ext_Runtime = class web_ext_Runtime {
 
 	constructor(api, onData) {
 		this.api = api;
 		this.onMessage = (data, sender, reply) => onData(...data, sender, (...args) => reply(args));
-		this.api.runtime.onMessage.addListener(this.onMessage);
 		this.sendMessage = api.runtime.sendMessage;
 		this.sendMessageTab = api.tabs ? api.tabs.sendMessage : () => { throw new Error(`Can't send messages to tabs (from within a tab)`); };
+		this.api.runtime.onMessage.addListener(this.onMessage);
 	}
 
 	send(name, id, args, tab) {
@@ -231,10 +313,7 @@ Port.web_ext_Runtime = class web_ext_Runtime /*implements PortAdapter*/ {
 	}
 };
 
-/**
- * PortAdapter implementation to send and receive messages in a namespace of nsIMessageListenerManagers.
- */
-Port.moz_nsIMessageListenerManager = class moz_nsIMessageListenerManager /*implements PortAdapter*/ {
+Port.moz_nsIMessageListenerManager = class moz_nsIMessageListenerManager {
 
 	constructor(options, onData) {
 		this.in = options.in || options.mm; if (!Array.isArray(this.in)) { this.in = [ this.in, ]; }
@@ -282,39 +361,13 @@ Port.moz_nsIMessageListenerManager = class moz_nsIMessageListenerManager /*imple
 	}
 };
 
-/**
- * PortAdapter implementation to wrap node js DuplexSteams.
- * Calls onEnd() from both 'end' and 'close' events.
- */
-Port.node_Stream = class node_Stream /*implements PortAdapter*/ {
-
-	constructor(port, onData, onEnd) {
-		this.port = port;
-		port.on('data', this.onData = data => onData.apply(null, JSON.parse(data.toString('utf8'))));
-		port.once('end', this.onEnd = () => onEnd());
-		port.once('close', this.onEnd);
-	}
-
-	send(name, id, args) {
-		const data = JSON.stringify([ name, id, args, ]);
-		(global.setImmediate || global.setTimeout)(() => this.port.write(data, 'utf8'));
-	}
-
-	destroy() {
-		this.port.removeListener('data', this.onData);
-		this.port.removeListener('end', this.onEnd);
-		this.port.removeListener('close', this.onEnd);
-		this.port.end();
-	}
-};
-
 // holds references between public interface and private implementation
 const Self = new WeakMap;
 
 // private implementation class
 class _Port {
-	constructor(self, port, adapter) {
-		this.port = new adapter(port, onData.bind(this), onEnd.bind(this));
+	constructor(self, port, Adapter) {
+		this.port = new Adapter(port, onData.bind(this), onEnd.bind(this));
 		this.requests = new Map; // id ==> PromiseCapability
 		this.handlers = new Map; // name ==> [ function, thisArg, ]
 		this.lastId = 1; // `1` will never be used
@@ -324,29 +377,20 @@ class _Port {
 	nextId() { return ++this.lastId; }
 
 	addHandler(name, handler, thisArg) {
-		if (arguments.length === 1) { handler = name; name = handler.name; }
-		if (!name || typeof name !== 'string') { throw new TypeError(`Handler names must be non-empty strings`); }
+		if (typeof name === 'function') { [ handler, thisArg, ] = arguments; name = handler.name; }
+		if (typeof name !== 'string' || name === '') { throw new TypeError(`Handler names must be non-empty strings`); }
 		if (typeof handler !== 'function') { throw new TypeError(`Message handlers must be functions`); }
 		if (this.handlers.has(name)) { throw new Error(`Duplicate message handler for "${ name }"`); }
 		this.handlers.set(name, [ handler, thisArg, ]);
 	}
 	addHandlers(prefix, handlers, thisArg) {
-		if (arguments.length === 1) { handlers = prefix; prefix = ''; }
-		if (typeof prefix !== 'string') {
-			if (typeof prefix === 'object') {
-				prefix = '';
-				handlers = arguments[0];
-				thisArg = arguments[1] !== undefined ? arguments[1] : arguments[0];
-			} else {
-				throw new TypeError(`Handler name prefixes must be strings (or omitted)`);
-			}
-		} else if (typeof handlers !== 'object') {
-			throw new TypeError(`'handlers' argument must be an object (or Array)`);
-		}
+		if (typeof prefix === 'object') { [ handlers, thisArg, ] = arguments; prefix = ''; }
+		if (typeof prefix !== 'string') { throw new TypeError(`Handler name prefixes must be strings (or omitted)`); }
+		if (typeof handlers !== 'object') { throw new TypeError(`'handlers' argument must be an object (or Array)`); }
 
 		const add = (
 			Array.isArray(handlers)
-			? handlers.map(f => [ f.name, f, ])
+			? handlers.map(f => [ f && f.name, f, ])
 			: Object.keys(handlers).map(k => [ k, handlers[k], ])
 		).filter(([ , f, ]) => typeof f === 'function');
 		add.forEach(([ name, handler, ]) => {
@@ -354,6 +398,12 @@ class _Port {
 			if (this.handlers.has(name)) { throw new Error(`Duplicate message handler for "${ name }"`); }
 		});
 		add.forEach(([ name, handler, ]) => this.handlers.set(prefix + name, [ handler, thisArg, ]));
+	}
+	removeHandler(name) {
+		this.handlers.delete(name);
+	}
+	hasHandler(name) {
+		return this.handlers.has(name);
 	}
 	request(name, ...args) {
 		let options = null;

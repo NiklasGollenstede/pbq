@@ -64,8 +64,8 @@ const apply = exports.apply = function apply(callback, self, args, arg) {
 /**
  * Tests whether a function can be used as a constructor, without attempting to call that function.
  * @param  {function}  func  Function object to test.
- * @return {Boolean}         True iff func has a [[Construct]] internal slot.
- *                           That is, if it returns false, then func is not a function or construction it with new would throw 'TypeError: <local id> is not a constructor'.
+ * @return {Boolean}         True iff func has a [[Construct]] internal method.
+ *                           That is, if it returns false, then func is not a function or constructing it with new would throw 'TypeError: <local id> is not a constructor'.
  *                           If it returns true, it may still throw 'TypeError: Illegal constructor.', but is is a constructor.
  */
 const isConstructable = exports.isConstructable = function isConstructable(func) {
@@ -195,17 +195,17 @@ const blockEvent = exports.blockEvent = function blockEvent(event) {
  */
 const fuzzyMatch = exports.fuzzyMatch = function fuzzyMatch(s1, s2, n) {
 	n = n > 2 && Number.parseInt(n) || 2;
-	var l1 = s1.length - n + 1;
-	var l2 = s2.length - n + 1;
-	var used = new Array(l2);
+	const l1 = s1.length - n + 1;
+	const l2 = s2.length - n + 1;
+	const used = new Array(l2);
 	var total = 0;
 	for (var i = 0; i < l1; ++i) {
 		var j = -1;
 		while ( // find s1.substr in s2 that wasn't used yet
-			((j = s2.indexOf(s1.substring(i, i+n), j+1)) !== -1)
+			((j = s2.indexOf(s1.substring(i, i + n), j + 1)) !== -1)
 			&& used[j]
 		) { }
-		if (j != -1) {
+		if (j !== -1) {
 			total++;
 			used[j] = true;
 		}

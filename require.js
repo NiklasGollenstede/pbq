@@ -210,6 +210,7 @@ function define(/* id, deps, factory */) {
 	}
 
 	const code = factory +'';
+	module.factory = factory;
 
 	// get deps
 	let special = false;
@@ -254,6 +255,7 @@ class Module {
 		this.url = url ? new URL(url) : id ? new URL(resolveUrl(id) +'.js') : '';
 		this.id = id;
 		this.parent = parent;
+		this.factory = null;
 		this.exports = { };
 		this._children = new Set;
 		this.promise = new PromiseCapability();

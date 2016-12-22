@@ -26,11 +26,14 @@ const Port = class Port {
 
 	/**
 	 * Adds a named message handler.
-	 * @param  {string}    name     Optional. Non-empty name of this handler which can be used
-	 *                              by .request() and .post() to call this handler. defaults to `handler`.name.
+	 * @param  {string}    name     Optional. Non-empty name of this handler, which can be used
+	 *                              by .request() and .post() to call this handler. Defaults to `handler`.name.
+	 * @param  {RegExp}    names    Optional, instead of explicit name. Name wildcard: Messages with names that are
+	 *                              not handled by a handler with a string name are handled by this handler if their name matches.
+	 *                              The first argument to the handler will be the actual name.
 	 * @param  {function}  handler  The handler function. It will be called with JSON-clones of all additional arguments
 	 *                              provided to .request() or .post() and may return a Promise to asynchronously return a value.
-	 * @param  {any}       thisArg  `this` to pass to the handler when called.
+	 * @param  {any}       thisArg  `this` to pass to the handler when called. If == null, it may be set by the PortAdapter.
 	 * @return {MessageHandler}     Self reference for chaining.
 	 * @throws {Error}              If there is already a handler registered for `name`.
 	 */
@@ -44,7 +47,7 @@ const Port = class Port {
 	 * Adds multiple named message handlers.
 	 * @param  {string}        prefix    Optional prefix to prepend to all handler names specified in `handlers`.
 	 * @param  {object|array}  handlers  Ether an array of named functions or an object with methods. Array entries / object properties that are no functions will be ignores.
-	 * @param  {any}           thisArg   `this` to pass to the handler when called.
+	 * @param  {any}           thisArg   `this` to pass to the handler when called. If == null, it may be set by the PortAdapter.
 	 * @return {MessageHandler}          Self reference for chaining.
 	 * @throws {Error}                   If there is already a handler registered for any `prefix` + handler.name; no handlers have been added.
 	 */
@@ -56,8 +59,8 @@ const Port = class Port {
 
 	/**
 	 * Removes a named handler.
-	 * @param  {string}         name  The name of the handler to be removed.
-	 * @return {MessageHandler}       Self reference for chaining.
+	 * @param  {string|RegExp}   name  The name of the handler to be removed.
+	 * @return {MessageHandler}        Self reference for chaining.
 	 */
 	removeHandler(name) {
 		const self = Self.get(this);
@@ -67,8 +70,8 @@ const Port = class Port {
 
 	/**
 	 * Queries the existence of a named handler.
-	 * @param  {string}  name  The name of the handler to query.
-	 * @return {bool}          true iff a handler is listening on this port.
+	 * @param  {string|RegExp}  name  The name of the handler to query.
+	 * @return {bool}                 true iff a handler is listening on this port.
 	 */
 	hasHandler(name) {
 		const self = Self.get(this);
@@ -97,6 +100,24 @@ const Port = class Port {
 	post(/*name, ...args*/) {
 		const self = Self.get(this);
 		return self.post(...arguments);
+	}
+
+	/**
+	 * Returns a frozen Promise that resolves when the Port gets .destroyed().
+	 */
+	get ended() {
+		const self = Self.get(this);
+		return self.ended;
+	}
+
+	/**
+	 * Tells whether the currently synchronously handled message is a request or post.
+	 * @return {boolean}  If false, the current handler is called by a remote .post(), i.e. the return value of the handler is not used.
+	 * @throws {Error}    If this Port is not currently in a synchronous call to a handler.
+	 */
+	isRequest() {
+		const self = Self.get(this);
+		return self.isRequest();
 	}
 
 	/**
@@ -137,6 +158,7 @@ const Port = class Port {
  *                            or a promisified version of the `chrome`/`browser` global in Chromium/Edge/Opera.
  *                            The `options` parameter of port.request()/.post() can be an object of { tabId, frameId?, } to send to tabs.
  *                            The Port is never closed automatically.
+ *                            If `thisArg` is == null, the `this` in the handler will be set to the messages `sender`.
  *
  *     Port.moz_nsIMessageListenerManager:
  *                            PortAdapter implementation to send and receive messages in a namespace of nsIMessageListenerManagers.
@@ -152,6 +174,7 @@ const Port = class Port {
  *                                @property {nsIMessage*}                sender     Optional. Overwrites `out` for this message. If it is not in `in` and .request() was used, it will be listened on for the reply.
  *                                @property {boolean}                    broadcast  Optional. If set overwrites the constructor parameter for this message.
  *                                @property {boolean}                    sync       Optional. If set overwrites the constructor parameter for this message.
+ *                            If `thisArg` is == null, the `this` in the handler will be set to the messages `target`.
  */
 
 /**
@@ -200,7 +223,7 @@ Port.WebSocket = class WebSocket {
 
 	constructor(port, onData, onEnd) {
 		this.port = port;
-		this.onMessage = ({ data, }) => onData.apply(null, JSON.parse(data));
+		this.onMessage = ({ data, }) => { data = JSON.parse(data); onData(data[0], data[1], data[2]); };
 		this.onClose = () => onEnd();
 		this.port.addEventListener('message', this.onMessage);
 		this.port.addEventListener('close', this.onClose);
@@ -226,7 +249,7 @@ Port.MessagePort = class MessagePort {
 
 	constructor(port, onData, onEnd) {
 		this.port = port;
-		this.onMessage = ({ data, }) => onData.apply(null, data);
+		this.onMessage = ({ data, }) => onData(data[0], data[1], data[2]);
 		this.port.addEventListener('message', this.onMessage);
 		this.port.start();
 	}
@@ -245,7 +268,7 @@ Port.node_Stream = class node_Stream {
 
 	constructor(port, onData, onEnd) {
 		this.port = port;
-		this.onData = data => onData.apply(null, JSON.parse(data.toString('utf8')));
+		this.onData = data => { data = JSON.parse(data.toString('utf8')); onData(data[0], data[1], data[2]); };
 		this.onEnd = () => onEnd();
 		port.on('data', this.onData);
 		port.once('end', this.onEnd);
@@ -269,14 +292,22 @@ Port.web_ext_Port = class web_ext_Port {
 
 	constructor(port, onData, onEnd) {
 		this.port = port;
-		this.onMessage = data => onData.apply(null, data);
+		this.onMessage = data => onData(data[0], data[1], JSON.parse(data[2]));
 		this.onDisconnect = () => onEnd();
 		this.port.onMessage.addListener(this.onMessage);
 		this.port.onDisconnect.addListener(this.onDisconnect);
 	}
 
 	send(name, id, args) {
-		this.port.postMessage([ name, id, args, ]);
+		args = JSON.stringify(args); // explicitly stringify args to throw any related errors here.
+		try {
+			this.port.postMessage([ name, id, args, ]); // throws if encoding any of the args throws, or if the port is disconnected:
+		} catch (error) { // firefox tends to not fire the onDisconnect event
+			// the port was unable so send an array of primitives ==> is is actually closed
+			// TODO: can it throw for other reasons (message to long, ...)?
+			console.error('Error in postMessage, closing Port:', error);
+			this.onDisconnect();
+		}
 	}
 
 	destroy() {
@@ -290,7 +321,7 @@ Port.web_ext_Runtime = class web_ext_Runtime {
 
 	constructor(api, onData) {
 		this.api = api;
-		this.onMessage = (data, sender, reply) => onData(...data, sender, (...args) => reply(args));
+		this.onMessage = (data, sender, reply) => onData(data[0], data[1], data[2], sender, (...args) => reply(args));
 		this.sendMessage = api.runtime.sendMessage;
 		this.sendMessageTab = api.tabs ? api.tabs.sendMessage : () => { throw new Error(`Can't send messages to tabs (from within a tab)`); };
 		this.api.runtime.onMessage.addListener(this.onMessage);
@@ -325,7 +356,7 @@ Port.moz_nsIMessageListenerManager = class moz_nsIMessageListenerManager {
 			const sender = target.messageManager || target;
 			let retVal;
 			const reply = sync ? ((...args) => retVal = args) : ((...args) => sender.sendAsyncMessage(name, args));
-			const async = onData(...data, target, reply);
+			const async = onData(data[0], data[1], data[2], target, reply);
 			if (sync && async) { try { reportError(new Error(`ignoring asynchronous reply to synchronous request`)); } catch (_) { } }
 			return retVal;
 		};
@@ -367,10 +398,13 @@ const Self = new WeakMap;
 // private implementation class
 class _Port {
 	constructor(self, port, Adapter) {
-		this.port = new Adapter(port, onData.bind(this), onEnd.bind(this));
+		this.port = new Adapter(port, onData.bind(this), this.destroy.bind(this));
 		this.requests = new Map; // id ==> PromiseCapability
 		this.handlers = new Map; // name ==> [ function, thisArg, ]
+		this.wildcards = new Map; // RegExp ==> [ function, thisArg, ]
 		this.lastId = 1; // `1` will never be used
+		this.ended = Object.freeze(new Promise(end => this.onEnd = end));
+		this._isRequest = 0; // -1: false; 0: throw; 1: true;
 		Self.set(this, self);
 		Self.set(self, this);
 	}
@@ -378,10 +412,16 @@ class _Port {
 
 	addHandler(name, handler, thisArg) {
 		if (typeof name === 'function') { [ handler, thisArg, ] = arguments; name = handler.name; }
-		if (typeof name !== 'string' || name === '') { throw new TypeError(`Handler names must be non-empty strings`); }
 		if (typeof handler !== 'function') { throw new TypeError(`Message handlers must be functions`); }
-		if (this.handlers.has(name)) { throw new Error(`Duplicate message handler for "${ name }"`); }
-		this.handlers.set(name, [ handler, thisArg, ]);
+		if (typeof name === 'string' && name !== '') {
+			if (this.handlers.has(name)) { throw new Error(`Duplicate message handler for "${ name }"`); }
+			this.handlers.set(name, [ handler, thisArg, ]);
+		} else {
+			const filter = name;
+			try { if (typeof filter.test('X') !== 'boolean') { throw null; } }
+			catch (_) { throw new TypeError(`Handler names must be non-empty strings or RegExp wildcards`); }
+			this.wildcards.set(filter, [ handler, thisArg, ]);
+		}
 	}
 	addHandlers(prefix, handlers, thisArg) {
 		if (typeof prefix === 'object') { [ handlers, thisArg, ] = arguments; prefix = ''; }
@@ -394,22 +434,23 @@ class _Port {
 			: Object.keys(handlers).map(k => [ k, handlers[k], ])
 		).filter(([ , f, ]) => typeof f === 'function');
 		add.forEach(([ name, handler, ]) => {
-			if (!name || typeof name !== 'string') { throw new TypeError(`Handler names must be non-empty strings`); }
+			if (typeof name !== 'string' || name === '') { throw new TypeError(`Handler names must be non-empty strings`); }
 			if (this.handlers.has(name)) { throw new Error(`Duplicate message handler for "${ name }"`); }
 		});
 		add.forEach(([ name, handler, ]) => this.handlers.set(prefix + name, [ handler, thisArg, ]));
 	}
 	removeHandler(name) {
-		this.handlers.delete(name);
+		typeof name === 'string' ? this.handlers.delete(name) : this.wildcards.delete(name);
 	}
 	hasHandler(name) {
-		return this.handlers.has(name);
+		return typeof name === 'string' ? this.handlers.has(name) : this.wildcards.has(name);
 	}
 	request(name, ...args) {
 		let options = null;
 		if (typeof name === 'object') {
 			options = name; name = args.shift();
 		}
+		if (typeof name !== 'string') { throw new TypeError(`The request name must be a string`); }
 		const id = this.nextId();
 		const promise = this.port.send(name, id, args, options);
 		if (promise !== undefined) { return promise; }
@@ -422,7 +463,17 @@ class _Port {
 		if (typeof name === 'object') {
 			options = name; name = args.shift();
 		}
+		if (typeof name !== 'string') { throw new TypeError(`The request name must be a string`); }
 		this.port.send(name, 0, args, options);
+	}
+	isRequest() {
+		switch (this._isRequest << 0) {
+			case -1: return false;
+			case 0: {
+				throw new Error(`Port.isRequest() may only be called while the port is in a synchronous handler`);
+			} break;
+			case 1: return true;
+		}
 	}
 	destroy() {
 		const self = Self.get(this);
@@ -431,6 +482,7 @@ class _Port {
 		this.requests.forEach(_=>_.reject(destroyed));
 		this.requests.clear();
 		this.handlers.clear();
+		this.onEnd();
 		this.port.destroy();
 		Self.delete(self);
 		Self.delete(this);
@@ -439,15 +491,29 @@ class _Port {
 
 function onData(name, id, args, altThis, reply) { try {
 	if (name) {
-		if (!this.handlers.has(name)) { throw new Error(`No such handler "${ name }"`); }
-		const [ handler, thisArg, ] = this.handlers.get(name);
-		const value = handler.apply(thisArg != null ? thisArg : altThis, args);
-		if (id === 0) { return false; }
+		let handler, thisArg;
+		if (this.handlers.has(name)) {
+			[ handler, thisArg, ] = this.handlers.get(name);
+		} else {
+			let dest; for (let [ filter, pair, ] of this.wildcards) {
+				if (filter.test(name)) { [ handler, thisArg, ] = pair; break; }
+			}
+			args.unshift(name);
+		}
+		if (!handler) { throw new Error(`No such handler "${ name }"`); }
+		let value; try {
+			this._isRequest = id === 0 ? -1 : 1;
+			value = handler.apply(thisArg != null ? thisArg : altThis, args);
+		} finally { this._isRequest = 0; }
 		if (!isPromise(value)) {
-			reply ? reply('', +id, [ value, ]) : this.port.send('', +id, [ value, ]);
+			if (id !== 0) { reply ? reply('', +id, [ value, ]) : this.port.send('', +id, [ value, ]); }
 			return false;
 		} else {
-			Promise.resolve(value).then(
+			if (id === 0) {
+				value.then(null, error => { try { reportError('Uncaught async error in handler (post)', error); } catch (_) { throw error; } });
+				return false;
+			}
+			value.then(
 				value => reply ? reply('', +id, [ value, ]) : this.port.send('', +id, [ value, ]),
 				error => reply ? reply('', -id, [ toJson(error), ]) : this.port.send('', -id, [ toJson(error), ])
 			);
@@ -473,10 +539,6 @@ function onData(name, id, args, altThis, reply) { try {
 	}
 	return false;
 } }
-
-function onEnd() {
-	this.destroy();
-}
 
 function handleReply([ _, id, [ value, ], ]) {
 	if (id < 0) {

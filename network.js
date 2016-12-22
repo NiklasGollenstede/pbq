@@ -68,7 +68,7 @@ return function HttpRequest(url, options) {
 	return promise;
 };
 function cancelWith(reject, reason) {
-	const error = new ProgressEventConstructor(reason);
+	const error = new ProgressEvent(reason);
 	this.dispatchEvent(error);
 	reject(error);
 }
@@ -119,4 +119,4 @@ const mimeTypes = exports.mimeTypes = {
 
 return exports;
 
-}; if (typeof define === 'function' && define.amd) { define([ 'exports', ], factory); } else { const exports = { }, result = factory(exports) || exports; if (typeof exports === 'object' && typeof module === 'object') { module.exports = result; } else { global[factory.name] = result; } } })((function() { return this; })());
+}; if (typeof define === 'function' && define.amd) { define([ 'exports', ], factory); } else { const exports = { }, result = factory(exports) || exports; if (typeof exports === 'object' && typeof module === 'object') { module.exports = result; } else { global[factory.name] = result; } } })((function() { /* jshint strict: false */ return this; })());

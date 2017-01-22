@@ -1,19 +1,18 @@
 (function(global) { 'use strict'; const factory = function es6lib_dom(exports) { // This Source Code Form is subject to the terms of the Mozilla Public License, v. 2.0. If a copy of the MPL was not distributed with this file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
 /**
- * The functions in this module operate on the global windows 'document' (and URL, self, top, etc.) by default.
- * This is the default document.
+ * The functions in this module use the global windows context (document, URL, self, top, etc.) by default.
  * To have any of the functions of this module operate on a different scope, call them with that scope as this,
  * e.g. `cerateElement.call(iframe.contentWindow, 'a', { ...});` to create an Element in an iframe.
  */
-exports.document = global.document;
+exports.window = global.window;
 
 /**
  * Returns true, if the current execution context is not a browser top level context.
  * I.e the current script is executed in an iframe.
  */
 const inIframe = exports.inIframe = function inIframe() {
-	try { return ((this || global).self !== (this || global).top); } catch (e) { return true; }
+	try { return ((this || global).window.self !== (this || global).window.top); } catch (e) { return true; }
 };
 
 /**
@@ -24,7 +23,7 @@ const inIframe = exports.inIframe = function inIframe() {
  * @return {Element}                     The new DOM element.
  */
 const createElement = exports.createElement = function createElement(tagName, properties, childList) {
-	const document = (this || global).document;
+	const document = (this || global).window.document;
 	const element = document.createElement(tagName);
 	if (Array.isArray(properties)) { childList = properties; properties = null; }
 	properties && deepAssign(element, properties);
@@ -50,7 +49,7 @@ function deepAssign(target, source) {
  * Creates a new style Element of the given css string.
  */
 const createStyleElement = exports.createStyleElement = function createStyleElement(css) {
-	const element = (this || global).document.createElement("style");
+	const element = (this || global).window.document.createElement("style");
 	element.type = "text/css";
 	element.textContent = css;
 	return element;
@@ -62,7 +61,7 @@ const createStyleElement = exports.createStyleElement = function createStyleElem
  * @return {Element}     The new style Element.
  */
 const addStyle = exports.addStyle = function addStyle(css) {
-	return (this || global).document.querySelector("head").appendChild(createStyleElement(css));
+	return (this || global).window.document.querySelector("head").appendChild(createStyleElement(css));
 };
 
 /**
@@ -70,31 +69,103 @@ const addStyle = exports.addStyle = function addStyle(css) {
  * @return {Element}         The clicked Element
  */
 const clickElement = exports.clickElement = function clickElement(element) {
-	const evt = (this || global).document.createEvent('MouseEvents');
+	const evt = (this || global).window.document.createEvent('MouseEvents');
 	evt.initEvent('click', true, true);
 	element.dispatchEvent(evt);
 	return element;
 };
 
 /**
- * Invokes a save dialogue for a Blob or Url object.
- * @param  {Blob|Url}  content The Blob or Url to save.
- * @param  {string}    name    The suggested file name.
- * @return {void}
+ * Invokes a save dialog for a Blob or an Url object or strings target.
+ * @param  {Blob|Url|string}  content  The Blob or url to save.
+ * @param  {string}           name     The suggested file name.
  */
 const saveAs = exports.saveAs = function saveAs(content, name) {
-	const win = this || global;
+	const window = (this || global).window;
 	const isBlob = typeof content.type === 'string';
 
-	const link = Object.assign(win.document.createElement('a'), {
+	const link = Object.assign(window.document.createElement('a'), {
 		download: name,
 		target: '_blank', // fallback
-		href: isBlob ? win.URL.createObjectURL(content) : content,
+		href: isBlob ? window.URL.createObjectURL(content) : content,
 	});
+	clickElement.call(window, link);
+	isBlob && global.setTimeout(function() { window.URL.revokeObjectURL(link.href); }, 1000);
+};
 
-	clickElement.call(win, link);
+/**
+ * Attempts to open a file picker dialog.
+ * NOTE: currently only works in Chrome, not in Firefox (52)!
+ * @param  {[type]}           options  An object whose properties are copied to the underlying input element.
+ *                                     Useful properties are 'accept' and 'multiple'.
+ * @return {Promise<[File]>}           A Promise to a (possibly empty) Array of Files.
+ *                                     Should reject if the dialog fails to open.
+ */
+const loadFile = exports.loadFile = function loadFile(options) { return new Promise(function(resolve, reject) {
+	const window = (this || global).window, document = window.document; var done = false, open = false;
 
-	isBlob && setTimeout(function() { win.URL.revokeObjectURL(link.href); }, 1000);
+	const input = Object.assign(window.document.createElement('input'), {
+		type: 'file',
+	}, options);
+	function onBlur() {
+		open = true; // file picker has opened
+	}
+	const timer = global.setTimeout(() => {
+		if (open || remove()) { return; }
+		// file picker didn't open or change
+		reject(new Error('Could not select file'));
+	}, 100);
+	function onFocus() { global.setTimeout(() => {
+		if (remove()) { return; }
+		resolve([ ]); // file picker was opened and closed, but no files were selected
+	}, 100); }
+	function onChange(event) { try {
+		if (remove()) { return; }
+		resolve(Array.from(input.files)); // actually got file(s)
+	} catch (error) { reject(error); } }
+	function remove() {
+		if (done) { return true; } done = true;
+		global.clearTimeout(timer);
+		window.removeEventListener('focus', onFocus);
+		document.removeEventListener('change', onChange);
+		input.remove();
+		return false;
+	}
+	document.addEventListener('change', onChange);
+	window.addEventListener('focus', onFocus);
+	window.addEventListener('blur', onBlur);
+	document.head.appendChild(input);
+	clickElement.call(window, input);
+}); };
+
+/**
+ * Loads the data referenced by a Blob (or File) object.
+ * @param  {Blob}    blob  The Blob to read.
+ * @param  {string}  type  Optional. The type/encoding of the returned data. May be 'string' (default, utf-8),
+ *                         'arrayBuffer', dataURL or any string encoding accepted by <FileReader>.readAsText(..., type).
+ * @return {Promise<String|ArrayBuffer}  Promise to the data read.
+ */
+const readBlob = exports.readBlob = function readBlob(blob, type) {
+	var reader;
+	return new Promise(function(resolve, reject) {
+		const window = (this || global).window;
+		reader = new window.FileReader;
+		reader.onerror = reject;
+		reader.onloadend = () => resolve(reader.result);
+
+		if (type == null || type === 'string') {
+			reader.readAsText(blob);
+		} else if ((/^dataU[rR][iIlL]$/).test(type)) {
+			reader.readAsDataURL(blob);
+		} else if ((/^(?:arrayB|b)uffer$/).test(type)) {
+			reader.readAsArrayBuffer(blob);
+		} else {
+			reader.readAsText(blob, type);
+		}
+	}).catch(error => {
+		if (reader) { reader.onerror = reader.onloadend = null; }
+		throw error;
+	});
 };
 
 /**
@@ -103,31 +174,29 @@ const saveAs = exports.saveAs = function saveAs(content, name) {
  * @param  {natural}        time  Maximum runtime of this asynchronous operation after which it will be cancelled and rejected.
  * @return {Promise}              Promise that rejects if the timeout or an error occurred. If it resolves the operation should have succeeded.
  */
-const writeToClipboard = exports.writeToClipboard = function writeToClipboard(data, time) {
-	return new Promise(function(resolve, reject) {
-		const doc = (this || global).document;
-		function onCopy(event) {
-			try {
-				doc.removeEventListener('copy', onCopy);
-				const transfer = event.clipboardData;
-				transfer.clearData();
-				if (typeof data === 'string') {
-					transfer.setData('text/plain', data);
-				} else {
-					Object.keys(data).forEach(mimeType => transfer.setData(mimeType, data[mimeType]));
-				}
-				event.preventDefault();
-				resolve();
-			} catch (error) { reject(error); }
+const writeToClipboard = exports.writeToClipboard = function writeToClipboard(data, time) { return new Promise(function(resolve, reject) {
+	const document = (this || global).window.document; var done = false;
+	function onCopy(event) { try {
+		if (done) { return; } done = true;
+		document.removeEventListener('copy', onCopy);
+		const transfer = event.clipboardData;
+		transfer.clearData();
+		if (typeof data === 'string') {
+			transfer.setData('text/plain', data);
+		} else {
+			Object.keys(data).forEach(mimeType => transfer.setData(mimeType, data[mimeType]));
 		}
-		setTimeout(function() {
-			reject(Error('Timeout after '+ (time || 1000) +'ms'));
-			doc.removeEventListener('copy', onCopy);
-		}, time || 1000);
-		doc.addEventListener('copy', onCopy);
-		doc.execCommand('copy', false, null);
-	});
-};
+		event.preventDefault();
+		resolve();
+	} catch (error) { reject(error); } }
+	global.setTimeout(function() {
+		if (done) { return; } done = true;
+		document.removeEventListener('copy', onCopy);
+		reject(new Error('Timeout after '+ (time || 1000) +'ms'));
+	}, time || 1000);
+	document.addEventListener('copy', onCopy);
+	document.execCommand('copy', false, null);
+}); };
 
 /**
  * Listen for a DOM Event on an Element only once and removes the listener afterwards.
@@ -142,19 +211,19 @@ const once = exports.once = function once(element, event, callback, capture) {
 };
 
 const whileVisible = exports.whileVisible = function whileVisible(callback, time) {
-	var handle;
+	var handle; const document = (this || global).window.document;
 	function check() {
-		if ((this || global).document.hidden) {
-			return handle && clearInterval(handle);
+		if (document.hidden) {
+			return handle && global.clearInterval(handle);
 		} else {
-			!handle && (handle = setInterval(callback, time));
+			!handle && (handle = global.setInterval(callback, time));
 		}
 	}
 	check();
-	(this || global).document.addEventListener('visibilitychange', check);
+	document.addEventListener('visibilitychange', check);
 	return function cancel() {
-		(this || global).document.addEventListener('visibilitychange', check);
-		handle && clearTimeout(handle);
+		document.addEventListener('visibilitychange', check);
+		handle && global.clearTimeout(handle);
 	};
 };
 
@@ -175,7 +244,7 @@ const getParent = exports.getParent = function getParent(element, selector) {
  * @return {string}            String that matches /^(?!>)((?:^|>){{tagName}}(#{{id}})?(.{{class}})*)*$/
  */
 const getSelector = exports.getSelector = function getSelector(element) {
-	const document = (this || global).document, strings = [ ];
+	const document = (this || global).window.document, strings = [ ];
 	while (element && element !== document) {
 		strings.add(
 			element.tagName
@@ -188,9 +257,9 @@ const getSelector = exports.getSelector = function getSelector(element) {
 };
 
 const onElementChanged = exports.onElementChanged = function onElementChanged(element, attributeFilter, callback) {
-	return new (this || global).MutationObserver(function(mutations, observer) {
+	return new (this || global).window.MutationObserver(function(mutations, observer) {
 		mutations.forEach(function(mutation) {
-			if (mutation.target.getAttribute(mutation.attributeName) != mutation.oldValue) {
+			if (mutation.target.getAttribute(mutation.attributeName) !== mutation.oldValue) {
 				try { callback(mutation.target, mutation.oldValue); } catch(e) {  }
 			}
 		});
@@ -216,13 +285,13 @@ const CreationObserver = exports.CreationObserver = function CreationObserver(el
 		observer.takeRecords();
 	});
 	observer.listeners = listeners;
-	observer.element = element || document;
+	observer.element = element || global.document;
 	Self.set(this, observer);
 };
 function elementCreated(listeners, element) {
 	element.matches && listeners.forEach(function(listener, index) {
 		if (element.matches(listener.selector)) {
-			setTimeout(listener.callback, 0, element);
+			global.setTimeout(listener.callback, 0, element);
 			if (listener.single) {
 				delete listeners[index];
 			}
@@ -262,7 +331,7 @@ CreationObserver.prototype.all = function(selector, callback) {
 	this.add(selector, callback, false);
 
 	for (var element, i = 0; (element = alreadyExisting[i]); i++) {
-		setTimeout(callback.bind(undefined, element), 0);
+		global.setTimeout(callback.bind(undefined, element), 0);
 	}
 };
 
@@ -398,14 +467,14 @@ Object.assign(RemoveObserverPrivate.prototype, {
 });
 
 const notify = exports.notify = function notify(options) {
-	const win = (this || global);
+	const window = (this || global).window, Notification = window.Notification;
 	return new Promise(function(resolve, reject) {
 		function doIt() {
-			const self = new win.Notification(options.title, options);
+			const self = new Notification(options.title, options);
 			self.onclick = resolve;
 			self.onerror = reject;
 			self.onclose = reject;
-			self.onshow = clearTimeout.bind(null, setTimeout(reject, options.timeout || 1500));
+			self.onshow = global.clearTimeout.bind(null, global.setTimeout(reject, options.timeout || 1500));
 		}
 
 		if (Notification.permission === "granted") {
@@ -428,6 +497,7 @@ const notify = exports.notify = function notify(options) {
  * Promise that resolves once the 'DOMContentLoaded' event is/was fired.
  */
 const DOMContentLoaded = exports.DOMContentLoaded = new Promise(function(resolve, reject) {
+	const document = global.document;
 	if (typeof document !== 'object') { return reject(); }
 	if (document.readyState !== 'interactive' && document.readyState !== 'complete') {
 		document.addEventListener('DOMContentLoaded', resolve);

@@ -104,7 +104,11 @@ const spawn = exports.spawn = function spawn(generator, thisArg, args, callSync)
 		}
 	}
 
-	return callSync ? next(undefined) : resolved.then(next);
+	if (callSync) {
+		try { return next(undefined); } catch (error) { return Promise.reject(error); }
+	} else {
+		return resolved.then(next);
+	}
 };
 const { apply, } = Reflect;
 
@@ -341,11 +345,11 @@ const periodic = exports.periodic = function periodic(callback, waitFor) {
 		setTimeout(ping, waitFor(0));
 	});
 };
-const hrtime = (function() { /* global process */
-	if (typeof performance !== 'undefined') {
-		return performance.now.bind(performance); // browser
-	} else if (typeof process !== 'undefined' && typeof process.hrtime === 'function') {
-		return function () { const pair = process.hrtime(); return pair[0] * 1e3 + pair[1] / 1e6; }; // node
+const hrtime = (function() {
+	if (typeof global.performance !== 'undefined') {
+		return global.performance.now.bind(global.performance); // browser
+	} else if (typeof (global.process && global.process.hrtime) === 'function') {
+		return function () { const pair = global.process.hrtime(); return pair[0] * 1e3 + pair[1] / 1e6; }; // node
 	} else { // firefox
 		try {
 			return Components.utils.now;

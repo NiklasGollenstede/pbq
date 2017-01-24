@@ -97,6 +97,7 @@ const mimeTypes = exports.mimeTypes = {
 	bmp: 'image/bmp',
 	css: 'text/css',
 	htm: 'text/html',
+	epub: 'application/epub+zip',
 	flv: 'video/x-flv',
 	gif: 'image/gif',
 	html: 'text/html',

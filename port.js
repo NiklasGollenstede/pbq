@@ -192,7 +192,8 @@ class PortAdapter {
 	 *                             The 4th argument may be an alternative value for `this` in the handler for this message,
 	 *                             which is used if the `thisArg` for the listener is == null.
 	 *                             The 5th argument may be a function that is used once instead of .send() to reply to this single message.
-	 *                             Returns whether the reply function will be called asynchronously.
+	 *                             A trueisch value as 6th argument indicates that handling this message is optional, i.e. it doesn't get rejected if no handler is found.
+	 *                             Returns whether the reply function, if provided, will be called asynchronously.
 	 * @param  {function}  onEnd   Function that should be called at least once when the underlying port closes.
 	 * @return {object}            Any object with .send() and .destroy() methods as specified below.
 	 */
@@ -321,7 +322,7 @@ Port.web_ext_Runtime = class web_ext_Runtime {
 
 	constructor(api, onData) {
 		this.api = api;
-		this.onMessage = (data, sender, reply) => onData(data[0], data[1], data[2], sender, (...args) => reply(args));
+		this.onMessage = (data, sender, reply) => onData(data[0], data[1], data[2], sender, (...args) => reply(args), true);
 		this.sendMessage = api.runtime.sendMessage;
 		this.sendMessageTab = api.tabs ? api.tabs.sendMessage : () => { throw new Error(`Can't send messages to tabs (from within a tab)`); };
 		this.api.runtime.onMessage.addListener(this.onMessage);
@@ -489,7 +490,7 @@ class _Port {
 	}
 }
 
-function onData(name, id, args, altThis, reply) { try {
+function onData(name, id, args, altThis, reply, optional) { try {
 	if (name) {
 		let handler, thisArg;
 		if (this.handlers.has(name)) {
@@ -500,7 +501,7 @@ function onData(name, id, args, altThis, reply) { try {
 			}
 			args.unshift(name);
 		}
-		if (!handler) { throw new Error(`No such handler "${ name }"`); }
+		if (!handler) { if (!optional) { throw new Error(`No such handler "${ name }"`); } else { return false; } }
 		let value; try {
 			this._isRequest = id === 0 ? -1 : 1;
 			value = handler.apply(thisArg != null ? thisArg : altThis, args);
@@ -540,11 +541,12 @@ function onData(name, id, args, altThis, reply) { try {
 	return false;
 } }
 
-function handleReply([ _, id, [ value, ], ]) {
-	if (id < 0) {
-		throw fromJson(value);
+function handleReply(reply) {
+	if (!Array.isArray(reply)) { throw new Error('Unhandled requests'); }
+	if (reply[1] < 0) {
+		throw fromJson(reply[2][0]);
 	} else {
-		return value;
+		return reply[2][0];
 	}
 }
 
@@ -588,4 +590,4 @@ const reportError = typeof console === 'object' ? console.error.bind(console) : 
 
 return Port;
 
-}; if (typeof define === 'function' && define.amd) { define([ 'exports', ], factory); } else { const exp = { }, result = factory(exp) || exp; if (typeof exports === 'object' && typeof module === 'object') { module.exports = result; } else { global[factory.name] = result; if (typeof QueryInterface === 'function') { global.exports = result; global.EXPORTED_SYMBOLS = [ 'exports', ]; } } } })((function() { return this; })());
+}; if (typeof define === 'function' && define.amd) { define([ 'exports', ], factory); } else { const exp = { }, result = factory(exp) || exp; if (typeof exports === 'object' && typeof module === 'object') { module.exports = result; } else { global[factory.name] = result; if (typeof QueryInterface === 'function') { global.exports = result; global.EXPORTED_SYMBOLS = [ 'exports', ]; } } } })((function() { /* jshint strict: false */ return this; })());

@@ -1,20 +1,36 @@
-(function(global) { 'use strict'; // This Source Code Form is subject to the terms of the Mozilla Public License, v. 2.0. If a copy of the MPL was not distributed with this file, You can obtain one at http://mozilla.org/MPL/2.0/.
+(function(global) { 'use strict'; /* globals URL, location, */ // This Source Code Form is subject to the terms of the Mozilla Public License, v. 2.0. If a copy of the MPL was not distributed with this file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
-const document = typeof window !== 'undefined' && window.navigator && window.document;
-const importScripts = typeof window === 'undefined' && typeof navigator === 'object' && typeof importScripts === 'function';
+const document = typeof window !== 'undefined' && global.navigator && global.document;
+const importScripts = typeof window === 'undefined' && typeof navigator === 'object' && typeof global.importScripts === 'function';
+const webExt = document && !document.currentScript && !importScripts && (() => {
+	const api = (global.browser || global.chrome);
+	if (api && api.extension && typeof api.extension.getURL === 'function') { return api; }
+})();
 const isGenerator = code => (/^function\s*\*/).test(code);
 const resolved = Promise.resolve();
 
 const Modules = { }; // id ==> Module
-const Loading =  { }; // url ==> Module (with .loading === true)
+const Loading = { }; // url ==> Module (with .loading === true)
 
 let mainModule = null;
-let baseUrl = '';
+let baseUrl = '', hiddenBaseUrl = null;
 let prefixMap = { };
 let modIdMap = null;
 let defIdMap = null;
 let shimMap = null;
 let loadScript = url => { throw new Error(`No JavaScript loader available to load "${ url }"`); };
+
+{ // set default baseUrl
+	const path = getCallingScript(0);
+	const fromNM = (/\/node_modules\/(?:require|es6lib)\/require\.js$/).test(path);
+	const url = (fromNM ? new URL('../../', path) : new URL('./', location));
+	baseUrl = url.href.slice(0, url.href.length - url.hash.length - url.search.length);
+}
+if (webExt) {
+	const actualBaseUrl = webExt.extension.getURL('');
+	if (baseUrl !== actualBaseUrl) { hiddenBaseUrl = baseUrl; }
+	baseUrl = actualBaseUrl;
+}
 
 function getCallingScript(offset = 0) {
 	const src = document && document.currentScript && document.currentScript.src;
@@ -22,7 +38,9 @@ function getCallingScript(offset = 0) {
 	const stack = (new Error).stack.split(/$/m);
 	const line = stack[(/^Error/).test(stack[0]) + 1 + offset];
 	const parts = line.split(/(?:\@|\(|\ )/g);
-	return parts[parts.length - 1].replace(/\:\d+(?:\:\d+)?\)?$/, '');
+	const url = parts[parts.length - 1].replace(/\:\d+(?:\:\d+)?\)?$/, '');
+	if (hiddenBaseUrl !== null && url.startsWith(hiddenBaseUrl)) { return url.replace(hiddenBaseUrl, baseUrl); }
+	return url;
 }
 
 function parseDepsDestr(factory, name, code) {
@@ -379,9 +397,9 @@ class Module {
 			const error = `The script at "${ url }" did not call define with the expected id`;
 			console.error(error); module.promise.reject(new Error(error));
 		})
-		.catch(() => {
-			const error = `Failed to load script "${ url }" first requested from "${ this.url }"`;
-			console.error(error); module.promise.reject(new Error(error));
+		.catch(error => {
+			const message = `Failed to load script "${ url }" first requested from "${ this.url }"`;
+			console.error(message +', due to:', error); module.promise.reject(new Error(message));
 		});
 		return module.promise.then(() => module.exports);
 	}
@@ -464,7 +482,14 @@ function resolveByPlugin(plugin, from, id) {
 	return resolveId(from, id);
 }
 
-if (document /*&& document.currentScript*/) {
+if (webExt) { // webExtension and not loaded via <script> tag
+	loadScript = url => new Promise((resolve, reject) => webExt.runtime.sendMessage([ 'require.loadScript', 1, [ url, ], ], reply => {
+		if (webExt.runtime.lastError) { return reject(webExt.runtime.lastError); }
+		if (!Array.isArray(reply)) { return reject(new Error('Failed to load script. Bad reply')); }
+		const threw = reply[1] < 0;
+		threw ? reject(reply[2][0]) : resolve();
+	}));
+} else if (document) { // normal DOM window
 	loadScript = url =>	new Promise((resolve, reject) => {
 		const script = document.createElement('script');
 		script.onload = resolve;
@@ -562,17 +587,10 @@ function config(options) {
 
 }
 
-{ // set default baseUrl
-	const path = getCallingScript(0);
-	const fromNM = (/\/node_modules\/(?:require|es6lib)\/require\.js$/).test(path);
-	const url = (fromNM ? new URL('../../', path) : new URL('./', location));
-	baseUrl = url.href.slice(0, url.href.length - url.hash.length - url.search.length);
-}
-
 /// set the config specified in the script tag via < data-...="..." >
 config(document.currentScript && document.currentScript.dataset);
 
 global.define = define;
 global.require = require;
 
-})((function() { return this; })());
+})((function() { /* jshint strict: false */ return this; })());

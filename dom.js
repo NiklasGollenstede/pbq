@@ -126,8 +126,9 @@ const loadFile = exports.loadFile = function loadFile(options) { return new Prom
 	function remove() {
 		if (done) { return true; } done = true;
 		global.clearTimeout(timer);
-		window.removeEventListener('focus', onFocus);
 		document.removeEventListener('change', onChange);
+		window.removeEventListener('focus', onFocus);
+		window.removeEventListener('blur', onBlur);
 		input.remove();
 		return false;
 	}
@@ -141,8 +142,8 @@ const loadFile = exports.loadFile = function loadFile(options) { return new Prom
 /**
  * Loads the data referenced by a Blob (or File) object.
  * @param  {Blob}    blob  The Blob to read.
- * @param  {string}  type  Optional. The type/encoding of the returned data. May be 'string' (default, utf-8),
- *                         'arrayBuffer', dataURL or any string encoding accepted by <FileReader>.readAsText(..., type).
+ * @param  {string}  type  Optional. The type/encoding of the returned data. May be 'string' (default, utf8),
+ *                         'arrayBuffer', 'dataURL' or any string encoding accepted by <FileReader>.readAsText(..., type).
  * @return {Promise<String|ArrayBuffer}  Promise to the data read.
  */
 const readBlob = exports.readBlob = function readBlob(blob, type) {
@@ -151,7 +152,10 @@ const readBlob = exports.readBlob = function readBlob(blob, type) {
 		const window = (this || global).window;
 		reader = new window.FileReader;
 		reader.onerror = reject;
-		reader.onloadend = () => resolve(reader.result);
+		reader.onloadend = () => {
+			reader.onerror = reader.onloadend = null;
+			resolve(reader.result);
+		};
 
 		if (type == null || type === 'string') {
 			reader.readAsText(blob);
@@ -171,7 +175,7 @@ const readBlob = exports.readBlob = function readBlob(blob, type) {
 /**
  * Attempts to write data to the users clipboard.
  * @param  {string|object}  data  Ether a plain string or an object of multiple pairs { [mimeType]: data, } to write.
- * @param  {natural}        time  Maximum runtime of this asynchronous operation after which it will be cancelled and rejected.
+ * @param  {natural}        time  Maximum runtime of this asynchronous operation after which it will be canceled and rejected.
  * @return {Promise}              Promise that rejects if the timeout or an error occurred. If it resolves the operation should have succeeded.
  */
 const writeToClipboard = exports.writeToClipboard = function writeToClipboard(data, time) { return new Promise(function(resolve, reject) {

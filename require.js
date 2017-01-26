@@ -2,7 +2,7 @@
 
 const document = typeof window !== 'undefined' && global.navigator && global.document;
 const importScripts = typeof window === 'undefined' && typeof navigator === 'object' && typeof global.importScripts === 'function';
-const webExt = document && !document.currentScript && !importScripts && (() => {
+const webExt = document && !importScripts && (() => {
 	const api = (global.browser || global.chrome);
 	if (api && api.extension && typeof api.extension.getURL === 'function') { return api; }
 })();
@@ -482,7 +482,19 @@ function resolveByPlugin(plugin, from, id) {
 	return resolveId(from, id);
 }
 
-if (webExt) { // webExtension and not loaded via <script> tag
+function onContentScriptMessage(message, sender, reply) {
+	if (!Array.isArray(message) || !Array.isArray(message[2]) || message[0] !== 'require.loadScript' || message[1] !== 1 || !sender.tab) { return; }
+	let url = message[2][0];
+	if (!url.startsWith(baseUrl)) { return reply([ '', -1, [ 'Can only load local resources', ], ]); }
+	url = url.slice(baseUrl.length - 1);
+	webExt.tabs.executeScript(sender.tab.id, { file: url, }, () => {
+		if (webExt.runtime.lastError) { return reply([ '', -1, [ webExt.runtime.lastError.message, ], ]); }
+		return reply([ '', 1, [ null, ], ]);
+	});
+	return true;
+}
+
+if (webExt && !document.currentScript) { // webExtension and not loaded via <script> tag
 	loadScript = url => new Promise((resolve, reject) => webExt.runtime.sendMessage([ 'require.loadScript', 1, [ url, ], ], reply => {
 		if (webExt.runtime.lastError) { return reject(webExt.runtime.lastError); }
 		if (!Array.isArray(reply)) { return reject(new Error('Failed to load script. Bad reply')); }
@@ -585,6 +597,14 @@ function config(options) {
 		});
 	}
 
+	if ('serveContentScripts' in options) {
+		const value = options.serveContentScripts;
+		if (value === 'false' || value === false) {
+			webExt.runtime.onMessage.removeListener(onContentScriptMessage);
+		} else {
+			webExt.runtime.onMessage.addListener(onContentScriptMessage);
+		}
+	}
 }
 
 /// set the config specified in the script tag via < data-...="..." >

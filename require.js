@@ -69,7 +69,7 @@ function parseDepsDestr(factory, name, code) {
 		}, };
 	}
 
-	index = (/^\s*(?:function)?\s*\*?\s*\(?\s*/).exec(code)[0].length; // skip 'function * ('
+	index = (/^\s*(?:async\s*)?(?:function\s*)?(?:\*\s*)?(?:\(\s*)?/).exec(code)[0].length; // skip ' async function * ( '
 	if (code[index] === ')') { return [ ]; } // argument list closes immediately
 	if (code[index] !== '{') { return [ ]; } // no destructuring assignment
 	const deps = [ ];

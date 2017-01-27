@@ -23,8 +23,7 @@ let   loadScript = url => { throw new Error(`No JavaScript loader available to l
 { // set default baseUrl
 	const path = getCallingScript(0);
 	const fromNM = (/\/node_modules\/(?:require|es6lib)\/require\.js$/).test(path);
-	const url = (fromNM ? new URL('../../', path) : new URL('./', location));
-	baseUrl = url.href.slice(0, url.href.length - url.hash.length - url.search.length);
+	baseUrl = path.split('/').slice(0, fromNM ? -3 : -1).join('/') +'/';
 }
 if (webExt) {
 	const actualBaseUrl = webExt.extension.getURL('');

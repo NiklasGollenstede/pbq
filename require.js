@@ -4,7 +4,7 @@ const document = typeof window !== 'undefined' && global.navigator && global.doc
 const importScripts = typeof window === 'undefined' && typeof navigator === 'object' && typeof global.importScripts === 'function';
 const webExt = document && !importScripts && (() => {
 	const api = (global.browser || global.chrome);
-	if (api && api.extension && typeof api.extension.getURL === 'function') { return api; }
+	return api && api.extension && typeof api.extension.getURL === 'function' && api;
 })();
 const isGenerator = code => (/^function\s*\*/).test(code);
 const resolved = Promise.resolve();
@@ -12,13 +12,13 @@ const resolved = Promise.resolve();
 const Modules = { }; // id ==> Module
 const Loading = { }; // url ==> Module (with .loading === true)
 
-let mainModule = null;
-let baseUrl = '', hiddenBaseUrl = null;
-let prefixMap = { };
-let modIdMap = null;
-let defIdMap = null;
-let shimMap = null;
-let loadScript = url => { throw new Error(`No JavaScript loader available to load "${ url }"`); };
+let   mainModule = null;
+let   baseUrl = '';
+let   hiddenBaseUrl = null;
+const prefixMap = { };
+let   modIdMap = null;
+let   defIdMap = null;
+let   loadScript = url => { throw new Error(`No JavaScript loader available to load "${ url }"`); };
 
 { // set default baseUrl
 	const path = getCallingScript(0);
@@ -70,11 +70,11 @@ function parseDepsDestr(factory, name, code) {
 	}
 
 	index = (/^\s*(?:async\s*)?(?:function\s*)?(?:\*\s*)?(?:\(\s*)?/).exec(code)[0].length; // skip ' async function * ( '
-	if (code[index] === ')') { return [ ]; } // argument list closes immediately
-	if (code[index] !== '{') { return [ ]; } // no destructuring assignment
+	if (code[index] === ')') { return null; } // argument list closes immediately
+	if (code[index] !== '{') { return null; } // no destructuring assignment
 	const deps = [ ];
 
-	loop: do {
+	loop: do { // eslint-disable-line
 		nextLine();
 		switch (code[index]) {
 			case '}': break loop; // exit
@@ -235,7 +235,7 @@ function define(/* id, deps, factory */) {
 	if (!deps) {
 		if (
 			factory.length === 1
-			&& (deps = parseDepsDestr(factory, id, code)).length
+			&& (deps = parseDepsDestr(factory, id, code))
 		) {
 			special = true;
 		} else {
@@ -243,7 +243,7 @@ function define(/* id, deps, factory */) {
 		}
 	}
 
-	const promise = resolved.then(() => Promise.all(deps.map(dep => { switch (dep.name || dep) {
+	resolved.then(() => Promise.all(deps.map(dep => { switch (dep.name || dep) {
 		case 'require': return module.require;
 		case 'exports': return module.exports;
 		case 'module': return module;
@@ -330,6 +330,7 @@ class Module {
 		} else {
 			throw new Error(`require must be called with (string) or (Array, function)`);
 		}
+		return null;
 	}
 
 	requireAsync(name, fast, plugin) {
@@ -392,10 +393,10 @@ class Module {
 			if (this.isShim) {
 				module._loaded = module._resolved = module.isShim = true;
 				module.promise.resolve(module.exports);
-				return console.info(`The shim dependency "${ url }" of "${ this.id }" didn't call define`);
+				return void console.info(`The shim dependency "${ url }" of "${ this.id }" didn't call define`);
 			}
-			const error = `The script at "${ url }" did not call define with the expected id`;
-			console.error(error); module.promise.reject(new Error(error));
+			const message = `The script at "${ url }" did not call define with the expected id`;
+			console.error(message); module.promise.reject(new Error(message));
 		})
 		.catch(error => {
 			const message = `Failed to load script "${ url }" first requested from "${ this.url }"`;
@@ -417,7 +418,7 @@ const globalModule = new Module(null, '', '');
 const require = globalModule.require;
 
 function PromiseCapability() {
-	let y, n, promise = new Promise((_y, _n) => (y = _y, n = _n));
+	let y, n; const promise = new Promise((_y, _n) => ((y = _y), (n = _n)));
 	promise.resolve = y;
 	promise.reject = n;
 	return promise;
@@ -446,7 +447,7 @@ function resolveId(from, to) {
 	.sort((a, b) => b.length - a.length)
 	.map(key => modIdMap[key])
 	.concat(defIdMap || [ ]);
-	for (let map of maps) {
+	for (let map of maps) { // eslint-disable-line
 		const prefix = Object.keys(map)
 		.filter(prefix => isIdPrefix(id, prefix))
 		.reduce((a, b) => a.length > b.length ? a : b, '');
@@ -483,7 +484,7 @@ function resolveByPlugin(plugin, from, id) {
 }
 
 function onContentScriptMessage(message, sender, reply) {
-	if (!Array.isArray(message) || !Array.isArray(message[2]) || message[0] !== 'require.loadScript' || message[1] !== 1 || !sender.tab) { return; }
+	if (!Array.isArray(message) || !Array.isArray(message[2]) || message[0] !== 'require.loadScript' || message[1] !== 1 || !sender.tab) { return false; }
 	let url = message[2][0];
 	if (!url.startsWith(baseUrl)) { return reply([ '', -1, [ 'Can only load local resources', ], ]); }
 	url = url.slice(baseUrl.length - 1);
@@ -496,8 +497,8 @@ function onContentScriptMessage(message, sender, reply) {
 
 if (webExt && !document.currentScript) { // webExtension and not loaded via <script> tag
 	loadScript = url => new Promise((resolve, reject) => webExt.runtime.sendMessage([ 'require.loadScript', 1, [ url, ], ], reply => {
-		if (webExt.runtime.lastError) { return reject(webExt.runtime.lastError); }
-		if (!Array.isArray(reply)) { return reject(new Error('Failed to load script. Bad reply')); }
+		if (webExt.runtime.lastError) { return void reject(webExt.runtime.lastError); }
+		if (!Array.isArray(reply)) { return void reject(new Error('Failed to load script. Bad reply')); }
 		const threw = reply[1] < 0;
 		threw ? reject(reply[2][0]) : resolve();
 	}));
@@ -580,14 +581,14 @@ function config(options) {
 
 			define(id, deps, function*() {
 				(yield loadScript(url).catch(() => {
-					const error = `Failed to load script "${ url }" first requested from ${ this.url }.js`;
-					console.error(error); throw new Error(error);
+					const message = `Failed to load script "${ url }" for shim`;
+					console.error(message); throw new message(message);
 				}));
 				Modules[id]._loaded = true;
 				const exports = globalPath.reduce((object, key) => object != null && object[key], global);
 				if (!exports) {
-					const error = `The script at "${ url }" did not set the global variable "${ globalPath.join('.') }"`;
-					console.error(error); throw new Error(error);
+					const message = `The script at "${ url }" did not set the global variable "${ globalPath.join('.') }" for shim`;
+					console.error(message); throw new Error(message);
 				}
 				const result = init && (yield init.apply(global, arguments));
 				return result !== undefined ? result : globalPath.length ? exports : undefined;
@@ -613,4 +614,4 @@ config(document.currentScript && document.currentScript.dataset);
 global.define = define;
 global.require = require;
 
-})((function() { /* jshint strict: false */ return this; })());
+})(this);

@@ -1,21 +1,26 @@
 {
-  "description": "lib",
-  "dependencies": {
-  },
-  "devDependencies": {
-    "chai": "^3.3.0",
-    "chai-as-promised": "^5.1.0",
-    "mocha": "^2.3.3"
-  },
-  "license": "MPL-2.0",
-  "name": "es6lib",
-  "repository": {
-    "type": "git",
-    "url": "https://github.com/NiklasGollenstede/es6lib"
-  },
-  "scripts": {
-    "test": "mocha --require test/node",
-    "test-debug": "node-debug _mocha --debug --require test/node"
-  },
-  "version": "0.0.1"
+	"name": "es6lib",
+	"description": "lib",
+	"version": "0.0.1",
+	"author": "Niklas Gollenstede",
+	"license": "MPL-2.0",
+	"repository": {
+		"type": "git",
+		"url": "https://github.com/NiklasGollenstede/es6lib"
+	},
+	"dependencies": {
+	},
+	"devDependencies": {
+		"chai": "^3.3.0",
+		"chai-as-promised": "^5.1.0",
+		"mocha": "^2.3.3",
+		"eslintrc": "NiklasGollenstede/eslintrc"
+	},
+	"scripts": {
+		"test": "mocha --require test/node",
+		"test-debug": "node-debug _mocha --debug --require test/node"
+	},
+	"eslintConfig": {
+		"extends": "./node_modules/eslintrc/web-ext.js"
+	}
 }

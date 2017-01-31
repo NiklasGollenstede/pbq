@@ -1,4 +1,4 @@
-(() => { 'use strict'; const factory = function es6lib_template(exports) { // This Source Code Form is subject to the terms of the Mozilla Public License, v. 2.0. If a copy of the MPL was not distributed with this file, You can obtain one at http://mozilla.org/MPL/2.0/.
+(function(global) { 'use strict'; const factory = function es6lib_template(exports) { // This Source Code Form is subject to the terms of the Mozilla Public License, v. 2.0. If a copy of the MPL was not distributed with this file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
 /**
  * 'ForEach' control flow element, repeats all elements between this value and the corresponding
@@ -8,7 +8,7 @@
  *                            While iterating, the forEach-callbacks second value will be the @see Index.
  * @return {ControlFlowElement}  Object that starts the loop.
  */
-const ForEach = exports.ForEach = function ForEach(name, array) { return { command: ForEach, array: array || name, name }; };
+const ForEach = exports.ForEach = function ForEach(name, array) { return { command: ForEach, array: array || name, name, }; };
 
 /**
  * Same as @see ForEach, only that it uses Object.keys(object) to get ist's @see Index'es
@@ -16,7 +16,7 @@ const ForEach = exports.ForEach = function ForEach(name, array) { return { comma
  * @param  {object}  object  Object that will be iterated over for every key in Object.keys(object).
  * @return {ControlFlowElement}  Object that starts the loop.
  */
-const ForOf = exports.ForOf = function ForOf(name, object) { return { command: ForOf, object: object || name, name }; };
+const ForOf = exports.ForOf = function ForOf(name, object) { return { command: ForOf, object: object || name, name, }; };
 
 /**
  * Loop while 'generator' yields values
@@ -56,7 +56,7 @@ const Index = exports.Index = function Index(name) { return { command: Index, na
 /**
  * Alias for Index
  */
-const Key = exports.Key = Index;
+exports.Key = Index;
 
 /**
  * Gets an array or object currently iterated over.
@@ -81,27 +81,27 @@ const Call = exports.Call = function Call(args, callback, thisArg) {
 };
 
 // read-only-assign 'command' properties to each ControlFlowElement function, so that they can be used like their return values
-Object.keys(exports).forEach(function(key) { Object.defineProperty(exports[key], 'command', { value: exports[key], }); });
+Object.keys(exports).forEach(key => Object.defineProperty(exports[key], 'command', { value: exports[key], }));
 
 /**
  * Ends a ControlFlowElement's branch
  * Using End's properties (ForEach/ForOf/While/If) introduces type safety and is encouraged.
  * @return {ControlFlowElement}  Object that ends the current branch.
  */
-const End = exports.End = (function(End) { return Object.freeze(Object.assign(End, {
+const End = exports.End = (End => Object.freeze(Object.assign(End, {
 	ForEach: { command: End, value: ForEach, },
 	ForOf: { command: End, value: ForOf, },
 	While: { command: End, value: While, },
 	If: { command: End, value: If, },
 	command: End,
-})); })({ });
+})))({ });
 
 /**
  * Excludes a value from the mapping.
  * @param {any}  value  Value that will be directly used instead of beeing mapped.
  */
-const NoMap = exports.NoMap = function NoMap(value) { return { command: NoMap, value, toString: noMaptoString }; };
-function noMaptoString() { return this && this.value || ''; }
+const NoMap = exports.NoMap = function NoMap(value) { return { command: NoMap, value, toString: noMaptoString, }; };
+function noMaptoString() { return this && this.value || ''; } // eslint-disable-line no-invalid-this
 
 /**
  * Creates a new template engine instance that can ether be called
@@ -186,7 +186,7 @@ TemplateEngine.prototype = {
 		const parts = this.parts, mapper = this.options.mapper;
 
 		// forEch odd indexed part of parts, i.e. all value parts
-		for (var index = 1, length = parts.length, part = parts[index]; index < length; part = parts[index += 2]) {
+		for (let index = 1, length = parts.length, part = parts[index]; index < length; part = parts[index += 2]) {
 			if (!(part && (part.command === NoMap || part === emptyValueNoStrip || part === emptyValue))) {
 				parts[index] = mapper(part);
 			}
@@ -264,9 +264,7 @@ TemplateEngine.prototype = {
 
 			if (!current || !(/object|function/).test(typeof current) || !current.command) {
 				this.parts.push(current);
-			}
-			else
-			switch (current.command) {
+			} else { switch (current.command) {
 				case Value: {
 					const tupel = (current === Value ? this.top() : this.find(current.name));
 					this.parts.push(tupel.array[tupel.index]);
@@ -308,7 +306,7 @@ TemplateEngine.prototype = {
 				} break;
 				case While: {
 					this.parts.push(emptyValue);
-					loopIndex = this.While(loopIndex, current);
+					loopIndex = this.while(loopIndex, current);
 				} break;
 				case Iterated: {
 					this.parts.push((current === Iterated ? this.top() : this.find(current.name)).array);
@@ -316,7 +314,7 @@ TemplateEngine.prototype = {
 				default: {
 					this.parts.push(current);
 				}
-			}
+			} }
 		} while (++loopIndex <= endIndex);
 	},
 
@@ -324,12 +322,12 @@ TemplateEngine.prototype = {
 		const array = element.array, name = element.name, stopIndex = element.closing;
 		// console.log('_forEach', startIndex, array, stopIndex);
 
-		const tupel = { array, name };
+		const tupel = { array, name, };
 		this.stack.push(tupel);
-		array.forEach(function(item, index) {
+		array.forEach((item, index) => {
 			tupel.index = index;
 			this.processRange(startIndex + 1, stopIndex);
-		}.bind(this));
+		});
 		this.stack.pop();
 		return stopIndex;
 	},
@@ -338,17 +336,17 @@ TemplateEngine.prototype = {
 		const object = element.object, name = element.name, stopIndex = element.closing;
 		// console.log('_forOf', startIndex, array, stopIndex);
 
-		const tupel = { array: object, name };
+		const tupel = { array: object, name, };
 		this.stack.push(tupel);
-		Object.keys(object).forEach(function(index) {
+		Object.keys(object).forEach(index => {
 			tupel.index = index;
 			this.processRange(startIndex + 1, stopIndex);
-		}.bind(this));
+		});
 		this.stack.pop();
 		return stopIndex;
 	},
 
-	While(startIndex, element) {
+	while(startIndex, element) {
 		const generator = element.generator, name = element.name, stopIndex = element.closing;
 		// console.log('_while', startIndex, generator, stopIndex);
 
@@ -356,7 +354,7 @@ TemplateEngine.prototype = {
 		const array = [];
 		const tupel = { array, name, index: -1, };
 		this.stack.push(tupel);
-		for (let value of generator(top.array[top.index], top.index, top.array)) {
+		for (const value of generator(top.array[top.index], top.index, top.array)) {
 			array.push(value);
 			tupel.index++;
 			this.processRange(startIndex + 1, stopIndex);
@@ -368,10 +366,10 @@ TemplateEngine.prototype = {
 	findBrackets() {
 		const stack = [];
 		const opening = [ ForEach, ForOf, While, If, ];
-		this.vars.forEach(function(value, index) {
+		this.vars.forEach((value, index) => {
 			if (!value) { return; }
 			if (value.command === End) {
-				let top = stack.pop();
+				const top = stack.pop();
 				if (!top) { throw Error('Unexpected End'+ (value.value ? ('.'+ value.value.name) : '') +' at value '+ index); }
 				if (value.value === undefined || value.value === top.command) {
 					top.closing = index;
@@ -393,7 +391,7 @@ TemplateEngine.prototype = {
 			const top = this.top();
 			return callback.call(thisArg, top.array[top.index], top.index, top.array);
 		}
-		return callback.apply(thisArg, args.map(function(value) {
+		return callback.apply(thisArg, args.map(value => {
 			const tupel = value.command === value ? this.top() : this.find(value.name);
 			// console.log('tupel', tupel, value);
 			if (value.command === Value) {
@@ -403,8 +401,8 @@ TemplateEngine.prototype = {
 			} else if (value.command === Iterated) {
 				return tupel.array;
 			}
-			throw 'Call\'s arguments must be Value or Index';
-		}.bind(this)));
+			throw new Error('Call\'s arguments must be Value or Index');
+		}));
 	},
 };
 
@@ -417,4 +415,5 @@ function emptyValue() { }
 function emptyValueNoStrip() { }
 emptyValue.toString = emptyValueNoStrip.toString = function() { return ''; };
 
-}; if (typeof define === 'function' && define.amd) { define([ 'exports', ], factory); } else { const exports = { }, result = factory(exports) || exports; if (typeof exports === 'object' && typeof module === 'object') { module.exports = result; } else { window[factory.name] = result; } } })();
+}; if (typeof define === 'function' && define.amd) { define([ 'exports', ], factory); } else { const exp = { }, result = factory(exp) || exp; if (typeof exports === 'object' && typeof module === 'object') { module.exports = result; } else { global[factory.name] = result; } } })((function() { return this; })()); // eslint-disable-line
+

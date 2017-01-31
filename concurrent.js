@@ -1,93 +1,109 @@
 (function(global) { 'use strict'; const factory = function es6lib_concurrent(exports) { // This Source Code Form is subject to the terms of the Mozilla Public License, v. 2.0. If a copy of the MPL was not distributed with this file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
-const resolved = Promise.resolve();
+const P_resolve = Promise.resolve.bind(Promise), P_reject = Promise.reject.bind(Promise), resolved = P_resolve();
 
 const SymbolIterator = typeof Symbol === 'function' && typeof Symbol.iterator === 'symbol' ? Symbol.iterator : '[[Symbol.iterator]]';
 
-const setTimeout = global.setTimeout || (function() { try { return require('sdk/'+'timers').setTimeout; } catch (_) { } });
+const setTimeout = global.setTimeout || (function() { try { return require('sdk/'+'timers').setTimeout; } catch (_) { return null; } });
 
 const Self = new WeakMap;
 
 /**
  * Returns a new Promise that has its `resolve` and `reject` functions as own properties.
  */
-const Resolvable = exports.Resolvable = function Resolvable() {
-	let resolve, reject, promise = new Promise((_y, _n) => (resolve = _y, reject = _n));
+exports.Resolvable = Resolvable; function Resolvable() {
+	let resolve, reject; const promise = new Promise((_y, _n) => ((resolve = _y), (reject = _n)));
 	promise.resolve = resolve;
 	promise.reject = reject;
 	return promise;
-};
+}
 
 /**
  * Returns a new Promise with its `resolve` and `reject` functions as an object of { promise, resolve, reject, }.
  */
-const PromiseCapability = exports.PromiseCapability = function PromiseCapability() {
-	let resolve, reject, promise = new Promise((_y, _n) => (resolve = _y, reject = _n));
+exports.PromiseCapability = PromiseCapability; function PromiseCapability() {
+	let resolve, reject; const promise = new Promise((_y, _n) => ((resolve = _y), (reject = _n)));
 	return { promise, resolve, reject, };
-};
+}
 
 /**
  * @param  {uint}    ms  Time to "sleep" in milliseconds
  * @return {Promise}     Resolves to undefined after 'ms' milliseconds
  */
-const sleep = exports.sleep = function sleep(ms) {
-	return new Promise(function(done) { setTimeout(done, ms); });
-};
+exports.sleep = sleep; function sleep(ms) {
+	return new Promise(done => setTimeout(done, ms));
+}
+
+/**
+ * Returns a Promise that resolves to whether a promise resolves or rejects.
+ * @param  {Promise<any>}      promise  A Promise that may resolve or reject.
+ * @return {Promise<boolean>}           A Promise that resolves to: true if promise rejects and false if promise resolves.
+ */
+exports.rejects = rejects; function rejects(promise) {
+	return P_resolve(promise).then(() => false, () => true);
+}
+
+/**
+ * Returns a Promise that resolves to whether the first promise resolves before the second.
+ * @param  {Promise<any>}      _true   Promise whose resolution results in true.
+ * @param  {Promise<any>}      _false  Promise whose resolution results in false.
+ * @return {Promise<boolean>}          A Promise that resolves to true/false as described above, or rejects if either Promise rejects first.
+ */
+exports.before = before; function before(_true, _false) {
+	return Promise.race([ P_resolve(_true).then(() => true), P_resolve(_false).then(() => false), ]);
+}
 
 /**
  * Returns a new node-style callback with a 'promise' property that will be resolved/rejected when the callback gets called.
  */
-const promiseCallback = exports.promiseCallback = function promiseCallback() {
-	var ret;
-	const promise = new Promise(function(resolve, reject) {
-		ret = function(err, res) { err ? reject(err) : resolve(res); };
-	});
-	ret.promise = promise;
-	return ret;
-};
+exports.promiseCallback = promiseCallback; function promiseCallback() {
+	let callback; const promise = new Promise((resolve, reject) => (callback = function(err, res) {
+		err ? reject(err) : resolve(res);
+	}));
+	callback.promise = promise;
+	return callback;
+}
 
 /**
  * Turns an asynchronous callback method into one that returns a promise
  * @param  {function}  callUlater  Method that takes an callback(error, value) as last argument
  * @return {function}              Method that returns a Promise to it's asynchronous value
  */
-const promisify = exports.promisify = function promisify(callUlater) {
+exports.promisify = promisify; function promisify(callUlater) {
 	return function promisifyed(/*arguments*/) {
 		return new Promise((resolve, reject) => {
-			callUlater.call(this, ...arguments, (err, res) => err ? reject(err) : resolve(res));
+			callUlater.call(this, ...arguments, (err, res) => err ? reject(err) : resolve(res)); // eslint-disable-line no-invalid-this
 		});
 	};
-};
+}
 
-const promisifyAll = exports.promisifyAll = function promisifyAll(object, prefix, keys) {
+exports.promisifyAll = promisifyAll; function promisifyAll(object, prefix, keys) {
 	prefix = prefix || '';
 	keys = keys || Object.keys(object);
-	keys.forEach(function(key) {
-		object[prefix + key] = promisify(object[key]);
-	});
-};
+	keys.forEach(key => (object[prefix + key] = promisify(object[key])));
+}
 
 /**
  * Turns a method that returns a promise into one that accepts a callback as last parameter.
  * @param  {function}  promiser  Method that returns a Promise to it's asynchronous value
  * @return {function}            Method that takes an callback(error, value) as last argument
  */
-const promised = exports.promised = function promised(promiser) {
+exports.promised = promised; function promised(promiser) {
 	return function(/*...args, callback*/) {
 		const callback = Array.prototype.pop.call(arguments);
-		promiser.apply(this, arguments)
+		promiser.apply(this, arguments) // eslint-disable-line no-invalid-this
 		.then(callback.bind(null, null), callback);
 	};
-};
+}
 
 /**
- * Asynchronous task spawner. Subset of Task.js. Executes immediately. Uses global 'Promise'.
+ * Asynchronous task spawner. Subset of Task.js. Executes immediately.
  * @param  {function*}  generator  Generator function that yields promises to asynchronous values which are returned to the generator once the promises are fulfilled
  * @param  {object}     thisArg    'this' in generator
  * @param  {Arguments}  args       Arguments for generator
  * @return {Promise}               Promise of the return value of the generator
  */
-const spawn = exports.spawn = function spawn(generator, thisArg, args, callSync) {
+exports.spawn = spawn; function spawn(generator, thisArg, args, callSync) {
 	const iterator = apply(generator, thisArg, args || [ ]);
 
 	function next(arg) {
@@ -98,18 +114,18 @@ const spawn = exports.spawn = function spawn(generator, thisArg, args, callSync)
 	}
 	function handle(result) {
 		if (result.done) {
-			return Promise.resolve(result.value);
+			return P_resolve(result.value);
 		} else {
-			return Promise.resolve(result.value).then(next, _throw);
+			return P_resolve(result.value).then(next, _throw);
 		}
 	}
 
 	if (callSync) {
-		try { return next(undefined); } catch (error) { return Promise.reject(error); }
+		try { return next(undefined); } catch (error) { return P_reject(error); }
 	} else {
 		return resolved.then(next);
 	}
-};
+}
 const { apply, } = Reflect;
 
 /**
@@ -123,10 +139,10 @@ const { apply, } = Reflect;
 const _async = exports.async = exports._async = function _async(generator, options = { }) {
 	return options.catch
 	? function async(/*arguments*/) {
-		return spawn(generator, this, arguments, options.callSync).catch(options.catch);
+		return spawn(generator, this, arguments, options.callSync).catch(options.catch); // eslint-disable-line no-invalid-this
 	}
 	: function async(/*arguments*/) {
-		return spawn(generator, this, arguments, options.callSync);
+		return spawn(generator, this, arguments, options.callSync); // eslint-disable-line no-invalid-this
 	};
 };
 
@@ -143,7 +159,7 @@ const _async = exports.async = exports._async = function _async(generator, optio
  *                                        will be used instead and be deleted afterwards.
  * @return {class|function}               The new or modified constructor. @see `constructor` param
  */
-const asyncClass = exports.asyncClass = function asyncClass(constructor, extending, prototype) {
+exports.asyncClass = asyncClass; function asyncClass(constructor, extending, prototype) {
 	if (arguments.length === 1) {
 		prototype = constructor; constructor = prototype.constructor;
 		extending = prototype.extends === undefined ? Object : prototype.extends;
@@ -154,7 +170,7 @@ const asyncClass = exports.asyncClass = function asyncClass(constructor, extendi
 	const ctor = !isGenerator(constructor) ? constructor
 	: class ctor extends extending {
 		constructor(/*arguments*/) {
-			return Promise.resolve(extending ? super() : null)
+			return P_resolve(extending ? super() : null) // eslint-disable-line constructor-super
 			.then(() => spawn(constructor, this, arguments))
 			.then(value =>
 				value != null && (typeof value === 'object' || typeof value === 'function')
@@ -178,7 +194,7 @@ const asyncClass = exports.asyncClass = function asyncClass(constructor, extendi
 		Object.defineProperty(ctor.prototype, key, desc);
 	});
 	return ctor;
-};
+}
 function isGenerator(func) {
 	return typeof func === 'function' && func.constructor && func.constructor.name === 'GeneratorFunction';
 }
@@ -186,7 +202,7 @@ function isGenerator(func) {
 /**
  * Turns a readable Stream into an asynchronous iterator over it's 'data' and 'end' events.
  * Receives and yields the values of 'data' events until after ether 'end' or 'error' is emitted.
- * If the Stream ends due to 'error', a Promise.reject(error) is returned as the last value.
+ * If the Stream ends due to 'error', a P_reject(error) is returned as the last value.
  * If the Stream ends due to 'end', that events data is returned as the last value.
  * To stop listening on the stream, end the iterator and clear it's data, call throw().
  * Do not call next() while the previous promise is pending.
@@ -216,11 +232,11 @@ const StreamIterator = exports.StreamIterator = class StreamIterator {
 					self.nextData(data);
 					self.promise = self.nextData = null;
 				} else {
-					self.buffer.push(Promise.resolve(data));
+					self.buffer.push(P_resolve(data));
 				}
 			},
 			throw(error) {
-				self.return(Promise.reject(error));
+				self.return(P_reject(error));
 			},
 			return(data) {
 				if (self.done) { return; }
@@ -255,10 +271,10 @@ const StreamIterator = exports.StreamIterator = class StreamIterator {
 			return { value: null, done: true, };
 		}
 		if (!self.promise) {
-			self.promise = new Promise(done => self.nextData = done);
+			self.promise = new Promise(done => (self.nextData = done));
 			return { value: self.promise, done: false, };
 		}
-		return { value: Promise.reject(new Error('No data available, await previous promise before iterating')), done: false, };
+		return { value: P_reject(new Error('No data available, await previous promise before iterating')), done: false, };
 	}
 
 	/**
@@ -298,7 +314,7 @@ const StreamIterator = exports.StreamIterator = class StreamIterator {
  */
 const forOn = exports.forOn = _async(function*(iterable, callback) {
 	const isIterable = typeof iterable[SymbolIterator] === 'function'; // TODO: this doesn't work ...
-	for (let value of isIterable ? iterable : new StreamIterator(iterable)) {
+	for (const value of isIterable ? iterable : new StreamIterator(iterable)) {
 		(yield callback((yield value)));
 	}
 });
@@ -314,9 +330,9 @@ const forOn = exports.forOn = _async(function*(iterable, callback) {
 forOn.reduce = function(iterable, callback, initial) {
 	let value = initial, first = arguments.length <= 2;
 	return forOn(iterable, (data) => {
-		if (first) { value = data; first = false; return; }
-		return Promise.resolve(callback(value, data)).then(done => value = done);
-	}).then(() => first ? Promise.reject(new TypeError('reduce of empty iterable with no initial value')) : value);
+		if (first) { value = data; first = false; return null; }
+		return P_resolve(callback(value, data)).then(done => (value = done));
+	}).then(() => first ? P_reject(new TypeError('reduce of empty iterable with no initial value')) : value);
 };
 
 /**
@@ -327,43 +343,31 @@ forOn.reduce = function(iterable, callback, initial) {
  * @return {Promise}             Promise to the true'ish value callback finally returns.
  * @throws {Promise}             Retuned Promise is rejected if callback throws or returns a rejected Promise.
  */
-const periodic = exports.periodic = function periodic(callback, waitFor) {
+exports.periodic = periodic; function periodic(callback, waitFor) {
 	// TODO: test
 	typeof waitFor === 'function' || (waitFor = (function() { return this; }).bind(waitFor || 0));
-	return new Promise(function(resolve, reject) {
-		var expected = hrtime(), index = 0;
+	return new Promise((resolve, reject) => {
+		let expected = now(), index = 0;
 		function ping() {
-			var value;
-			try { value = callback(); } catch (error) { return reject(error); }
+			let value; try { value = callback(); } catch (error) { return void reject(error); }
 			(value && typeof value.then === 'function') ? value.then(pong, reject) : pong(value);
 		}
 		function pong(value) {
-			if (value) { return resolve(value); }
-			try { expected += waitFor(++index); } catch (error) { return reject(error); }
-			setTimeout(ping, expected - hrtime());
+			if (value) { return void resolve(value); }
+			try { expected += waitFor(++index); } catch (error) { return void reject(error); }
+			setTimeout(ping, expected - now());
 		}
 		setTimeout(ping, waitFor(0));
 	});
-};
-const hrtime = (function() {
-	if (typeof global.performance !== 'undefined') {
-		return global.performance.now.bind(global.performance); // browser
-	} else if (typeof (global.process && global.process.hrtime) === 'function') {
-		return function () { const pair = global.process.hrtime(); return pair[0] * 1e3 + pair[1] / 1e6; }; // node
-	} else { // firefox
-		try {
-			return Components.utils.now;
-		} catch (_) { }
-		return require("chr" + "ome").Cu.now;
-	}
-})();
+}
+const { now, } = global.Date;
 
 /**
  * Instantly asynchronously executes a callback as soon as possible.
  * @param  {function}  callback  Callback that will be executed without this or arguments.
  */
-const instantly = exports.instantly = function instantly(callback) {
+exports.instantly = instantly; function instantly(callback) {
 	resolved.then(callback);
-};
+}
 
-}; if (typeof define === 'function' && define.amd) { define([ 'exports', ], factory); } else { const exp = { }, result = factory(exp) || exp; if (typeof exports === 'object' && typeof module === 'object') { module.exports = result; } else { global[factory.name] = result; if (typeof QueryInterface === 'function') { global.exports = result; global.EXPORTED_SYMBOLS = [ 'exports', ]; } } } })((function() { return this; })());
+}; if (typeof define === 'function' && define.amd) { define([ 'exports', ], factory); } else { const exp = { }, result = factory(exp) || exp; if (typeof exports === 'object' && typeof module === 'object') { module.exports = result; } else { global[factory.name] = result; if (typeof QueryInterface === 'function') { global.exports = result; global.EXPORTED_SYMBOLS = [ 'exports', ]; } } } })((function() { return this; })()); // eslint-disable-line

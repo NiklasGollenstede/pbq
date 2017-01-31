@@ -1,4 +1,4 @@
-'use strict'; /* global assert, describe, expect, it, beforeEach, afterEach */
+/*eslint strict: ["error", "global"], no-implicit-globals: "off", no-unused-expressions: "off"*/ 'use strict'; /* global assert, describe, it, beforeEach, afterEach, */ // license: MPL-2.0
 
 describe('A Port should', () => {
 	const Port = require('../port.js');
@@ -29,7 +29,7 @@ describe('A Port should', () => {
 	it('revieve post messages', done => {
 		const _this = { };
 		port.addHandler('foo', function(_1, _2, _3) {
-			assert(this === _this, 'bad this');
+			assert(this === _this, 'bad this'); // eslint-disable-line no-invalid-this
 			assert(_1 === 1, 'bad arg');
 			assert(_2 === 2, 'bad arg');
 			assert(_3 === 3, 'bad arg');

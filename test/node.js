@@ -1,4 +1,4 @@
-'use strict';
+/* eslint-disable */ 'use strict';
 
 const chai = require('chai');
 global.chaiAsPromised = require('chai-as-promised');

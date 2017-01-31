@@ -1,4 +1,4 @@
-'use strict'; /* global assert, describe, expect, it, xit */
+/*eslint strict: ["error", "global"], no-implicit-globals: "off", no-unused-expressions: "off"*/ 'use strict'; /* global describe, expect, it, */ // license: MPL-2.0
 
 const {
 	concurrent: { promisify, promised, spawn, async, StreamIterator, forOn, sleep, },
@@ -9,7 +9,7 @@ function nodeReturn(value, callback) {
 }
 
 function nodeReturnThis(callback) {
-	callback(null, this, 'ignored');
+	callback(null, this, 'ignored'); // eslint-disable-line no-invalid-this
 }
 
 function nodeThrow(error, callback) {
@@ -17,11 +17,11 @@ function nodeThrow(error, callback) {
 }
 
 function promiseReturn(value) {
-	return new Promise((resolve, reject) => resolve(value));
+	return new Promise(resolve => resolve(value));
 }
 
 function promiseReturnThis() {
-	return new Promise((resolve, reject) => resolve(this));
+	return new Promise(resolve => resolve(this)); // eslint-disable-line no-invalid-this
 }
 
 function promiseThrow(error) {
@@ -31,7 +31,7 @@ function promiseThrow(error) {
 function* pointlessGenerator(values) {
 	values = values.map((value, index) => index % 2 ? promiseReturn(value) : promiseThrow(value));
 	const out = [ ];
-	for (let promise of values) {
+	for (const promise of values) {
 		try {
 			out.push(yield promise);
 		} catch (error) {
@@ -65,7 +65,7 @@ describe('"promised"ed should', () => {
 
 	it('return', done => {
 		function callback(error, value) {
-			if (error) { return done(error); }
+			if (error) { return void done(error); }
 			value.should.equal(42);
 			done();
 		}
@@ -74,7 +74,7 @@ describe('"promised"ed should', () => {
 
 	it('forward `this´', done => {
 		function callback(error, value) {
-			if (error) { return done(error); }
+			if (error) { return void done(error); }
 			value.should.equal(42);
 			done();
 		}
@@ -82,7 +82,7 @@ describe('"promised"ed should', () => {
 	});
 
 	it('throw', done => {
-		function callback(error, value) {
+		function callback(error, _value) {
 			error.should.equal(42);
 			done();
 		}
@@ -95,16 +95,16 @@ describe('"spawn"ed should', () => {
 	const sut = spawn;
 
 	it('directly return', () => {
-		return sut(function*() { return 23; }).should.become(23);
+		return sut(function*() { return 23; }).should.become(23); // eslint-disable-line require-yield
 	});
 
 	it('directly throw', () => {
-		return sut(function*() { throw 23; }).should.rejectedWith(23);
+		return sut(function*() { throw new RangeError; }).should.rejectedWith(RangeError); // eslint-disable-line require-yield
 	});
 
 	it('be async', () => {
 		let closure = false;
-		const ret = sut(function*() { return closure; }).should.become(true);
+		const ret = sut(function*() { return closure; }).should.become(true); // eslint-disable-line require-yield
 		closure = true;
 		return ret;
 	});
@@ -205,7 +205,7 @@ describe('"forOn" should', () => {
 		emitter.emit('error', 17);
 
 		let cought;
-		(yield promise.catch(error => cought = error));
+		(yield promise.catch(error => (cought = error)));
 		cought.should.equal(17);
 
 		values.should.deep.equal([ ]);
@@ -220,7 +220,7 @@ describe('"forOn" should', () => {
 		emitter.emit('error', 17);
 
 		let cought;
-		(yield promise.catch(error => cought = error));
+		(yield promise.catch(error => (cought = error)));
 		cought.should.equal(17);
 
 		values.should.deep.equal([ -1, -2, ]);
@@ -228,13 +228,13 @@ describe('"forOn" should', () => {
 
 	it('directly rethrow', async(function*() {
 		const emitter = new EventEmitter, values = [ ];
-		const promise = sut(new StreamIterator(emitter), value => { throw 23; });
+		const promise = sut(new StreamIterator(emitter), _ => { throw new RangeError; });
 
 		emitter.emit('data', 42);
 
 		let cought;
-		(yield promise.catch(error => cought = error));
-		cought.should.equal(23);
+		(yield promise.catch(error => (cought = error)));
+		cought.should.be.instanceOf(RangeError);
 
 		values.should.deep.equal([ ]);
 	}));
@@ -282,7 +282,7 @@ describe('"forOn.reduce" should with initial value', () => {
 		emitter.emit('end');
 
 		let cought;
-		(yield promise.catch(error => cought = error));
+		(yield promise.catch(error => (cought = error)));
 		expect(cought).to.be.instanceOf(TypeError);
 
 		values.should.deep.equal([ ]);
@@ -295,7 +295,7 @@ describe('"forOn.reduce" should with initial value', () => {
 		emitter.emit('error', 17);
 
 		let cought;
-		(yield promise.catch(error => cought = error));
+		(yield promise.catch(error => (cought = error)));
 		expect(cought).to.equal(17);
 
 		values.should.deep.equal([ ]);
@@ -310,7 +310,7 @@ describe('"forOn.reduce" should with initial value', () => {
 		emitter.emit('error', 17);
 
 		let cought;
-		(yield promise.catch(error => cought = error));
+		(yield promise.catch(error => (cought = error)));
 		expect(cought).to.equal(17);
 
 		values.should.deep.equal([ -1.5, -2.5, ]);
@@ -318,12 +318,12 @@ describe('"forOn.reduce" should with initial value', () => {
 
 	it('directly rethrow', async(function*() {
 		const emitter = new EventEmitter;
-		const promise = sut(new StreamIterator(emitter), value => { throw value + 23; }, 19);
+		const promise = sut(new StreamIterator(emitter), value => { throw value; }, 42);
 
 		emitter.emit('data', null);
 
 		let cought;
-		(yield promise.catch(error => cought = error));
+		(yield promise.catch(error => (cought = error)));
 		cought.should.equal(42);
 	}));
 

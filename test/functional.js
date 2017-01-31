@@ -1,4 +1,4 @@
-'use strict'; /* global assert, describe, expect, it, xit */
+/*eslint strict: ["error", "global"], no-implicit-globals: "off", no-unused-expressions: "off"*/ 'use strict'; /* global assert, describe, expect, it, */ // license: MPL-2.0
 
 describe('"noop" should', () => {
 
@@ -43,10 +43,10 @@ describe('"noop" should', () => {
 
 	it('have the imutable .__proto__ == null', () => {
 		expect(Object.getPrototypeOf(noop)).to.be.null;
-		expect(noop.__proto__).to.be.null;
+		expect(noop.__proto__).to.be.null; // eslint-disable-line no-proto
 		Object.setPrototypeOf(noop, Object.prototype);
 		expect(Object.getPrototypeOf(noop)).to.be.null;
-		expect(noop.__proto__).to.be.null;
+		expect(noop.__proto__).to.be.null; // eslint-disable-line no-proto
 	});
 
 	it('have no enumerable properties', () => {
@@ -68,45 +68,3 @@ describe('"noop" should', () => {
 	});
 
 });
-
-describe('"apply" should', function() {
-	const sut = require('../functional.js').apply;
-
-	function concat(/*...*/args) {
-		args = Array.prototype.slice.call(arguments);
-		args.unshift(this);
-		return args;
-	}
-
-	it('call correctly', () => {
-		sut(concat).should.deep.equal([ undefined, ]);
-		sut(concat, this).should.deep.equal([ this, ]);
-
-		sut(concat, null, [ ]).should.deep.equal([ undefined, ]);
-		sut(concat, this, [ ]).should.deep.equal([ this, ]);
-		sut(concat, null, [ 1, ]).should.deep.equal([ null, 1, ]);
-		sut(concat, this, [ 1, ]).should.deep.equal([ this, 1, ]);
-		sut(concat, null, [ 1, 2, ]).should.deep.equal([ null, 1, 2, ]);
-		sut(concat, this, [ 1, 2, ]).should.deep.equal([ this, 1, 2, ]);
-		sut(concat, null, [ 1, 2, 3, ]).should.deep.equal([ null, 1, 2, 3, ]);
-		sut(concat, this, [ 1, 2, 3, ]).should.deep.equal([ this, 1, 2, 3, ]);
-		sut(concat, null, [ 1, 2, 3, 4, ]).should.deep.equal([ null, 1, 2, 3, 4, ]);
-		sut(concat, this, [ 1, 2, 3, 4, ]).should.deep.equal([ this, 1, 2, 3, 4, ]);
-		sut(concat, null, [ 1, 2, 3, 4, 5, 6, ]).should.deep.equal([ null, 1, 2, 3, 4, 5, 6, ]);
-		sut(concat, this, [ 1, 2, 3, 4, 5, 6, ]).should.deep.equal([ this, 1, 2, 3, 4, 5, 6, ]);
-
-		sut(concat, null, [ ], 42).should.deep.equal([ null, 42, ]);
-		sut(concat, this, [ ], 42).should.deep.equal([ this, 42, ]);
-		sut(concat, null, [ 1, ], 42).should.deep.equal([ null, 1, 42, ]);
-		sut(concat, this, [ 1, ], 42).should.deep.equal([ this, 1, 42, ]);
-		sut(concat, null, [ 1, 2, ], 42).should.deep.equal([ null, 1, 2, 42, ]);
-		sut(concat, this, [ 1, 2, ], 42).should.deep.equal([ this, 1, 2, 42, ]);
-		sut(concat, null, [ 1, 2, 3, ], 42).should.deep.equal([ null, 1, 2, 3, 42, ]);
-		sut(concat, this, [ 1, 2, 3, ], 42).should.deep.equal([ this, 1, 2, 3, 42, ]);
-		sut(concat, null, [ 1, 2, 3, 4, ], 42).should.deep.equal([ null, 1, 2, 3, 4, 42, ]);
-		sut(concat, this, [ 1, 2, 3, 4, ], 42).should.deep.equal([ this, 1, 2, 3, 4, 42, ]);
-		sut(concat, null, [ 1, 2, 3, 4, 5, 6, ], 42).should.deep.equal([ null, 1, 2, 3, 4, 5, 6, 42, ]);
-		sut(concat, this, [ 1, 2, 3, 4, 5, 6, ], 42).should.deep.equal([ this, 1, 2, 3, 4, 5, 6, 42, ]);
-	});
-
-}.bind({ self: Symbol(), }));

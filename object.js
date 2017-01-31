@@ -1,4 +1,4 @@
-(() => { 'use strict'; const factory = function es6lib_object(exports) { // This Source Code Form is subject to the terms of the Mozilla Public License, v. 2.0. If a copy of the MPL was not distributed with this file, You can obtain one at http://mozilla.org/MPL/2.0/.
+(function(global) { 'use strict'; const factory = function es6lib_object(exports) { // This Source Code Form is subject to the terms of the Mozilla Public License, v. 2.0. If a copy of the MPL was not distributed with this file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
 /**
  * Deeply freezes an object structure by crawling the objects enumerable own properties (Object.keys()).
@@ -6,16 +6,16 @@
  * @param  {object}  object  An object that is part of the structure to freeze.
  * @return {object}          The object passed in.
  */
-const deepFreeze = exports.deepFreeze = function deepFreeze(object) {
+exports.deepFreeze = deepFreeze; function deepFreeze(object) {
 	const done = new WeakSet;
 	(function doIt(object) {
 		if (typeof object !== 'object' || object === null || done.has(object)) { return; }
 		done.add(object);
 		Object.freeze(object);
-		Object.keys(object).forEach(function(key) { doIt(object[key]); });
+		Object.keys(object).forEach(key => doIt(object[key]));
 	})(object);
 	return object;
-};
+}
 
 /**
  * Checks the type of build in objects, e.g. 'Object', 'Date', 'Array', ...
@@ -23,9 +23,9 @@ const deepFreeze = exports.deepFreeze = function deepFreeze(object) {
  * @param  {string}  constructorName  Name of the (native) constructor Function
  * @return {bool}                     true, if object is instance of the constructor
  */
-const checkNativeType = exports.checkNativeType = function checkNativeType(object, constructorName) {
+exports.checkNativeType = checkNativeType; function checkNativeType(object, constructorName) {
 	return Object.prototype.toString.call(object).indexOf(constructorName, 8) === 8;
-};
+}
 
 /**
  * Deeply copies the enumerable own property values from one object to an other.
@@ -36,8 +36,8 @@ const checkNativeType = exports.checkNativeType = function checkNativeType(objec
  * Can NOT handle cyclic structures (of none-native objects).
  * @return {object}          target
  */
-const copyProperties = exports.copyProperties = function copyProperties(target, source) {
-	source != null && Object.keys(source).forEach(function(key) {
+exports.copyProperties = copyProperties; function copyProperties(target, source) {
+	source != null && Object.keys(source).forEach(key => {
 		let to = target[key]; const value = source[key];
 		if (typeof to !== 'object') {
 			target[key] = value;
@@ -52,15 +52,15 @@ const copyProperties = exports.copyProperties = function copyProperties(target, 
 		}
 	});
 	return target;
-};
+}
 
 /**
  * Same as copyProperties but can handle cyclic structures.
  */
-const cloneOnto = exports.cloneOnto = function cloneOnto(target, source) {
+exports.cloneOnto = cloneOnto; function cloneOnto(target, source) {
 	const done = new WeakMap([ [ source, target, ], ]);
 	source && (function doIt(target, source) {
-		Object.keys(source).forEach(function(key) {
+		Object.keys(source).forEach(key => {
 			const sourceValue = source[key];
 			if (checkNativeType(sourceValue, "Object")) {
 				const targetValue = done.get(sourceValue);
@@ -84,13 +84,13 @@ const cloneOnto = exports.cloneOnto = function cloneOnto(target, source) {
 		});
 	})(target, source);
 	return target;
-};
+}
 
 /**
  * Same as copyProperties except that assignments will fail silently, instead of throwing.
  */
-const tryCopyProperties = exports.tryCopyProperties = function tryCopyProperties(target, source) {
-	source && Object.keys(source).forEach(function(key) {
+exports.tryCopyProperties = tryCopyProperties; function tryCopyProperties(target, source) {
+	source && Object.keys(source).forEach(key => {
 		if (checkNativeType(source[key], "Object")) {
 			try { !target[key] && (target[key] = { }); } catch (e) { }
 			tryCopyProperties(target[key], source[key]);
@@ -102,45 +102,45 @@ const tryCopyProperties = exports.tryCopyProperties = function tryCopyProperties
 		}
 	});
 	return target;
-};
+}
 
 /**
  * Set 'value' as enumerable but unconfigurable and unwritable property 'key' of 'object'.
  * @return {object}   The value that was set.
  */
-const setConst = exports.setConst = function setConst(object, key, value) {
+exports.setConst = setConst; function setConst(object, key, value) {
 	Object.defineProperty(object, key, { value: value, enumerable: true, });
 	return value;
-};
+}
 
 /**
  * Set 'value' as unenumerable but configurable and writable property 'key' of 'object'.
  * @return {object}   The value that was set.
  */
-const setHidden = exports.setHidden = function setHidden(object, key, value) {
+exports.setHidden = setHidden; function setHidden(object, key, value) {
 	Object.defineProperty(object, key, { value: value, configurable: true, writable: true, });
 	return value;
-};
+}
 
 /**
  * Set 'value' as unenumerable, unconfigurable and unwritable property 'key' of 'object'.
  * @return {object}   The value that was set.
  */
-const setHiddenConst = exports.setHiddenConst = function setHiddenConst(object, key, value) {
+exports.setHiddenConst = setHiddenConst; function setHiddenConst(object, key, value) {
 	Object.defineProperty(object, key, { value: value, });
 	return value;
-};
+}
 
 /**
  * Copies the complete descriptors of the enumerable own properties from one object to an other.
  * @return {object}      The target object.
  */
-const assignDescriptors = exports.assignDescriptors = function(to, from) {
-	Object.keys(from).forEach(function(key) {
+exports.assignDescriptors = assignDescriptors; function assignDescriptors(to, from) {
+	Object.keys(from).forEach(key => {
 		Object.defineProperty(to, key, Object.getOwnPropertyDescriptor(from, key));
 	});
 	return to;
-};
+}
 
 /**
  * Returns a Map where all the values are Sets, so that the map is effectively a multi map.
@@ -155,7 +155,7 @@ const MultiMapOf = MapType => class extends MapType {
 	constructor(init) {
 		super();
 		if (init == null) { return; }
-		for (let [ key, value, ] of init) {
+		for (const [ key, value, ] of init) {
 			super.set(key, new Set(value));
 		}
 	}
@@ -166,7 +166,7 @@ const MultiMapOf = MapType => class extends MapType {
 	 * @param {any}  value  Any value.
 	 */
 	set(key, value) {
-		let set = this.get(key);
+		const set = this.get(key);
 		set.clear();
 		set.add(value);
 	}
@@ -177,7 +177,7 @@ const MultiMapOf = MapType => class extends MapType {
 	 * @param {any}  value  Any value.
 	 */
 	add(key, value) {
-		let set = this.get(key);
+		const set = this.get(key);
 		set.add(value);
 	}
 
@@ -212,8 +212,10 @@ const MultiMapOf = MapType => class extends MapType {
 		return +set.delete(value);
 	}
 };
-const MultiMap = exports.MultiMap = MultiMapOf(Map);
-const WeakMultiMap = exports.WeakMultiMap = MultiMapOf(WeakMap);
+exports.MultiMap = MultiMapOf(Map);
+exports.WeakMultiMap = MultiMapOf(WeakMap);
+
+/* eslint-disable */ // the code below works, but is old
 
 const ClassMap = new WeakMap;
 
@@ -342,7 +344,7 @@ const Class = exports.Class = function Class(options) {
 };
 
 function copyPublicProperties(to, from, configurable) {
-	Object.keys(from).forEach(function(key) {
+	Object.keys(from).forEach(key => {
 		const enumerable = !(/^_/).test(key);
 		const descriptor = Object.getOwnPropertyDescriptor(from, key);
 		descriptor.configurable = configurable;
@@ -357,7 +359,7 @@ function NameSpace(proto) {
 	typeof proto === 'object' || (proto = Object.prototype);
 	const map = new WeakMap();
 	return function(key, set) {
-		var value = map.get(key);
+		let value = map.get(key);
 		if (value === undefined) {
 			map.set(key, value = set || Object.create(proto));
 		}
@@ -367,4 +369,7 @@ function NameSpace(proto) {
 
 function idFunction(arg) { return arg; }
 
-}; if (typeof define === 'function' && define.amd) { define([ 'exports', ], factory); } else { const exports = { }, result = factory(exports) || exports; if (typeof exports === 'object' && typeof module === 'object') { module.exports = result; } else { window[factory.name] = result; } } })();
+/* eslint-enable */
+
+}; if (typeof define === 'function' && define.amd) { define([ 'exports', ], factory); } else { const exp = { }, result = factory(exp) || exp; if (typeof exports === 'object' && typeof module === 'object') { module.exports = result; } else { global[factory.name] = result; if (typeof QueryInterface === 'function') { global.exports = result; global.EXPORTED_SYMBOLS = [ 'exports', ]; } } } })((function() { return this; })()); // eslint-disable-line
+

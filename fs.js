@@ -1,4 +1,4 @@
-'use strict'; /* global exports */
+/*eslint strict: ["error", "global"], no-implicit-globals: "off"*/ 'use strict'; /* globals exports, module, process, */ // license: MPL-2.0
 
 const concurrent = require('./concurrent.js');
 const promisify = concurrent.promisify;
@@ -18,13 +18,13 @@ const Path = exports.Path = require('path');
  * @function listDir   asynchronous, recursive, unordered directory listing
  * @function makeDir   asynchronous direktory path creation, reimplementation of 'mkdirp' package
  */
-(function() {
+const FS = module.exports = (function() {
 	const FS = Object.assign(exports, fs);
 	const exists = FS.exists;
 	Object.keys(FS)
 	.filter(key => (/Sync$/).test(key))
 	.map(key => key.slice(0, -4))
-	.forEach(key => FS[key] = promisify(FS[key]));
+	.forEach(key => (FS[key] = promisify(FS[key])));
 	FS.exists = path => new Promise(done => exists(path, done));
 	FS.listDir = promisify(walk);
 	FS.makeDir = function(path, mask) {
@@ -36,18 +36,18 @@ const Path = exports.Path = require('path');
 
 function trustedMakeDir(path, mask) {
 	return FS.mkdir(path, mask)
-	.catch(function(error) {
+	.catch(error => {
 		if (error.code === 'ENOENT') {
 			return FS.trustedMakeDir(Path.dirname(path), mask)
 			.then(FS.trustedMakeDir.bind(FS, path, mask));
 		}
 		return FS.stat(path)
-		.then(function(stat) {
-			if (!stat.isDirectory()) { throw null; }
-		})
-		.catch(function() { throw error; });
+		.catch(() => { throw error; })
+		.then(stat => { if (!stat.isDirectory()) { throw error; } });
 	});
 }
+
+/* eslint-disable */
 
 // TODO: reimplement (licence?)
 function walk(dir, done) {

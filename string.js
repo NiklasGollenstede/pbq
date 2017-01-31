@@ -10,14 +10,14 @@ Object.defineProperty(exports, 'RegExpX', { get() { throw new Error(`'RegExpX' h
  * @param  {char}     fill    String whose first character is used to add padding if needed, defaults to '0'
  * @return {string}           string of .length length
  */
-const toFixedLength = exports.toFixedLength = function toFixedLength(string, length, fill) {
+exports.toFixedLength = toFixedLength; function toFixedLength(string, length, fill) {
 	if (length > (string += '').length) {
 		fill = fill ? (fill+'')[0] : '0';
 		return fill.repeat(length - string.length) + string;
 	} else {
 		return string.slice(string.length - length);
 	}
-};
+}
 
 /**
  * Generates a fixed-length string of random characters to a base.
@@ -42,39 +42,39 @@ const randomHex = exports.randomHex = (function() { try {
 			return toFixedLength(Array.prototype.map.call(data, _=>_.toString(base)).join(''), chars);
 		};
 	}
-} catch (_) { } })();
+} catch (_) { return null; } })();
 
 /**
  * Generates a cryptographically random GUID, e.g.: 6f2e78a1-c4f3-4895-858b-347f92fb2d14
  */
-const Guid = exports.Guid = function Guid() {
-	var data = randomHex(32);
+exports.Guid = Guid; function Guid() {
+	const data = randomHex(32);
 	return [ data.slice(0, 8), data.slice(8, 12), '4'+ data.slice(13, 16), '8'+ data.slice(17, 20), data.slice(20, 32), ].join('-');
-};
+}
 
 /**
  * @param  {uint}   time input time in seconds
  * @return {string}      the time part of new Date(time * 1000).toUTCString(), hurs only if !== 0
  */
-const secondsToHhMmSs = exports.secondsToHhMmSs = function secondsToHhMmSs(time) {
+exports.secondsToHhMmSs = secondsToHhMmSs; function secondsToHhMmSs(time) {
 	time = +time;
 	const hours = Math.floor(time / 3600); time = time % 3600;
 	const ret = Math.floor(time / 60) +':'+ (time % 60 < 10 ? ('0' + time % 60) : (time % 60));
 	if (hours) { return hours + (ret.length > 4 ? ':' : ':0') +ret; }
 	return ret;
-};
+}
 
 /**
  * @param  {string} time hh:mm:SS.ss
  * @return {uint}        time in seconds
  */
-const hhMmSsToSeconds = exports.hhMmSsToSeconds = function hhMmSsToSeconds(time) {
+exports.hhMmSsToSeconds = hhMmSsToSeconds; function hhMmSsToSeconds(time) {
 	time = time.split(':').map(parseFloat);
 	while(time.length > 1) {
 		time[0] = time[1] + 60 * time.shift();
 	}
 	return time[0];
-};
+}
 
 /**
  * outputs a time/duration as a human readable string like '12 ms', '3 months'
@@ -82,21 +82,21 @@ const hhMmSsToSeconds = exports.hhMmSsToSeconds = function hhMmSsToSeconds(time)
  * @param  {float}  tolerance tolerance to use smaler unit than possible, e.g. '45 days' instead of '1 month' with tolerance = 1.5
  * @return {string}           s.o.
  */
-const timeToRoundString = exports.timeToRoundString = function timeToRoundString(time, tolerance) {
+exports.timeToRoundString = timeToRoundString; function timeToRoundString(time, tolerance) {
 	time = +time; tolerance = +tolerance || 1;
-	const many = [ "ms", "seconds", "minutes", "hours", "days", "months", "years" ];
-	const one = [ "ms", "second", "minute", "hour", "day", "month", "year" ];
-	const sizes = [ 1000, 60, 60, 24, 30.4375, 12, Number.MAX_VALUE];
-	if (!time) { return "0"+ many[0]; }
-	var sign = "";
-	if (time < 0) { time *= -1; sign = "-"; }
-	var i = 0;
+	const many = [ 'ms', 'seconds', 'minutes', 'hours', 'days', 'months', 'years', ];
+	const one = [ 'ms', 'second', 'minute', 'hour', 'day', 'month', 'year', ];
+	const sizes = [ 1000, 60, 60, 24, 30.4375, 12, Number.MAX_VALUE, ];
+	if (!time) { return '0'+ many[0]; }
+	let sign = '';
+	if (time < 0) { time *= -1; sign = '-'; }
+	let i = 0;
 	while (time > sizes[i] * tolerance) {
 		time = Math.floor(time / sizes[i]);
 		i++;
 	}
-	return sign + time +" "+ (time == 1 ? one[i] : many[i]);
-};
+	return sign + time +' '+ (time === 1 ? one[i] : many[i]);
+}
 
 /**
  * outputs a number as a human readable string like '12.3µ', '42', '1.05T'
@@ -104,8 +104,8 @@ const timeToRoundString = exports.timeToRoundString = function timeToRoundString
  * @param  {uint}   digits  significant digits in the output
  * @return {string}         s.o.
  */
-const exponentAliases = { "-9": "p", "-6": "µ", "-3": "m", 0: "", 3: "k", 6: "M", 9: "G", 12: "T", };
-const numberToRoundString = exports.numberToRoundString = function numberToRoundString(number, digits) {
+const exponentAliases = { '-9': 'p', '-6': 'µ', '-3': 'm', 0: '', 3: 'k', 6: 'M', 9: 'G', 12: 'T', };
+exports.numberToRoundString = numberToRoundString; function numberToRoundString(number, digits) {
 	if (typeof number !== 'number') { return '0'; }
 	digits = (+digits > 3) ? +digits : 3;
 	const match = number.toExponential(digits + 2).match(/(-?)(.*)e(.*)/);
@@ -118,7 +118,7 @@ const numberToRoundString = exports.numberToRoundString = function numberToRound
 		: (_1 + _2 + _3 + (digits <= 3 ? '' : +'.'+ _R.slice(0, digits - 3)))
 	) : match[2].slice(0, digits + 1);
 	return match[1] + mantissa + (exponentAliases[unit] != null ? exponentAliases[unit] : "e"+ unit);
-};
+}
 
 /**
  * Turns a (url) query string into an object (similar to URLSearchParams).
@@ -128,14 +128,14 @@ const numberToRoundString = exports.numberToRoundString = function numberToRound
  * @param  {function}          decoder   Optional. Function used to decode value segments. Defaults to id function.
  * @return {QueryObject}                 QueryObject instance that has properties as read from the query.
  */
-const QueryObject = exports.QueryObject = function QueryObject(query, key, value, decoder) {
+exports.QueryObject = QueryObject; function QueryObject(query, key, value, decoder) {
 	value = value || '='; decoder = decoder || function(id) { return id; };
 	const self = (this instanceof QueryObject) ? this : Object.create(QueryObject.prototype);
 	String.prototype.split.call(query, key || (/[&#?]+/))
-	.map(function(string) { return string.split(value); })
-	.forEach(function(pair) { pair[0] && (self[pair[0]] = decoder(pair[1])); });
+	.map(string => string.split(value))
+	.forEach(pair => pair[0] && (self[pair[0]] = decoder(pair[1])));
 	return self;
-};
+}
 /**
  * Turns the QueryObject back into a query string.
  * @param  {string}    keySep    Separator between key/value-pairs, defaults to '&'.
@@ -146,7 +146,7 @@ const QueryObject = exports.QueryObject = function QueryObject(query, key, value
 QueryObject.prototype.toString = function(keySep, valueSep, encoder) {
 	const self = this;
 	valueSep = valueSep || '='; encoder = encoder || function(id) { return id; };
-	return Object.keys(self).map(function(key) {
+	return Object.keys(self).map(key => {
 		return key + valueSep + (self[key] !== null ? encoder(self[key]) : '');
 	}).join(keySep || '&');
 };
@@ -156,9 +156,9 @@ QueryObject.prototype.toString = function(keySep, valueSep, encoder) {
  * @param  {string}  html  A string possibly containing control characters.
  * @return {string}        A string without any control characters, whose unescapeHtml() is the input.
  */
-const escapeHtml = exports.escapeHtml = exports.encodeHtml = function escapeHtml(html) {
-	return html.replace(htmlEscapeRegExp, function(c) { return htmlEscapeObject[c]; });
-};
+exports.escapeHtml = exports.encodeHtml = escapeHtml; function escapeHtml(html) {
+	return html.replace(htmlEscapeRegExp, c => htmlEscapeObject[c]);
+}
 const htmlEscapeObject = { '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;', '/': '&#47;', '--': '-&#45;', };
 const htmlEscapeRegExp = new RegExp(Object.keys(htmlEscapeObject).join('|'), 'g'); // also correct for multi char strings
 // const htmlEscapeRegExp = new RegExp('['+ Object.keys(htmlEscapeObject).join('') +']', 'g'); // faster ??
@@ -179,23 +179,19 @@ try {
  * @param  {string}  string  String that should be placed within another string.
  * @return {string}          Escaped string such that eval('"'+ result +'"') === string
  */
-const escapeForString = exports.escapeForString = exports.escapeString = function escapeForString(string) {
+exports.escapeForString = exports.escapeString = escapeForString; function escapeForString(string) {
 	return String.prototype.replace.call(string != null ? string : '', /([\\\$\`\'\"])/g, '\\$1').replace(/\n/g, '\\n\\\n');
-};
-const escapeForTemplateString = exports.escapeForTemplateString = function escapeForTemplateString(string) {
+}
+exports.escapeForTemplateString = escapeForTemplateString; function escapeForTemplateString(string) {
 	return String.prototype.replace.call(string != null ? string : '', /(\\|\$\{|\`)/g, '\\$1');
-};
+}
 
-const unescapeUrl = exports.unescapeUrl = function unescapeUrl(string) {
-	return decodeURIComponent(string).replace(/\+/g, ' ');
-};
-
-const toString = exports.toString = function toString(any) {
+exports.toString = toString; function toString(any) {
 	try {
 		if (/^(boolean|number|string)$/.test(typeof any)) { return any +''; }
 		if (/^function$/.test(typeof any)) { return '[function '+ (any.name || '<unnamed>') +']'; }
 		if (/^symbol$/.test(typeof any)) { return any.toString(); }
-		if (any === undefined) { return ''; }
+		if (any === undefined) { if (arguments.length === 0 && this === exports) { return exports +''; }  return ''; } // eslint-disable-line no-invalid-this
 		if (Array.isArray(any)) { return any.map(toString).join(', '); }
 		const string = any +'';
 		const match = /^\[object (\w+)\]$/.test(string);
@@ -206,25 +202,22 @@ const toString = exports.toString = function toString(any) {
 	} catch (e) {
 		return Object.prototype.toString.call(any);
 	}
-};
+}
 
-const removeTags = exports.removeTags = function removeTags(html) {
-	const newLine = this && this.newLine || '\n';
-	const space = this && this.space || '';
-	const linkReplacer = this && this.linkReplacer || function(link, href, text) {
+exports.removeTags = removeTags; function removeTags(html) {
+	const options = this || { }; // eslint-disable-line no-invalid-this
+	const newLine = options.newLine || '\n';
+	const space = options.space || '';
+	const linkReplacer = options.linkReplacer || function(link, href, text) {
 		return '['+ text +'] ('+ href +')';
 	};
 	return String.prototype.replace.call(html, /<a[^>]+?href="?([^>"]*)"?[^]*?>([^]*?)<\/a>/g, linkReplacer)
-	.replace(/(<\/?.*?>)+/g, function(tag) {
-		if (/<(br|\/div)>/.test(tag)) {
-			return newLine;
-		}
-		return space;
-	});
-};
+	.replace(/(<\/?.*?>)+/g, tag => (/<(?:br|\/div)>/).test(tag) ? newLine : space);
+}
 
-const removeEmptyLines = exports.removeEmptyLines = function removeEmptyLines(string) { // TODO: test
+exports.removeEmptyLines = removeEmptyLines; function removeEmptyLines(string) { // TODO: test
 	String.prototype.replace.call(string != null ? string : '', (/(\n|\r|\r\n)([ \t]*(\n|\r|\r\n))+/g), '$1');
-};
+}
 
-}; if (typeof define === 'function' && define.amd) { define([ 'exports', ], factory); } else { const exp = { }, result = factory(exp) || exp; if (typeof exports === 'object' && typeof module === 'object') { module.exports = result; } else { global[factory.name] = result; } } })((function() { return this; })());
+}; if (typeof define === 'function' && define.amd) { define([ 'exports', ], factory); } else { const exp = { }, result = factory(exp) || exp; if (typeof exports === 'object' && typeof module === 'object') { module.exports = result; } else { global[factory.name] = result; } } })((function() { return this; })()); // eslint-disable-line
+

@@ -1,4 +1,5 @@
 (function(global) { 'use strict'; const factory = function es6lib_port(exports) { // This Source Code Form is subject to the terms of the Mozilla Public License, v. 2.0. If a copy of the MPL was not distributed with this file, You can obtain one at http://mozilla.org/MPL/2.0/.
+/* eslint-disable no-unused-vars */
 
 /**
  * Wrapper class for browser WebSockets, node js Streams, web-extension runtime.Ports and similar ports,
@@ -130,7 +131,7 @@ const Port = class Port {
 		try {
 			const self = Self.get(this);
 			self && self.destroy();
-		} catch (error) { try { reportError(error); } catch (_) { } }
+		} catch (error) { reportError(error); }
 	}
 };
 
@@ -219,6 +220,7 @@ class PortAdapter {
 }
 
 ///////// start of private implementation /////////
+/* eslint-enable no-unused-vars */
 
 Port.WebSocket = class WebSocket {
 
@@ -248,7 +250,7 @@ Port.web_Port = class extends Port.WebSocket { constructor() {
 
 Port.MessagePort = class MessagePort {
 
-	constructor(port, onData, onEnd) {
+	constructor(port, onData, _onEnd) {
 		this.port = port;
 		this.onMessage = ({ data, }) => onData(data[0], data[1], data[2]);
 		this.port.addEventListener('message', this.onMessage);
@@ -337,7 +339,7 @@ Port.web_ext_Runtime = class web_ext_Runtime {
 			promise = this.sendMessage([ name, id, args, ]);
 		}
 		if (id === 0) { return; } // is post
-		return promise.then(handleReply);
+		return promise.then(handleReply); // eslint-disable-line consistent-return
 	}
 
 	destroy() {
@@ -356,7 +358,7 @@ Port.moz_nsIMessageListenerManager = class moz_nsIMessageListenerManager {
 		this.onMessage = ({ sync, target, data, }) => {
 			const sender = target.messageManager || target;
 			let retVal;
-			const reply = sync ? ((...args) => retVal = args) : ((...args) => sender.sendAsyncMessage(name, args));
+			const reply = sync ? ((...args) => (retVal = args)) : ((...args) => sender.sendAsyncMessage(name, args));
 			const async = onData(data[0], data[1], data[2], target, reply);
 			if (sync && async) { try { reportError(new Error(`ignoring asynchronous reply to synchronous request`)); } catch (_) { } }
 			return retVal;
@@ -364,7 +366,7 @@ Port.moz_nsIMessageListenerManager = class moz_nsIMessageListenerManager {
 		this.in.forEach(_=>_.addMessageListener(this.name, this.onMessage));
 	}
 
-	send(name, id, args, options) {
+	send(name, id, args, options) { // eslint-disable-line consistent-return
 		const sync = options && ('sync' in options) ? options.sync : this.sync;
 		if (sync) {
 			const replies = this.out.sendSyncMessage(this.name, [ name, id, args, ]).filter(Array.isArray);
@@ -399,12 +401,12 @@ const Self = new WeakMap;
 // private implementation class
 class _Port {
 	constructor(self, port, Adapter) {
-		this.port = new Adapter(port, onData.bind(this), this.destroy.bind(this));
+		this.port = new Adapter(port, this.onData.bind(this), this.destroy.bind(this));
 		this.requests = new Map; // id ==> PromiseCapability
 		this.handlers = new Map; // name ==> [ function, thisArg, ]
 		this.wildcards = new Map; // RegExp ==> [ function, thisArg, ]
 		this.lastId = 1; // `1` will never be used
-		this.ended = Object.freeze(new Promise(end => this.onEnd = end));
+		this.ended = Object.freeze(new Promise(end => (this.onEnd = end)));
 		this._isRequest = 0; // -1: false; 0: throw; 1: true;
 		Self.set(this, self);
 		Self.set(self, this);
@@ -419,7 +421,7 @@ class _Port {
 			this.handlers.set(name, [ handler, thisArg, ]);
 		} else {
 			const filter = name;
-			try { if (typeof filter.test('X') !== 'boolean') { throw null; } }
+			try { if (typeof filter.test('X') !== 'boolean') { throw null; } } // eslint-disable-line no-throw-literal
 			catch (_) { throw new TypeError(`Handler names must be non-empty strings or RegExp wildcards`); }
 			this.wildcards.set(filter, [ handler, thisArg, ]);
 		}
@@ -434,7 +436,7 @@ class _Port {
 			? handlers.map(f => [ f && f.name, f, ])
 			: Object.keys(handlers).map(k => [ k, handlers[k], ])
 		).filter(([ , f, ]) => typeof f === 'function');
-		add.forEach(([ name, handler, ]) => {
+		add.forEach(([ name, ]) => {
 			if (typeof name !== 'string' || name === '') { throw new TypeError(`Handler names must be non-empty strings`); }
 			if (this.handlers.has(name)) { throw new Error(`Duplicate message handler for "${ name }"`); }
 		});
@@ -470,11 +472,9 @@ class _Port {
 	isRequest() {
 		switch (this._isRequest << 0) {
 			case -1: return false;
-			case 0: {
-				throw new Error(`Port.isRequest() may only be called while the port is in a synchronous handler`);
-			} break;
-			case 1: return true;
+			case +1: return true;
 		}
+		throw new Error(`Port.isRequest() may only be called while the port is in a synchronous handler`);
 	}
 	destroy() {
 		const self = Self.get(this);
@@ -488,61 +488,64 @@ class _Port {
 		Self.delete(self);
 		Self.delete(this);
 	}
+
+	onData(name, id, args, altThis, reply, optional) {
+		if (name) { try { // handle request
+			let handler, thisArg;
+			if (this.handlers.has(name)) {
+				[ handler, thisArg, ] = this.handlers.get(name);
+			} else {
+				for (const [ filter, pair, ] of this.wildcards) {
+					if (filter.test(name)) { [ handler, thisArg, ] = pair; break; }
+				}
+				args.unshift(name);
+			}
+			if (!handler) { if (!optional) { throw new Error(`No such handler "${ name }"`); } else { return false; } }
+			let value; try {
+				this._isRequest = id === 0 ? -1 : 1;
+				value = handler.apply(thisArg != null ? thisArg : altThis, args);
+			} finally { this._isRequest = 0; }
+			if (!isPromise(value)) {
+				if (id !== 0) { reply ? reply('', +id, [ value, ]) : this.port.send('', +id, [ value, ]); }
+				return false;
+			} else {
+				if (id === 0) {
+					value.then(null, error => reportError('Uncaught async error in handler (post)', error));
+					return false;
+				}
+				value.then(
+					value => reply ? reply('', +id, [ value, ]) : this.port.send('', +id, [ value, ]),
+					error => reply ? reply('', -id, [ toJson(error), ]) : this.port.send('', -id, [ toJson(error), ])
+				);
+				return true;
+			}
+		} catch (error) {
+			if (id) {
+				reply ? reply('', -id, [ toJson(error), ]) : this.port.send('', -id, [ toJson(error), ]);
+			} else {
+				reportError('Uncaught error in handler (post)', error);
+			}
+			return false;
+		} } else { try { // resolve reply
+			if (!id) { throw new Error(`Bad request`); }
+			const threw = id < 0; threw && (id = -id);
+			const request = this.requests.get(id); this.requests.delete(id);
+			if (!request) { throw new Error(`Bad or duplicate response id`); }
+			if (threw) {
+				request.reject(fromJson(args[0]));
+			} else {
+				request.resolve(args[0]);
+			}
+			return false;
+		} catch (error) {
+			reportError(error);
+			return false;
+		} }
+	}
 }
 
-function onData(name, id, args, altThis, reply, optional) { try {
-	if (name) {
-		let handler, thisArg;
-		if (this.handlers.has(name)) {
-			[ handler, thisArg, ] = this.handlers.get(name);
-		} else {
-			let dest; for (let [ filter, pair, ] of this.wildcards) {
-				if (filter.test(name)) { [ handler, thisArg, ] = pair; break; }
-			}
-			args.unshift(name);
-		}
-		if (!handler) { if (!optional) { throw new Error(`No such handler "${ name }"`); } else { return false; } }
-		let value; try {
-			this._isRequest = id === 0 ? -1 : 1;
-			value = handler.apply(thisArg != null ? thisArg : altThis, args);
-		} finally { this._isRequest = 0; }
-		if (!isPromise(value)) {
-			if (id !== 0) { reply ? reply('', +id, [ value, ]) : this.port.send('', +id, [ value, ]); }
-			return false;
-		} else {
-			if (id === 0) {
-				value.then(null, error => { try { reportError('Uncaught async error in handler (post)', error); } catch (_) { throw error; } });
-				return false;
-			}
-			value.then(
-				value => reply ? reply('', +id, [ value, ]) : this.port.send('', +id, [ value, ]),
-				error => reply ? reply('', -id, [ toJson(error), ]) : this.port.send('', -id, [ toJson(error), ])
-			);
-			return true;
-		}
-	} else {
-		if (!id) { throw new Error(`Bad request`); }
-		const threw = id < 0; threw && (id = -id);
-		const request = this.requests.get(id); this.requests.delete(id);
-		if (!request) { throw new Error(`Bad or duplicate response id`); }
-		if (threw) {
-			request.reject(fromJson(args[0]));
-		} else {
-			request.resolve(args[0]);
-		}
-		return false;
-	}
-} catch (error) {
-	if (name && id) {
-		reply ? reply('', -id, [ toJson(error), ]) : this.port.send('', -id, [ toJson(error), ]);
-	} else {
-		try { reportError('Uncaught error in handler (post)', error); } catch (_) { }
-	}
-	return false;
-} }
-
 function handleReply(reply) {
-	if (!Array.isArray(reply)) { throw new Error('Unhandled requests'); }
+	if (!Array.isArray(reply)) { throw new Error('Unhandled request'); }
 	if (reply[1] < 0) {
 		throw fromJson(reply[2][0]);
 	} else {
@@ -560,7 +563,7 @@ function isPromise(value) { try {
 	const ctor = value.constructor;
 	if (typeof ctor !== 'function') { return false; }
 	if (PromiseCtors.has(ctor)) { return PromiseCtors.get(ctor); }
-	let is = false; try { new ctor((a, b) => is = typeof a === 'function' && typeof b === 'function'); } finally { }
+	let is = false; try { new ctor((a, b) => (is = typeof a === 'function' && typeof b === 'function')); } catch (_) { }
 	PromiseCtors.set(ctor, is);
 	return is;
 } catch (_) { return false; } }
@@ -586,8 +589,14 @@ function fromJson(string) {
 	});
 }
 
-const reportError = typeof console === 'object' ? console.error.bind(console) : typeof Components === 'object' ? (...args) => args.forEach(Components.utils.reportError) : () => 0;
+const reportError =
+typeof console === 'object'
+? function() { try { console.error.apply(console, arguments); } catch (_) { } }
+: typeof Components === 'object'
+? function() { try { for (let i = 0; i < arguments.length; ++i) { Components.utils.reportError(arguments[i]); } } catch (_) { } } // eslint-disable-line no-undef
+: () => 0;
 
 return Port;
 
-}; if (typeof define === 'function' && define.amd) { define([ 'exports', ], factory); } else { const exp = { }, result = factory(exp) || exp; if (typeof exports === 'object' && typeof module === 'object') { module.exports = result; } else { global[factory.name] = result; if (typeof QueryInterface === 'function') { global.exports = result; global.EXPORTED_SYMBOLS = [ 'exports', ]; } } } })((function() { /* jshint strict: false */ return this; })());
+}; if (typeof define === 'function' && define.amd) { define([ 'exports', ], factory); } else { const exp = { }, result = factory(exp) || exp; if (typeof exports === 'object' && typeof module === 'object') { module.exports = result; } else { global[factory.name] = result; if (typeof QueryInterface === 'function') { global.exports = result; global.EXPORTED_SYMBOLS = [ 'exports', ]; } } } })((function() { return this; })()); // eslint-disable-line
+

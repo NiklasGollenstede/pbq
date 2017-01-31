@@ -1,4 +1,4 @@
-(function(exports) { 'use strict';
+/*eslint strict: ["error", "global"], no-implicit-globals: "off", no-unused-expressions: "off"*/ 'use strict'; /* global exports, */ // license: MPL-2.0
 
 const child_process = require('child_process');
 
@@ -8,20 +8,11 @@ const child_process = require('child_process');
  * @return {Promise(string)} Promise that will be fulfilled with the child_processes accumulated stdout
  *                           or be rejected with the error which has stdout and stderr attached
  */
-const execute = exports.execute = function(/*...args*/) {
-	const args = Array.prototype.slice.call(arguments);
-	return new Promise(function(resolve, reject) {
-		args.push(function(error, stdout, stderr) {
-			if (error) {
-				reject(Object.assign((error && typeof error === 'object') ? error : { value: error, }, { stderr, stdout }));
-			} else {
-				resolve(stdout);
-			}
-		});
+exports.execute = execute; function execute(...args) {
+	return new Promise((resolve, reject) => {
+		args.push((error, stdout, stderr) => error ? reject(Object.assign(error, { stderr, stdout, })) : resolve(stdout));
 		child_process[
 			(args[1] instanceof Array) ? 'execFile' : 'exec'
 		].apply(child_process, args);
 	});
-};
-
-const moduleName = 'es6lib/process'; if (typeof module !== 'undefined') { module.exports = exports; } else if (typeof define === 'function') { define(moduleName, exports); } else if (typeof window !== 'undefined' && typeof module === 'undefined') { window[moduleName] = exports; } return exports; })({ });
+}

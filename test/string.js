@@ -1,11 +1,10 @@
-'use strict'; /* global assert, describe, expect, it, xit */
+/*eslint strict: ["error", "global"], no-implicit-globals: "off", no-unused-expressions: "off"*/ 'use strict'; /* global describe, it, */ // license: MPL-2.0
 
 const {
-	functional: { log, },
-	string: { toFixedLength, Guid, numberToRoundString, }
+	string: { toFixedLength, Guid, numberToRoundString, },
 } = require('../');
 
-describe('"toFixedLength" should', function() {
+describe('"toFixedLength" should', () => {
 
 	it('cast its first argument into a string a string', () => {
 		toFixedLength('abc').should.equal('abc');
@@ -15,7 +14,7 @@ describe('"toFixedLength" should', function() {
 
 	it('truncate', () => {
 		toFixedLength('xxabc', 3).should.equal('abc');
-		toFixedLength(abcx => x, 6).should.equal('x => x');
+		toFixedLength(abcx => x, 6).should.equal('x => x'); // eslint-disable-line
 		toFixedLength(12345, 3).should.equal('345');
 	});
 
@@ -33,7 +32,7 @@ describe('"toFixedLength" should', function() {
 
 });
 
-describe('"Guid" should', function() {
+describe('"Guid" should', () => {
 
 	it('work', () => {
 		for (let i = 0; i < 100; ++i) {
@@ -44,7 +43,7 @@ describe('"Guid" should', function() {
 
 });
 
-describe('"numberToRoundString" should', function() {
+describe('"numberToRoundString" should', () => {
 
 	it('work', () => {
 		numberToRoundString(+1.23e1, 3).should.equal( '12.3');

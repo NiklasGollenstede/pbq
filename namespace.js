@@ -1,4 +1,4 @@
-(() => { 'use strict'; const factory = function es6lib_namespace(exports) { // This Source Code Form is subject to the terms of the Mozilla Public License, v. 2.0. If a copy of the MPL was not distributed with this file, You can obtain one at http://mozilla.org/MPL/2.0/.
+(function(global) { 'use strict'; const factory = function es6lib_namespace(exports) { // This Source Code Form is subject to the terms of the Mozilla Public License, v. 2.0. If a copy of the MPL was not distributed with this file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
 /**
  * NameSpace constructor, where a NameSpace is a function that can be used to emulate provate/namespaced oroperties on objects.
@@ -8,17 +8,17 @@
  * @param  {object}  proto  optional __proto__ of all shadow objects.
  * @throws {TypeError} If called with non-object argument.
  */
-const NameSpace = exports.NameSpace = function NameSpace(proto) {
+exports.NameSpace = NameSpace; function NameSpace(proto) {
 	typeof proto === 'object' || (proto = Object.prototype);
 	const map = new WeakMap();
 	return function(key, set) {
-		var value = map.get(key);
+		let value = map.get(key);
 		if (value === undefined) {
 			map.set(key, value = set || Object.create(proto));
 		}
 		return value;
 	};
-};
+}
 
 /**
  * IterableNameSpace, similar to NameSpace, but holds strong references to the arguments it is called with.
@@ -27,11 +27,11 @@ const NameSpace = exports.NameSpace = function NameSpace(proto) {
  * @method destroy  Reset the instance and drop all references.
  * Doesn't throw if called with non-object argument.
  */
-const IterableNameSpace = exports.IterableNameSpace = function IterableNameSpace(proto) {
+exports.IterableNameSpace = IterableNameSpace; function IterableNameSpace(proto) {
 	typeof proto === 'object' || (proto = Object.prototype);
 	const map = new Map();
-	return Object.assign(function(key) {
-		var value = map.get(key);
+	return Object.assign(function(key) { // eslint-disable-line prefer-arrow-callback
+		let value = map.get(key);
 		if (value === undefined) {
 			map.set(key, value = Object.create(proto));
 		}
@@ -40,20 +40,21 @@ const IterableNameSpace = exports.IterableNameSpace = function IterableNameSpace
 		forEach: map.forEach.bind(map),
 		destroy: map.clear.bind(map),
 	});
-};
+}
 
 /**
  * Marker, similar to NameSpace, but explicitly stores a value (2nd argument) and has Get and Set behaviour:
  * When called stores the new value to an object, but returns the value it had before that call.
  * When called without 2nd argument, it only returns the current value.
  */
-const Marker = exports.Marker = function Marker() {
+exports.Marker = Marker; function Marker() {
 	const map = new WeakMap();
 	return function(key, now) {
 		const old = map.get(key);
 		arguments.length > 1 && map.set(key, now);
 		return old;
 	};
-};
+}
 
-}; if (typeof define === 'function' && define.amd) { define([ 'exports', ], factory); } else { const exports = { }, result = factory(exports) || exports; if (typeof exports === 'object' && typeof module === 'object') { module.exports = result; } else { window[factory.name] = result; } } })();
+}; if (typeof define === 'function' && define.amd) { define([ 'exports', ], factory); } else { const exp = { }, result = factory(exp) || exp; if (typeof exports === 'object' && typeof module === 'object') { module.exports = result; } else { global[factory.name] = result; } } })((function() { return this; })()); // eslint-disable-line
+

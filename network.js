@@ -19,13 +19,48 @@
  *     @property {bool}    mozAnon           mozilla privileged code only, don't send any session/login data
  *     @property {bool}    mozSystem         mozilla privileged code only, allow cross side request
  */
-const HttpRequest = exports.HttpRequest = (function() {
+exports.HttpRequest = HttpRequest; function HttpRequest(url, options) { const promise = new Promise((resolve, reject) => {
+	let o; if (typeof url === 'string') { o = options || { }; }
+	else { o = url || { }; url = o.url || o.src; }
 
-var XHR, ProgressEvent;
+	const request = new XMLHttpRequest(o);
+
+	function cancelWith(reason) {
+		const error = new ProgressEvent(reason);
+		request.dispatchEvent(error);
+		reject(error);
+	}
+	o.needAbort && (promise.abort = function() {
+		request.abort();
+		cancelWith('canceled');
+	});
+
+	request.open(o.method || 'get', url, true, o.user, o.password);
+
+	o.responseType            && (request.responseType = o.responseType);
+	o.timeout                 && (request.timeout = o.timeout);
+	o.overrideMimeType        && request.overrideMimeType(o.overrideMimeType);
+	(o.xhr == null || o.xhr)  && request.setRequestHeader('X-Requested-With', 'XMLHttpRequest');
+	o.header                  && Object.keys(o.header).forEach(key => request.setRequestHeader(key, o.header[key]));
+
+	request.onerror = reject;
+	request.ontimeout = reject;
+	request.onload = function(event) {
+		if (request.status >= 200 && request.status < 300) {
+			resolve(request);
+		} else {
+			cancelWith('bad status');
+		}
+	};
+	request.send(o.body);
+}); return promise; }
+
+// compatibility fixes
+let XMLHttpRequest, ProgressEvent;
 if (global.process && global.process.versions && global.process.versions.node) {
-	try { XHR = require('xhr'+'2'); ProgressEvent = XHR.ProgressEvent; } catch(_) { }
+	try { XMLHttpRequest = require('xhr'+'2'); ProgressEvent = XMLHttpRequest.ProgressEvent; } catch(_) { }
 } else {
-	XHR = global.XMLHttpRequest || (function() { try { return require('sdk/net'+'/xhr').XMLHttpRequest; } catch(_) { } })();
+	XMLHttpRequest = global.XMLHttpRequest || (() => { try { return require('sdk/net'+'/xhr').XMLHttpRequest; } catch(_) { return null; } })();
 	try { /* global ProgressEvent */
 		new global.ProgressEvent(''); ProgressEvent = global.ProgressEvent;
 	} catch (error) {
@@ -33,66 +68,25 @@ if (global.process && global.process.versions && global.process.versions.node) {
 	}
 }
 
-return function HttpRequest(url, options) {
-	var request, cancel;
-	const o = arguments[arguments.length - 1] || { };
-	const promise = new Promise(function(resolve, reject) {
-		typeof url !== 'string' && (url = o.url || o.src);
-
-		request = new XHR(o);
-		cancel = cancelWith.bind(request, reject);
-
-		request.open(o.method || "get", url, true, o.user, o.password);
-
-		o.responseType && (request.responseType = o.responseType);
-		o.timeout && (request.timeout = o.timeout);
-		o.overrideMimeType && request.overrideMimeType(o.overrideMimeType);
-		(o.xhr == null || o.xhr) && request.setRequestHeader('X-Requested-With', 'XMLHttpRequest');
-		o.header && Object.keys(o.header).forEach(function(key) { request.setRequestHeader(key, o.header[key]); });
-
-		request.onerror = reject;
-		request.ontimeout = reject;
-		request.onload = function(event) {
-			if (request.status >= 200 && request.status < 300) {
-				resolve(request);
-			} else {
-				cancel('bad status');
-			}
-		};
-		request.send(o.body);
-	});
-	o.needAbort && (promise.abort = function() {
-		request.abort();
-		cancel('canceled');
-	});
-	return promise;
-};
-function cancelWith(reject, reason) {
-	const error = new ProgressEvent(reason);
-	this.dispatchEvent(error);
-	reject(error);
-}
-})();
-
 /**
  * Converts an ArrayBuffer into a binary string, where each char represents a byte of the buffer.
- * @param  {ArrayBuffer}   buffer   The input buffer
- * @return {string}        string with .length === buffer.length
+ * @param  {ArrayBuffer}   buffer   The input buffer.
+ * @return {string}                 String with .length === buffer.length.
  */
-const arrayBufferToString = exports.arrayBufferToString = function arrayBufferToString(buffer) {
+exports.arrayBufferToString = function arrayBufferToString(buffer) {
 	buffer = new Uint8Array(buffer);
 	const ret = new Array(buffer.length);
-	for (var i = 0, length = buffer.length; i < length; ++i) {
+	for (let i = 0, length = buffer.length; i < length; ++i) {
 		ret[i] = String.fromCharCode(buffer[i]);
 	}
 	return ret.join('');
 };
 
 /**
- * Map object from file extensions to mime-types
+ * Map object from file extensions to mime-types.
  * @type {object}
  */
-const mimeTypes = exports.mimeTypes = {
+exports.mimeTypes = {
 	'3gp': 'video/3gpp',
 	bmp: 'image/bmp',
 	css: 'text/css',
@@ -120,4 +114,5 @@ const mimeTypes = exports.mimeTypes = {
 
 return exports;
 
-}; if (typeof define === 'function' && define.amd) { define([ 'exports', ], factory); } else { const exports = { }, result = factory(exports) || exports; if (typeof exports === 'object' && typeof module === 'object') { module.exports = result; } else { global[factory.name] = result; } } })((function() { /* jshint strict: false */ return this; })());
+}; if (typeof define === 'function' && define.amd) { define([ 'exports', ], factory); } else { const exp = { }, result = factory(exp) || exp; if (typeof exports === 'object' && typeof module === 'object') { module.exports = result; } else { global[factory.name] = result; } } })((function() { return this; })()); // eslint-disable-line
+

@@ -7,8 +7,7 @@
  * simulates a .__proto__ of null and ignores any property assignments or definitions.
  * But it throws when preventExtensions is called on it.
  */
-const noop = exports.noop = (typeof Proxy !== 'undefined') && (function(noop) {
-	const keys = [ ];
+exports.noop = (typeof Proxy !== 'undefined') && (function(noop) {
 	const target = function() { return noop; }.bind();
 	delete target.name; delete target.length;
 
@@ -29,28 +28,16 @@ const noop = exports.noop = (typeof Proxy !== 'undefined') && (function(noop) {
 })();
 
 /**
- * Function.prototype.apply optimised for the common case (no this and/or few arguments).
- * @param  {Function}   callback The function to call
- * @param  {any}        self     Optional this for callback
- * @param  {Arguments}  args     Optional argument (array-like) for callback
- * @param  {any}        arg      Additional argument to push on top of args
- * @return {any}                 Callbacks return value
+ * @deprecated
  */
-const apply = exports.apply = function apply(callback, self, args, arg) {
+exports.apply = function apply(callback, self, args, arg) {
+	try { console.error('es6lib/functional.js apply() is deprecated'); } catch (_) { }
 	const haveArg = arguments.length > 3;
 	switch (((args && args.length) + haveArg) || 0) {
-		case 0: {
-			return self ? callback.call(self) : callback();
-		} break;
-		case 1: {
-			return callback.call(self, haveArg ? arg : args[0]);
-		} break;
-		case 2: {
-			return callback.call(self, args[0], haveArg ? arg : args[1]);
-		} break;
-		case 3: {
-			return callback.call(self, args[0], args[1], haveArg ? arg : args[2]);
-		} break;
+		case 0: return self ? callback.call(self) : callback();
+		case 1: return callback.call(self, haveArg ? arg : args[0]);
+		case 2: return callback.call(self, args[0], haveArg ? arg : args[1]);
+		case 3: return callback.call(self, args[0], args[1], haveArg ? arg : args[2]);
 		default: {
 			if (haveArg) {
 				args = Array.prototype.slice.call(args);
@@ -68,25 +55,28 @@ const apply = exports.apply = function apply(callback, self, args, arg) {
  *                           That is, if it returns false, then func is not a function or constructing it with new would throw 'TypeError: <local id> is not a constructor'.
  *                           If it returns true, it may still throw 'TypeError: Illegal constructor.', but is is a constructor.
  */
-const isConstructable = exports.isConstructable = function isConstructable(func) {
+exports.isConstructable = isConstructable; function isConstructable(func) {
 	try {
 		construct(Ctor, [ ], func);
 		return true;
 	} catch (_) {
 		return false;
 	}
-};
+}
 class Ctor { }
 const { construct, } = Reflect;
 
 /**
- * console.log's it's arguments
- * @return {any} the last argument
+ * Console.log's it's arguments, useful to log intermediate values.
+ * @param  {...any} discard  Any number of arguments that are logged and then discarded.
+ * @param  {any}    retVal   The last argument that is logged and then returned.
+ * @return {any}             The last argument.
  */
 const log = exports.log = exports.debugLog = function log() {
-	console.log.apply(console, arguments);
+	consoleLog.apply(console, arguments);
 	return arguments[arguments.length - 1];
 };
+const { console, } = global, consoleLog = console.log;
 
 /**
  * Returns a function that executes a callback after it has not been called for a certain time.
@@ -95,16 +85,15 @@ const log = exports.log = exports.debugLog = function log() {
  * @param  {natural}   time      The cool down duration in ms.
  * @return {function}            Asynchronous, debounced version of callback.
  */
-const debounce = exports.debounce = function debounce(callback, time) {
-	var timer = null;
+exports.debounce = debounce; function debounce(callback, time) {
+	let timer = null;
 	return function() {
 		clearTimeout(timer);
-		const args = arguments, self = this;
 		timer = setTimeout(function() {
-			apply(callback, self, args);
+			callback.apply(this, arguments); // eslint-disable-line no-invalid-this
 		}, time);
 	};
-};
+}
 
 /**
  * Wraps a (void to void) function such that it is called asynchronously and at most once every 'time' ms.
@@ -113,19 +102,19 @@ const debounce = exports.debounce = function debounce(callback, time) {
  * @param  {[type]}    time      The minimum time between two calls in milliseconds.
  * @return {[type]}              The throttled function.
  */
-const throttle = exports.throttle = function throttle(callback, time) {
-	var pending = false, last = 0;
+exports.throttle = throttle; function throttle(callback, time) {
+	let pending = false, last = 0;
 	return function() {
 		if (pending) { return; }
 		const wait = last + time - Date.now();
 		pending = true;
-		setTimeout(function() {
+		setTimeout(() => {
 			last = Date.now();
 			pending = false;
 			callback();
 		}, wait > 0 ? wait : 0); // mustn't be << 0 in chrome 53+
 	};
-};
+}
 
 /**
  * Systems non-absolute but continuous high resolution time
@@ -134,10 +123,11 @@ const throttle = exports.throttle = function throttle(callback, time) {
 const hrtime = exports.hrtime = (function() {
 	if (typeof performance !== 'undefined') {
 		return performance.now.bind(performance); // browser
-	} else if (typeof process !== 'undefined' && typeof process.hrtime === 'function') {
-		return function () { const pair = process.hrtime(); return pair[0] * 1e3 + pair[1] / 1e6; }; // node
+	} else if (typeof global.process !== 'undefined' && typeof global.process.hrtime === 'function') {
+		const { hrtime, } = global.process;
+		return function () { const pair = hrtime(); return pair[0] * 1e3 + pair[1] / 1e6; }; // node
 	} else {
-		return require("chr" + "ome").Cu.now; // firefox
+		return require('chr' + 'ome').Cu.now; // firefox
 	}
 })();
 
@@ -147,10 +137,10 @@ const hrtime = exports.hrtime = (function() {
  * @return   {function}        function that returns the time difference between Timer creation an it's call
  * @example  timer = new Timer; doStuff(); diff1 = timer(); doMore(); diff2 = timer();
  */
-const Timer = exports.Timer = function Timer() {
+exports.Timer = Timer; function Timer() {
 	const start = hrtime();
 	return function() { return hrtime() - start; };
-};
+}
 
 /**
  * Counter
@@ -158,17 +148,17 @@ const Timer = exports.Timer = function Timer() {
  * @return {function}       a function that increments start by one at each call and returns the implemented value
  * @method {Number}   get   returns the current value (without incrementing it)
  */
-const Counter = exports.Counter = function Counter(start) {
+exports.Counter = Counter; function Counter(start) {
 	start = +start || 0;
-	return Object.assign(function() { return ++start; }, { get: function() { return start; }, });
-};
+	return Object.assign(function() { return ++start; }, { get: function() { return start; }, }); // eslint-disable-line prefer-arrow-callback
+}
 
 /**
  * Logger
  * @param {...[type]} outer first args
  */
 // (...outer) => (...inner) => log(...outer, ...inner);
-const Logger = exports.Logger = function Logger() {
+exports.Logger = Logger; function Logger() {
 	const outer = arguments;
 	return function() {
 		const args = [];
@@ -176,15 +166,15 @@ const Logger = exports.Logger = function Logger() {
 		args.push.apply(args, arguments);
 		return log.apply(null, args);
 	};
-};
+}
 
 /**
  * callback that blocks an events propagation and default action
  */
-const blockEvent = exports.blockEvent = function blockEvent(event) {
+exports.blockEvent = blockEvent; function blockEvent(event) {
 	event.preventDefault();
 	event.stopPropagation && event.stopPropagation();
-};
+}
 
 /**
  * string similarity norm, inspired by http://www.catalysoft.com/articles/StrikeAMatch.html
@@ -193,25 +183,25 @@ const blockEvent = exports.blockEvent = function blockEvent(event) {
  * @param  {[type]} n  length of sequences to match
  * @return {float}     similarity of s1 and s1. Between 1 for two equal strings and 0 if there is no substeing s of s1 and length n that is also substring of s2
  */
-const fuzzyMatch = exports.fuzzyMatch = function fuzzyMatch(s1, s2, n) {
+exports.fuzzyMatch = fuzzyMatch; function fuzzyMatch(s1, s2, n) {
 	n = n > 2 && Number.parseInt(n) || 2;
 	const l1 = s1.length - n + 1;
 	const l2 = s2.length - n + 1;
 	const used = new Array(l2);
-	var total = 0;
-	for (var i = 0; i < l1; ++i) {
-		var j = -1;
+	let total = 0;
+	for (let i = 0; i < l1; ++i) {
+		let j = -1;
 		while ( // find s1.substr in s2 that wasn't used yet
 			((j = s2.indexOf(s1.substring(i, i + n), j + 1)) !== -1)
 			&& used[j]
-		) { }
+		) { void 0; }
 		if (j !== -1) {
 			total++;
 			used[j] = true;
 		}
 	}
 	return (l1 + l2) ? 2 * total / (l1 + l2) : 0;
-};
+}
 
 /**
  * Wraps a function in a simple Map based cache. The cache key is the first argument passed to the resulting function.
@@ -219,15 +209,16 @@ const fuzzyMatch = exports.fuzzyMatch = function fuzzyMatch(s1, s2, n) {
  * @param  {Map}       cache  Optional object with .get() and .set() functions (e.g. a WeakMap or Map). Defaults to a new Map().
  * @return {function}         The func parameter wrapped such that its return values will be cached with the first argument as the key. All arguments are forwarded to func.
  */
-const cached = exports.cached = function cached(func, cache) {
+exports.cached = cached; function cached(func, cache) {
 	cache = cache || new Map;
 	const ret = function(arg) {
 		if (cache.has(arg)) { return cache.get(arg); }
-		const result = func.apply(this, arguments);
+		const result = func.apply(this, arguments); // eslint-disable-line no-invalid-this
 		cache.set(arg, result);
 		return result;
 	};
 	return ret;
-};
+}
 
-}; if (typeof define === 'function' && define.amd) { define([ 'exports', ], factory); } else { const exp = { }, result = factory(exp) || exp; if (typeof exports === 'object' && typeof module === 'object') { module.exports = result; } else { global[factory.name] = result; } } })(this);
+}; if (typeof define === 'function' && define.amd) { define([ 'exports', ], factory); } else { const exp = { }, result = factory(exp) || exp; if (typeof exports === 'object' && typeof module === 'object') { module.exports = result; } else { global[factory.name] = result; } } })((function() { return this; })()); // eslint-disable-line
+

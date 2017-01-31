@@ -1,4 +1,4 @@
-'use strict';
+/* eslint-disable */ 'use strict';
 /* global requireEs6 */
 
 const { TemplateEngine, ForEach, ForOf, While, If, Value, Index, Key, Call, End, NoMap, } = require('./../../template/engine.js');

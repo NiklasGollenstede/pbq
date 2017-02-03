@@ -20,30 +20,25 @@ exports.inIframe = inIframe; function inIframe() {
  * Creates a DOM Element and sets properties/attributes and children.
  * @param  {string}          tagName     Type of the new Element to create.
  * @param  {object}          properties  Optional. Object (not Array) of properties, which are deeply copied onto the new element.
- * @param  {Array(Element)}  childList   Optional. Array of elements or strings to set as the children of the new element.
+ * @param  {Array<Element>}  childList   Optional. Array of elements or strings (as Text nodes) to set as the children of the new element. Nested Array are recursively flattened.
  * @return {Element}                     The new DOM element.
  */
 exports.createElement = createElement; function createElement(tagName, properties, childList) {
-	const document = (this || global).window.document;
 	const element = document.createElement(tagName);
 	if (Array.isArray(properties)) { childList = properties; properties = null; }
-	properties && deepAssign(element, properties);
-	if (!childList) { return element; }
-	for (const child of childList) {
-		child && element.appendChild(typeof child === 'string' ? document.createTextNode(child) : child);
-	}
-	return element;
-}
-
-function deepAssign(target, source) {
-	Object.keys(source).forEach(key => {
+	properties && (function assign(target, source) { Object.keys(source).forEach(key => {
 		const value = source[key], now = target[key];
 		if (typeof value === 'object' && (typeof now === 'object' || typeof now === 'function')) {
-			deepAssign(now, value);
+			assign(now, value);
 		} else {
 			target[key] = value;
 		}
-	});
+	}); })(element, properties);
+	childList && (function append(child) {
+		if (Array.isArray(child)) { return void child.forEach(append); }
+		child && element.appendChild(typeof child === 'string' ? document.createTextNode(child) : child);
+	})(childList);
+	return element;
 }
 
 /**

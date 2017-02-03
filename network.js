@@ -67,6 +67,7 @@ if (global.process && global.process.versions && global.process.versions.node) {
 		ProgressEvent = function(reason) { const error = global.document.createEvent('ProgressEvent'); error.initEvent(reason, false, false); return error; };
 	}
 }
+HttpRequest.available = !!XMLHttpRequest;
 
 /**
  * Converts an ArrayBuffer into a binary string, where each char represents a byte of the buffer.

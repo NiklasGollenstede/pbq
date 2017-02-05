@@ -177,33 +177,6 @@ exports.blockEvent = blockEvent; function blockEvent(event) {
 }
 
 /**
- * string similarity norm, inspired by http://www.catalysoft.com/articles/StrikeAMatch.html
- * @param  {[type]} s1 input, commutative
- * @param  {[type]} s2 input, commutative
- * @param  {[type]} n  length of sequences to match
- * @return {float}     similarity of s1 and s1. Between 1 for two equal strings and 0 if there is no substeing s of s1 and length n that is also substring of s2
- */
-exports.fuzzyMatch = fuzzyMatch; function fuzzyMatch(s1, s2, n) {
-	n = n > 2 && Number.parseInt(n) || 2;
-	const l1 = s1.length - n + 1;
-	const l2 = s2.length - n + 1;
-	const used = new Array(l2);
-	let total = 0;
-	for (let i = 0; i < l1; ++i) {
-		let j = -1;
-		while ( // find s1.substr in s2 that wasn't used yet
-			((j = s2.indexOf(s1.substring(i, i + n), j + 1)) !== -1)
-			&& used[j]
-		) { void 0; }
-		if (j !== -1) {
-			total++;
-			used[j] = true;
-		}
-	}
-	return (l1 + l2) ? 2 * total / (l1 + l2) : 0;
-}
-
-/**
  * Wraps a function in a simple Map based cache. The cache key is the first argument passed to the resulting function.
  * @param  {function}  func   The function whose results are to be cached.
  * @param  {Map}       cache  Optional object with .get() and .set() functions (e.g. a WeakMap or Map). Defaults to a new Map().

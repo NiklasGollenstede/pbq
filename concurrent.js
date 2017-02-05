@@ -27,8 +27,8 @@ exports.PromiseCapability = PromiseCapability; function PromiseCapability() {
 }
 
 /**
- * @param  {uint}    ms  Time to "sleep" in milliseconds
- * @return {Promise}     Resolves to undefined after 'ms' milliseconds
+ * @param  {natural}  ms  Time to "sleep" in milliseconds
+ * @return {Promise}      Resolves to undefined after 'ms' milliseconds
  */
 exports.sleep = sleep; function sleep(ms) {
 	return new Promise(done => setTimeout(done, ms));

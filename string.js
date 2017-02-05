@@ -152,6 +152,47 @@ QueryObject.prototype.toString = function(keySep, valueSep, encoder) {
 };
 
 /**
+ * String similarity norm, inspired by http://www.catalysoft.com/articles/StrikeAMatch.html
+ * @param  {string}   s1  Commutative input.
+ * @param  {string}   s2  Commutative input.
+ * @param  {natural}  n   Optional. Length of sequences to match. Defaults to 2.
+ * @return {float}        Similarity of s1 and s1. Between 1 iff the two strings are equal and 0 iff s1 and s2 share no substring of length >= n (for n >= 2).
+ */
+exports.fuzzyMatch = fuzzyMatch; function fuzzyMatch(s1, s2, n) {
+	n = Math.abs(n << 0) || 2;
+	const l1 = s1.length - n + 1;
+	const l2 = s2.length - n + 1;
+	if (l1 <= 0 || l2 <= 0) { return +(s1 === s2); }
+	const used = new Array(l2);
+	let total = 0;
+	for (let i = 0; i < l1; ++i) {
+		let j = -1;
+		while ( // find s1.substr in s2 that wasn't used yet
+			((j = s2.indexOf(s1.substring(i, i + n), j + 1)) !== -1)
+			&& used[j]
+		) { void 0; }
+		if (j !== -1) {
+			total++;
+			used[j] = true;
+		}
+	}
+	return (l1 + l2) ? 2 * total / (l1 + l2) : 0;
+}
+
+/**
+ * Uses fuzzyMatch to determine how many of a shorter strings n-grams are uniquely contained in a longer string.
+ */
+exports.fuzzyIncludes = fuzzyIncludes; function fuzzyIncludes(s1, s2, n) {
+	n = Math.abs(n << 0) || 2;
+	const l1 = s1.length - n + 1;
+	const l2 = s2.length - n + 1;
+	const ll = Math.min(l1, l2);
+	if (ll <= 0) { return +(s1 === s2); }
+	const match = fuzzyMatch(s1, s2, n);
+	return match && ll ? match / 2 * (l1 + l2) / ll : 0;
+}
+
+/**
  * Replaces HTML control characters in a string with their escape entities.
  * @param  {string}  html  A string possibly containing control characters.
  * @return {string}        A string without any control characters, whose unescapeHtml() is the input.

@@ -6,6 +6,7 @@ const webExt = document && !importScripts && (() => {
 	const api = (global.browser || global.chrome);
 	return api && api.extension && typeof api.extension.getURL === 'function' && api;
 })();
+const isContentScript = webExt && !document.currentScript;
 const isGenerator = code => (/^function\s*\*/).test(code);
 const resolved = Promise.resolve();
 
@@ -14,7 +15,7 @@ const Loading = { }; // url ==> Module (with .loading === true)
 
 let   mainModule = null;
 let   baseUrl = '';
-let   hiddenBaseUrl = null;
+let   hiddenBaseUrl = null; // scripts attached with tabs.executeScript can incorrectly have this file url prefix. replacing hiddenBaseUrl with baseUrl fixes that
 const prefixMap = { };
 let   modIdMap = null;
 let   defIdMap = null;
@@ -22,7 +23,7 @@ let   loadScript = url => { throw new Error(`No JavaScript loader available to l
 
 { // set default baseUrl
 	const path = getCallingScript(0);
-	const fromNM = (/\/node_modules\/(?:require|es6lib)\/require\.js$/).test(path);
+	const fromNM = (/\/node_modules\/[^\/]+\/require\.js$/).test(path);
 	baseUrl = path.split('/').slice(0, fromNM ? -3 : -1).join('/') +'/';
 }
 if (webExt) {
@@ -203,6 +204,14 @@ function define(/* id, deps, factory */) {
 			id = id.slice(baseUrl.length);
 		} else if (id.startsWith('/')) {
 			id = id.slice(1);
+		} else if (isContentScript && hiddenBaseUrl === null && (/^(?:jar:)?file:\/\/|^!/).test(url)) {
+			// require.js was loaded via `conent_script` and has the correct url, but the current module is loaded by `tabs.executeScript` probably with an incorrect url
+			for (const module of Object.values(Loading)) { if (id.endsWith('/'+ module.id)) {
+				hiddenBaseUrl = id.slice(0, -module.id.length);
+				console.warn(`Loaded file "${ url }" in a content script, will replace "${ hiddenBaseUrl }" with "${ baseUrl }" from now on`);
+				id = module.id; src = src.replace(hiddenBaseUrl, baseUrl);
+				break;
+			} }
 		}
 	}
 	if (typeof id !== 'string') { badArg(); }
@@ -494,7 +503,7 @@ function onContentScriptMessage(message, sender, reply) {
 	return true;
 }
 
-if (webExt && !document.currentScript) { // webExtension and not loaded via <script> tag
+if (isContentScript) { // webExtension and not loaded via <script> tag
 	loadScript = url => new Promise((resolve, reject) => webExt.runtime.sendMessage([ 'require.loadScript', 1, [ url, ], ], reply => {
 		if (webExt.runtime.lastError) { return void reject(webExt.runtime.lastError); }
 		if (!Array.isArray(reply)) { return void reject(new Error('Failed to load script. Bad reply')); }
@@ -538,7 +547,7 @@ function config(options) {
 	/// Set an id to be the main module. Loads the module if needed.
 	if ('main' in options) {
 		const id = resolveId(location, options.main.replace(/^"(.*)"$/g, '$1'));
-		require.async(id); // TODO: .catch ?
+		require.async(id);
 		require.main = require.cache[id];
 		require.main.parent = null;
 	}

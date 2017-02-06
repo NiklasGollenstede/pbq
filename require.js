@@ -16,10 +16,10 @@ const Loading = { }; // url ==> Module (with .loading === true)
 let   mainModule = null;
 let   baseUrl = '';
 let   hiddenBaseUrl = null; // scripts attached with tabs.executeScript can incorrectly have this file url prefix. replacing hiddenBaseUrl with baseUrl fixes that
-const prefixMap = { };
-let   modIdMap = null;
-let   defIdMap = null;
-let   loadScript = url => { throw new Error(`No JavaScript loader available to load "${ url }"`); };
+const prefixMap = { }; // url prefix map (idPrefix ==> urlPrefix), instead of baseUrl
+let   modIdMap = null; // id prefix maps by id of requesting module (requestinModuleId ==> idPrefix ==> idPrefix)
+let   defIdMap = null; // id prefix map for '*' (idPrefix ==> idPrefix)
+let   loadScript; setScriptLoader(null);
 
 { // set default baseUrl
 	const path = getCallingScript(0);
@@ -336,7 +336,7 @@ class Module {
 			.then(result => done(...result))
 			.catch(error => { console.error(`Failed to require([ ${ names }, ], ...)`); throw error; });
 		} else {
-			throw new Error(`require must be called with (string) or (Array, function)`);
+			throw new Error(`require must be called with (string) or (Array<string>, function)`);
 		}
 		return null;
 	}
@@ -491,42 +491,30 @@ function resolveByPlugin(plugin, from, id) {
 	return resolveId(from, id);
 }
 
-function onContentScriptMessage(message, sender, reply) {
-	if (!Array.isArray(message) || !Array.isArray(message[2]) || message[0] !== 'require.loadScript' || message[1] !== 1 || !sender.tab) { return false; }
-	let url = message[2][0];
-	if (!url.startsWith(baseUrl)) { return reply([ '', -1, [ 'Can only load local resources', ], ]); }
-	url = url.slice(baseUrl.length - 1);
-	webExt.tabs.executeScript(sender.tab.id, { file: url, }, () => {
-		if (webExt.runtime.lastError) { return reply([ '', -1, [ webExt.runtime.lastError.message, ], ]); }
-		return reply([ '', 1, [ null, ], ]);
-	});
-	return true;
+function domLoader(url) { return new Promise((resolve, reject) => {
+	const script = document.createElement('script');
+	script.onload = resolve;
+	script.onerror = reject;
+	script.src = url;
+	document.documentElement.appendChild(script).remove();
+}); }
+
+const requestedUrls = [ ];
+function workerLoder(url) {
+	requestedUrls.push(url);
+	return resolved.then(
+		() => requestedUrls.length
+		&& importScripts(requestedUrls.splice(0, Infinity))
+	);
 }
 
-if (isContentScript) { // webExtension and not loaded via <script> tag
-	loadScript = url => new Promise((resolve, reject) => webExt.runtime.sendMessage([ 'require.loadScript', 1, [ url, ], ], reply => {
-		if (webExt.runtime.lastError) { return void reject(webExt.runtime.lastError); }
-		if (!Array.isArray(reply)) { return void reject(new Error('Failed to load script. Bad reply')); }
-		const threw = reply[1] < 0;
-		threw ? reject(reply[2][0]) : resolve();
-	}));
-} else if (document) { // normal DOM window
-	loadScript = url =>	new Promise((resolve, reject) => {
-		const script = document.createElement('script');
-		script.onload = resolve;
-		script.onerror = reject;
-		script.src = url;
-		document.documentElement.appendChild(script).remove();
-	});
-} else if (importScripts) { // for WebWorkers, untested
-	const requested = [ ];
-	loadScript = url => {
-		requested.push(url);
-		resolved.then(
-			() => requested.length
-			&& importScripts(requested.splice(0, Infinity))
-		);
-	};
+function setScriptLoader(loader) {
+	if (typeof loader !== 'function') {
+		loadScript = document ? domLoader : importScripts ? workerLoder
+		: url => { throw new Error(`No JavaScript loader available to load "${ url }"`); };
+	} else {
+		loadScript = loader;
+	}
 }
 
 function spawn(iterator) {
@@ -553,7 +541,7 @@ function config(options) {
 	}
 
 	if ('paths' in options) {
-		const paths = typeof options.paths === 'string' ? JSON.parse(options.paths) : options.paths;
+		const paths = options.paths;
 		Object.keys(paths).forEach(prefix => {
 			const url = new URL(paths[prefix], baseUrl);
 			prefixMap[prefix] = url.href.slice(0, url.href.length - url.hash.length - url.search.length);
@@ -561,7 +549,7 @@ function config(options) {
 	}
 
 	if ('map' in options) {
-		const map = typeof options.map === 'string' ? JSON.parse(options.map) : options.map;
+		const map = options.map;
 		Object.keys(map).forEach(id => {
 			const idMap = Object.assign(map[id]);
 			if (typeof idMap !== 'object') { return; }
@@ -575,7 +563,7 @@ function config(options) {
 	}
 
 	if ('shim' in options) {
-		const shims = typeof options.shim === 'string' ? JSON.parse(options.shim) : options.shim;
+		const shims = options.shim;
 		Object.keys(shims).forEach(id => {
 			const shim = shims[id];
 			if (!shim || typeof shim !== 'object') { return; }
@@ -606,18 +594,19 @@ function config(options) {
 		});
 	}
 
-	if ('serveContentScripts' in options) {
-		const value = options.serveContentScripts;
-		if (value === 'false' || value === false) {
-			webExt.runtime.onMessage.removeListener(onContentScriptMessage);
-		} else {
-			webExt.runtime.onMessage.addListener(onContentScriptMessage);
-		}
+	if ('defaultLoader' in options) {
+		setScriptLoader(options.defaultLoader);
 	}
 }
 
 /// set the config specified in the script tag via < data-...="..." >
-config(document.currentScript && document.currentScript.dataset);
+if (document.currentScript) {
+	const data = document.currentScript.dataset, config = { };
+	Object.keys(data).forEach(key => { try { config[key] = JSON.parse(data[key]); } catch(_) {config[key] = data[key]; } });
+	require.config(config);
+}
+
+if (typeof global.require === 'object') { require.config(global.require); }
 
 global.define = define;
 global.require = require;

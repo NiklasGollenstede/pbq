@@ -1,5 +1,7 @@
 (function(global) { 'use strict'; /* globals URL, location, */ // This Source Code Form is subject to the terms of the Mozilla Public License, v. 2.0. If a copy of the MPL was not distributed with this file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
+if (typeof global.define === 'function' && define.amd) { console.warn('Existing AMD loader detected, will overwrite'); }
+
 const document = typeof window !== 'undefined' && global.navigator && global.document;
 const importScripts = typeof window === 'undefined' && typeof navigator === 'object' && typeof global.importScripts === 'function';
 const webExt = document && !importScripts && (() => {
@@ -13,6 +15,7 @@ const resolved = Promise.resolve();
 const Modules = { }; // id ==> Module
 const Loading = { }; // url ==> Module (with .loading === true)
 
+const moduleConfig = { }; // moduleId ==> module.config()
 let   mainModule = null;
 let   baseUrl = '';
 let   hiddenBaseUrl = null; // scripts attached with tabs.executeScript can incorrectly have this file url prefix. replacing hiddenBaseUrl with baseUrl fixes that
@@ -420,6 +423,7 @@ class Module {
 	get children  () { return Array.from(this._children); }
 	get loaded    () { return this._loaded; }
 	get resolved  () { return this._resolved; }
+	config() { return moduleConfig[this.id]; }
 }
 
 const globalModule = new Module(null, '', '');
@@ -538,6 +542,10 @@ function config(options) {
 		require.async(id);
 		require.main = require.cache[id];
 		require.main.parent = null;
+	}
+
+	if ('config' in options) {
+		Object.assign(moduleConfig, options.config);
 	}
 
 	if ('paths' in options) {

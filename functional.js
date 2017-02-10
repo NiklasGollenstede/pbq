@@ -89,9 +89,7 @@ exports.debounce = debounce; function debounce(callback, time) {
 	let timer = null;
 	return function() {
 		clearTimeout(timer);
-		timer = setTimeout(function() {
-			callback.apply(this, arguments); // eslint-disable-line no-invalid-this
-		}, time);
+		timer = setTimeout(() => callback.apply(this, arguments), time); // eslint-disable-line no-invalid-this
 	};
 }
 

@@ -17,20 +17,12 @@ exports.onElementChanged = onElementChanged; function onElementChanged(element, 
 
 exports.InsertObserver = exports.CreationObserver = CreationObserver; function CreationObserver(element) {
 	const listeners = [/*{ callback: function(){}, selector: string [, single: true] }*/];
-	const observer = new MutationObserver(function(mutations, observer) {
-		mutations.forEach(function(mutation) {
-			for (var j = 0, element; (element = mutation.addedNodes[j]); j++) {
-				elementCreated(listeners, element);
-				if (element.querySelectorAll) {
-					for (var list = element.querySelectorAll('*'),
-						i=0; (element = list[i]); i++) {
-						elementCreated(listeners, element);
-					}
-				}
-			}
+	const observer = new MutationObserver(_=>_.forEach(_=>_.addedNodes.forEach(element => {
+		elementCreated(listeners, element);
+		element.querySelectorAll && element.querySelectorAll('*').forEach(element => {
+			elementCreated(listeners, element);
 		});
-		observer.takeRecords();
-	});
+	})));
 	observer.listeners = listeners;
 	observer.element = element || global.document;
 	Self.set(this, observer);

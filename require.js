@@ -103,7 +103,7 @@ function parseDepsDestr(factory, name, code) {
 
 function parseDepsBody(factory, name, code) {
 	if (factory.length === 0) { return [ ]; }
-	const require = (/require\s*\(\s*(?:"(.*?)"|'.*?'|`.*?`)\s*\)/g);
+	const require = (/\brequire\s*\(\s*(?:"(.*?)"|'.*?'|`.*?`)\s*\)/g);
 	const whitespace = (/\s*/g);
 
 	// try to find an early way out
@@ -112,12 +112,13 @@ function parseDepsBody(factory, name, code) {
 		const requireAt = match.index;
 		const dotAt = code.lastIndexOf('.', requireAt);
 		whitespace.lastIndex = dotAt;
-		if (dotAt >= 0 && dotAt + whitespace.exec(code)[0].length === requireAt) { continue; }
+		if (dotAt >= 0 && dotAt + whitespace.exec(code)[0].length === requireAt) { continue; } // require was used as a method
 		found = true; break;
 	}
 	const deps = [ 'require', 'exports', 'module', ];
-	if (!found) { return deps.slice(0, factory.length); }
+	if (!found) { return deps.slice(0, factory.length); } // there was no literal `require("string")` call ==> just return the mandatory deps
 
+	// this thing looks huge, but it is quite precise and very efficient
 	const stringsAndComments = (/(\'(?:[^\\]|\\[^\\]|(?:\\\\)*)*?\'|\"(?:[^\\]|\\[^\\]|(?:\\\\)*)*?\"|\`(?:[^\\]|\\[^\\]|(?:\\\\)*)*?\`)|\/\/[^]*?$|\/\*[^]*?\*\/|\/(?:[^\\]|\\[^\\]|(?:\\\\)*)*?\//gm);
 	/* which (using the 'regexpx' module) is: RegExpX('gmsX')`
 		(		# strings, allow multiple lines
@@ -136,21 +137,21 @@ function parseDepsBody(factory, name, code) {
 	`;
 	and the expression between the quotes is: RegExpX`
 		(?:
-			  [^\\] # something that's not a backslash
-			| \\ [^\\] # a backslash followed by something that's not
-			| (?: \\\\ )* # an even number of backslashes
+			  [^\\]   # something that's not a backslash
+			| \\ [^\\]   # a backslash followed by something that's not, so this consumes escaped closing quotes
+			| (?: \\\\ )*   # an even number of backslashes
 		)*?
 	`;
 	*/
 
-	code = code.replace(stringsAndComments, (_, s) => (s && (s = s.slice(1, -1)) && !require.test(s) ? '"'+ s +'"' : ''));
+	code = code.replace(stringsAndComments, (_, s) => (s && !(/["'`\\]/).test(s) && (s = s.slice(1, -1)) && !require.test(s) ? '"'+ s +'"' : '')); // avoid recursive matchings of the require RegExp
 
 	require.lastIndex = 0;
 	while ((match = require.exec(code))) {
 		const requireAt = match.index;
 		const dotAt = code.lastIndexOf('.', requireAt);
 		whitespace.lastIndex = dotAt;
-		if (dotAt >= 0 && dotAt + whitespace.exec(code)[0].length === requireAt) { continue; }
+		if (dotAt >= 0 && dotAt + whitespace.exec(code)[0].length === requireAt) { continue; } // require was used as a method
 		deps.push(match[1]);
 	}
 
@@ -258,7 +259,7 @@ function define(/* id, deps, factory */) {
 		case 'require': return module.require;
 		case 'exports': return module.exports;
 		case 'module': return module;
-		default: return module.requireAsync(dep +'', true);
+		default: return module._requireAsync(dep +'', true);
 	} })))
 	.then(modules => {
 		const result = special ? factory(makeObject(deps, modules)) : factory(...modules);
@@ -296,8 +297,8 @@ class Module {
 		Object.defineProperty(this, 'require', { get() {
 			if (this._require) { return this._require; }
 			const require = this._require = Module.prototype.require.bind(this);
-			require.async = Module.prototype.requireAsync.bind(this);
-			require.toUrl = Module.prototype.requireToUrl.bind(this);
+			require.async = id => this._requireAsync(id);
+			require.toUrl = id => this._requireToUrl(id);
 			require.resolve = resolveId.bind(null, this.id);
 			require.cache = Modules;
 			require.config = config;
@@ -333,18 +334,18 @@ class Module {
 			this._children.add(module);
 			return module.exports;
 		}
-		const [ names, done, ] = arguments;
+		const [ names, done, failed, ] = arguments;
 		if (Array.isArray(names) && typeof done === 'function') {
-			Promise.all(names.map(name => this.requireAsync(name, true)))
+			Promise.all(names.map(name => this._requireAsync(name, true)))
 			.then(result => done(...result))
-			.catch(error => { console.error(`Failed to require([ ${ names }, ], ...)`); throw error; });
+			.catch(typeof failed === 'function' ? failed : (error => console.error(`Failed to require([ ${ names }, ], ...):`, error)));
 		} else {
-			throw new Error(`require must be called with (string) or (Array<string>, function)`);
+			throw new Error(`require must be called with (string) or (Array<string>, function, function?)`);
 		}
 		return null;
 	}
 
-	requireAsync(name, fast, plugin) {
+	_requireAsync(name, fast, plugin) {
 		let split = 0, id = '';
 		if (plugin) {
 			id = name;
@@ -354,10 +355,10 @@ class Module {
 			if (fast && (plugin = Modules[pluginId]) && plugin._resolved) {
 				id = resolveByPlugin(plugin, this.id, resName);
 			} else {
-				return this.requireAsync(pluginId)
+				return this._requireAsync(pluginId)
 				.then(() => {
 					const plugin = Modules[pluginId];
-					return this.requireAsync(resolveByPlugin(plugin, this.id, resName), true, plugin);
+					return this._requireAsync(resolveByPlugin(plugin, this.id, resName), true, plugin);
 				});
 			}
 		} else {
@@ -416,7 +417,7 @@ class Module {
 		return module.promise.then(() => module.exports);
 	}
 
-	requireToUrl(path) {
+	_requireToUrl(path) {
 		return resolveUrl(resolveId(this.id, path));
 	}
 

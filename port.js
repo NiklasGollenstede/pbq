@@ -17,7 +17,6 @@ const Port = class Port {
 	 *                                Port.node_Stream      for  node.js DuplexSteams,
 	 *                                Port.web_ext_Port     for  (browser/chrome).runtime.Port object in Chromium, Firefox and Opera extensions,
 	 *                                Port.web_ext_Runtime  for  browser.runtime/tabs.on/sendMessage API in Firefox extensions (in Chromium and Opera this needs to be Promise-wrapped),
-	 *                                Port.moz_nsIMessageListenerManager for Firefox MessageManagers,
 	 *                            or any other class that implements the PortAdapter interface.
 	 * @return {Port}             The new Port instance.
 	 */
@@ -160,22 +159,6 @@ const Port = class Port {
  *                            The `options` parameter of port.request()/.post() can be an object of { tabId, frameId?, } to send to tabs.
  *                            The Port is never closed automatically.
  *                            If `thisArg` is == null, the `this` in the handler will be set to the messages `sender`.
- *
- *     Port.moz_nsIMessageListenerManager:
- *                            PortAdapter implementation to send and receive messages in a namespace of nsIMessageListenerManagers.
- *                            The `port` parameter to the Port constructor must be an object of:
- *                                @property {string}                     name       The namespace to listen on and send in.
- *                                @property {string}                     namespace  Alias for `name`.
- *                                @property {nsIMessageListenerManager}  in         Optional. An (Array of) message managers to permanently listen for requests on.
- *                                @property {nsIMessage*}                out        Optional. Default message manager to send messages from.
- *                                @property {nsIMessage*}                mm         Optional. Fallback for both `in` and `out`.
- *                                @property {boolean}                    broadcast  Optional. If true, uses `broadcastAsyncMessage` to send. If not set, it defaults to true iff `out` has no `sendAsyncMessage` method.
- *                                @property {boolean}                    sync       Optional. If true, uses `sendSyncMessage` to send.
- *                            The `options` parameter to <Port>.request()/.post() can be an optional object of:
- *                                @property {nsIMessage*}                sender     Optional. Overwrites `out` for this message. If it is not in `in` and .request() was used, it will be listened on for the reply.
- *                                @property {boolean}                    broadcast  Optional. If set overwrites the constructor parameter for this message.
- *                                @property {boolean}                    sync       Optional. If set overwrites the constructor parameter for this message.
- *                            If `thisArg` is == null, the `this` in the handler will be set to the messages `target`.
  */
 
 /**
@@ -347,54 +330,6 @@ Port.web_ext_Runtime = class web_ext_Runtime {
 	}
 };
 
-Port.moz_nsIMessageListenerManager = class moz_nsIMessageListenerManager {
-
-	constructor(options, onData) {
-		this.in = options.in || options.mm; if (!Array.isArray(this.in)) { this.in = [ this.in, ]; }
-		this.out = options.out || options.mm;
-		const name = this.name = options.name || options.namespace;
-		this.broadcast = 'broadcast' in options ? options.broadcast : this.out && !this.out.sendAsyncMessage;
-		this.sync = !!options.sync;
-		this.onMessage = ({ sync, target, data, }) => {
-			const sender = target.messageManager || target;
-			let retVal;
-			const reply = sync ? ((...args) => (retVal = args)) : ((...args) => sender.sendAsyncMessage(name, args));
-			const async = onData(data[0], data[1], data[2], target, reply);
-			if (sync && async) { try { reportError(new Error(`ignoring asynchronous reply to synchronous request`)); } catch (_) { } }
-			return retVal;
-		};
-		this.in.forEach(_=>_.addMessageListener(this.name, this.onMessage));
-	}
-
-	send(name, id, args, options) { // eslint-disable-line consistent-return
-		const sync = options && ('sync' in options) ? options.sync : this.sync;
-		if (sync) {
-			const replies = this.out.sendSyncMessage(this.name, [ name, id, args, ]).filter(Array.isArray);
-			if (replies.length < 1) { throw new Error(`Request was not handled`); }
-			if (replies.length > 1) { throw new Error(`Request was handled more than once`); }
-			const retVal = handleReply(replies[0]);
-			return retVal === undefined ? null : retVal;
-		} else {
-			const broadcast = options && ('broadcast' in options) ? options.broadcast : this.broadcast;
-			if (broadcast && id) { throw new Error(`Can't broadcast request, use post() instead`); }
-			const sender = options && options.sender;
-			if (sender && id && !this.in.includes(sender)) { // listen to this reply
-				const onReply = event => {
-					if (!event.data || Math.abs(event.data[1]) !== id) { return; }
-					sender.removeMessageListener(this.name, onReply);
-					this.onMessage(event);
-				};
-				sender.addMessageListener(this.name, onReply);
-			}
-			(sender || this.out)[broadcast ? 'broadcastAsyncMessage' : 'sendAsyncMessage'](this.name, [ name, id, args, ]);
-		}
-	}
-
-	destroy() {
-		this.in.forEach(_=>_.removeMessageListener(this.name, this.onMessage));
-	}
-};
-
 // holds references between public interface and private implementation
 const Self = new WeakMap;
 
@@ -425,6 +360,7 @@ class _Port {
 			catch (_) { throw new TypeError(`Handler names must be non-empty strings or RegExp wildcards`); }
 			this.wildcards.set(filter, [ handler, thisArg, ]);
 		}
+		return this;
 	}
 	addHandlers(prefix, handlers, thisArg) {
 		if (typeof prefix === 'object') { [ handlers, thisArg, ] = arguments; prefix = ''; }
@@ -441,9 +377,11 @@ class _Port {
 			if (this.handlers.has(name)) { throw new Error(`Duplicate message handler for "${ name }"`); }
 		});
 		add.forEach(([ name, handler, ]) => this.handlers.set(prefix + name, [ handler, thisArg, ]));
+		return this;
 	}
 	removeHandler(name) {
 		typeof name === 'string' ? this.handlers.delete(name) : this.wildcards.delete(name);
+		return this;
 	}
 	hasHandler(name) {
 		return typeof name === 'string' ? this.handlers.has(name) : this.wildcards.has(name);
@@ -590,11 +528,8 @@ function fromJson(string) {
 }
 
 const reportError =
-typeof console === 'object'
-? function() { try { console.error.apply(console, arguments); } catch (_) { } }
-: typeof Components === 'object'
-? function() { try { for (let i = 0; i < arguments.length; ++i) { Components.utils.reportError(arguments[i]); } } catch (_) { } } // eslint-disable-line no-undef
-: () => 0;
+typeof console !== 'object' ? () => 0
+: function() { try { console.error.apply(console, arguments); } catch (_) { } };
 
 return Port;
 

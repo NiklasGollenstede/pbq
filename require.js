@@ -23,11 +23,14 @@ const prefixMap = { }; // url prefix map (idPrefix ==> urlPrefix), instead of ba
 let   modIdMap = null; // id prefix maps by id of requesting module (requestinModuleId ==> idPrefix ==> idPrefix)
 let   defIdMap = null; // id prefix map for '*' (idPrefix ==> idPrefix)
 let   loadScript; setScriptLoader(null);
+let   scriptTimeout = 7000; // ms after which a script load is assumed to have failed
+let   urlQuery = null;
 
 { // set default baseUrl
-	const path = getCallingScript(0);
-	const fromNM = (/\/node_modules\/[^\/]+\/require\.js$/).test(path);
-	baseUrl = path.split('/').slice(0, fromNM ? -3 : -1).join('/') +'/';
+	let url = getCallingScript(0);
+	[ , url, urlQuery, ] = (/^(.*?)(?:\?|\#|$)(.*)$/).exec(url);
+	const fromNM = (/\/node_modules\/[^\/]+\/require\.js$/).test(url);
+	baseUrl = url.split('/').slice(0, fromNM ? -3 : -1).join('/') +'/';
 }
 if (webExt) {
 	const actualBaseUrl = webExt.extension.getURL('');
@@ -202,6 +205,7 @@ function define(/* id, deps, factory */) {
 	if (id === undefined) {
 		src = getCallingScript(1);
 		const url = new URL(src);
+		const query = url.search + url.hash;
 		src = url.href.slice(0, url.href.length - url.hash.length - url.search.length);
 		id = src.replace(/\.js$/, '');
 		if (id.startsWith(baseUrl)) {
@@ -217,6 +221,7 @@ function define(/* id, deps, factory */) {
 				break;
 			} }
 		}
+		if (query) { moduleConfig[id] = parseQuery(query); }
 	}
 	if (typeof id !== 'string') { badArg(); }
 	if ((/^[\.\\\/]/).test(id)) { throw new Error('The module id must be an absolute path'); }
@@ -259,7 +264,7 @@ function define(/* id, deps, factory */) {
 		case 'require': return module.require;
 		case 'exports': return module.exports;
 		case 'module': return module;
-		default: return module._requireAsync(dep +'', true);
+		default: return Private.requireAsync.call(module, dep +'', true);
 	} })))
 	.then(modules => {
 		const result = special ? factory(makeObject(deps, modules)) : factory(...modules);
@@ -282,38 +287,44 @@ define.amd = {
 
 class Module {
 	constructor(parent, url, id) {
-		this.url = url ? new URL(url) : id ? new URL(resolveUrl(id) +'.js') : '';
 		this.id = id;
+		this.url = url ? new URL(url) : id ? new URL(resolveUrl(id) +'.js') : '';
 		this.parent = parent;
 		this.factory = null;
 		this.exports = { };
-		this._children = new Set;
 		this.promise = new PromiseCapability();
+		this.isShim = false;
+		this._children = new Set;
 		this._loaded = false;
 		this._resolved = false;
-		this.isShim = false;
-
-		this._require = null;
-		Object.defineProperty(this, 'require', { get() {
-			if (this._require) { return this._require; }
-			const require = this._require = Module.prototype.require.bind(this);
-			require.async = id => this._requireAsync(id);
-			require.toUrl = id => this._requireToUrl(id);
-			require.resolve = resolveId.bind(null, this.id);
-			require.cache = Modules;
-			require.config = config;
-			Object.defineProperty(require, 'main', {
-				get() { return mainModule; },
-				set(module) {
-					if (module instanceof Module) { mainModule = module; }
-					else { throw new Error(`require.main must be a Module`); }
-				},
-				enumerable: true, configurable: true,
-			});
-			return require;
-		}, enumerable: true, configurable: true, });
 	}
 
+	get require() {
+		const require = Private.require.bind(this);
+		require.async = Private.requireAsync.bind(this);
+		require.toUrl = id => resolveUrl(resolveId(this.id, id));
+		require.resolve = resolveId.bind(null, this.id);
+		require.cache = Modules;
+		require.config = config;
+		Object.defineProperty(require, 'main', {
+			get() { return mainModule; },
+			set(module) {
+				if (module instanceof Module) { mainModule = module; }
+				else { throw new Error(`require.main must be a Module`); }
+			},
+			enumerable: true, configurable: true,
+		});
+		Object.defineProperty(this, 'require', { value: require, enumerable: true, configurable: true, });
+		return require;
+	}
+
+	get children  () { return Array.from(this._children); }
+	get loaded    () { return this._loaded; }
+	get resolved  () { return this._resolved; }
+	config() { return moduleConfig[this.id]; }
+}
+
+const Private = {
 	require(name) {
 		if (typeof name === 'string') {
 			let split = 0, id = '';
@@ -336,16 +347,16 @@ class Module {
 		}
 		const [ names, done, failed, ] = arguments;
 		if (Array.isArray(names) && typeof done === 'function') {
-			Promise.all(names.map(name => this._requireAsync(name, true)))
+			Promise.all(names.map(name => Private.requireAsync.call(this, name, true)))
 			.then(result => done(...result))
 			.catch(typeof failed === 'function' ? failed : (error => console.error(`Failed to require([ ${ names }, ], ...):`, error)));
 		} else {
 			throw new Error(`require must be called with (string) or (Array<string>, function, function?)`);
 		}
 		return null;
-	}
+	},
 
-	_requireAsync(name, fast, plugin) {
+	requireAsync(name, fast, plugin) {
 		let split = 0, id = '';
 		if (plugin) {
 			id = name;
@@ -355,10 +366,10 @@ class Module {
 			if (fast && (plugin = Modules[pluginId]) && plugin._resolved) {
 				id = resolveByPlugin(plugin, this.id, resName);
 			} else {
-				return this._requireAsync(pluginId)
+				return Private.requireAsync.call(this, pluginId)
 				.then(() => {
 					const plugin = Modules[pluginId];
-					return this._requireAsync(resolveByPlugin(plugin, this.id, resName), true, plugin);
+					return Private.requireAsync.call(this, resolveByPlugin(plugin, this.id, resName), true, plugin);
 				});
 			}
 		} else {
@@ -415,17 +426,8 @@ class Module {
 			console.error(message +', due to:', error); module.promise.reject(new Error(message));
 		});
 		return module.promise.then(() => module.exports);
-	}
-
-	_requireToUrl(path) {
-		return resolveUrl(resolveId(this.id, path));
-	}
-
-	get children  () { return Array.from(this._children); }
-	get loaded    () { return this._loaded; }
-	get resolved  () { return this._resolved; }
-	config() { return moduleConfig[this.id]; }
-}
+	},
+};
 
 const globalModule = new Module(null, '', '');
 const require = globalModule.require;
@@ -496,12 +498,22 @@ function resolveByPlugin(plugin, from, id) {
 	return resolveId(from, id);
 }
 
+function parseQuery(query) {
+	const search = new URLSearchParams(query.replace(/[?#]+/, '&')), config = { };
+	for (const [ key, value, ] of search) {
+		try { config[key] = JSON.parse(value); } catch(_) { config[key] = value; }
+	}
+	return config;
+}
+
 function domLoader(url) { return new Promise((resolve, reject) => {
 	const script = document.createElement('script');
-	script.onload = resolve;
-	script.onerror = reject;
+	script.addEventListener('load', () => { resolve(); clearTimeout(timer); script.remove(); });
+	script.addEventListener('error', e => { reject(e); clearTimeout(timer); script.remove(); });
 	script.src = url;
-	document.documentElement.appendChild(script).remove();
+	// .remove()ing the script immediately causes chrome to randomly fire error events even though the script loaded
+	(document.head || document.documentElement).appendChild(script);
+	const timer = scriptTimeout && setTimeout(() => reject(new Error(`Load of script at "${ url }" timed out`)), scriptTimeout);
 }); }
 
 const requestedUrls = [ ];
@@ -537,14 +549,6 @@ function config(options) {
 		baseUrl = url.href.slice(0, url.href.length - url.hash.length - url.search.length);
 	}
 
-	/// Set an id to be the main module. Loads the module if needed.
-	if ('main' in options) {
-		const id = resolveId(location, options.main.replace(/^"(.*)"$/g, '$1'));
-		require.async(id);
-		require.main = require.cache[id];
-		require.main.parent = null;
-	}
-
 	if ('config' in options) {
 		Object.assign(moduleConfig, options.config);
 	}
@@ -571,6 +575,14 @@ function config(options) {
 		});
 	}
 
+	/// Set an id to be the main module. Loads the module if needed.
+	if ('main' in options) {
+		const id = resolveId(location, options.main.replace(/^"(.*)"$/g, '$1'));
+		require.async(id);
+		const main = require.main = require.cache[id];
+		main.parent = null;
+	}
+
 	if ('shim' in options) {
 		const shims = options.shim;
 		Object.keys(shims).forEach(id => {
@@ -587,7 +599,7 @@ function config(options) {
 			define(id, deps, function*() {
 				(yield loadScript(url).catch(() => {
 					const message = `Failed to load script "${ url }" for shim`;
-					console.error(message); throw new message(message);
+					console.error(message); throw new Error(message);
 				}));
 				Modules[id]._loaded = true;
 				const exports = globalPath.reduce((object, key) => object != null && object[key], global);
@@ -603,17 +615,31 @@ function config(options) {
 		});
 	}
 
+	if ('waitSeconds' in options) {
+		scriptTimeout = options.waitSeconds * 1000 << 0;
+	}
+
 	if ('defaultLoader' in options) {
 		setScriptLoader(options.defaultLoader);
+	}
+
+	if ('deps' in options) {
+		options.deps.forEach(require);
+	}
+
+	if ('callback' in options || 'errback' in options) {
+		Promise.all(globalModule.children.map(_=>_.promise)).then(options.callback, options.errback);
 	}
 }
 
 /// set the config specified in the script tag via < data-...="..." >
 if (document.currentScript) {
 	const data = document.currentScript.dataset, config = { };
-	Object.keys(data).forEach(key => { try { config[key] = JSON.parse(data[key]); } catch(_) {config[key] = data[key]; } });
+	Object.keys(data).forEach(key => {
+		try { config[key] = JSON.parse(data[key]); } catch(_) { config[key] = data[key]; }
+	});
 	require.config(config);
-}
+} else if (urlQuery) { require.config(parseQuery(urlQuery)); }
 
 if (typeof global.require === 'object') { require.config(global.require); }
 

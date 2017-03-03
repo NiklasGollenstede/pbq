@@ -4,7 +4,7 @@
  * Constructs an XMLHttpRequest from the given url and options and returns a Promise
  * that is fulfilled with the request once the result is loaded or canceld with an ProgressEvent if an error occurs.
  * @param {string} url     Destination url, may be omitted in favor of the url or src property of the options object.
- * @param {Object} options optional object of:
+ * @param {object} options optional object of:
  *     @property {string}  url || src        Optional replacement for the url parameter
  *     @property {string}  method            HTTP request method
  *     @property {bool}    needAbort         If trueisch, the returned Promise has an abort() method that aborts the XHR and rejects the Promise
@@ -58,7 +58,7 @@ exports.HttpRequest = HttpRequest; function HttpRequest(url, options) { const pr
 // compatibility fixes
 let XMLHttpRequest, ProgressEvent;
 if (global.process && global.process.versions && global.process.versions.node) {
-	try { XMLHttpRequest = require('xhr'+'2'); ProgressEvent = XMLHttpRequest.ProgressEvent; } catch(_) { }
+	try { XMLHttpRequest = require('xhr'+'2'); ProgressEvent = XMLHttpRequest.ProgressEvent; } catch(_) { } /* global require */
 } else {
 	XMLHttpRequest = global.XMLHttpRequest || (() => { try { return require('sdk/net'+'/xhr').XMLHttpRequest; } catch(_) { return null; } })();
 	try { /* global ProgressEvent */

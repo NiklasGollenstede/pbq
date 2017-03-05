@@ -14,6 +14,7 @@ const resolved = Promise.resolve();
 
 const Modules = { }; // id ==> Module
 const Loading = { }; // url ==> Module (with .loading === true)
+const Self = new WeakMap/*<Module, object>*/;
 
 const moduleConfig = { }; // moduleId ==> module.config()
 let   mainModule = null;
@@ -162,11 +163,12 @@ function parseDepsBody(factory, name, code) {
 }
 
 function hasPendingPath(from, to) {
-	if (from._children.size === 0) { return false; }
-	return from.children.some(child => {
-		if (child._resolved) { return false; }
+	const { children, } = from;
+	if (children.length === 0) { return false; }
+	return children.some(child => {
+		if (child.resolved) { return false; }
 		if (child === to) { return true; }
-		// unless somebody messes with the ._resolved property, this traverses a directed acyclic graph
+		// unless somebody messes with the .resolved property, this traverses a directed acyclic graph
 		return hasPendingPath(child, to);
 	});
 }
@@ -230,18 +232,18 @@ function define(/* id, deps, factory */) {
 	}
 
 	// get/create Module
-	const module = src && Loading[src] || Modules[id] || (Modules[id] = new Module(null, null, id));
-	if (module._loaded) { throw new Error(`Duplicate definition of module "${ id }"`); }
-	module._loaded = true;
+	const module = src && Loading[src] || Modules[id] || (Modules[id] = new Module(null, null, id)), self = Self.get(module);
+	if (self.loaded) { throw new Error(`Duplicate definition of module "${ id }"`); }
+	self.loaded = true;
 	delete Loading[src];
 
 	if (typeof factory !== 'function') {
 		resolved.then(() => {
 			module.exports = factory;
-			module._resolved = true;
-			module.promise.resolve(module.exports);
+			self.resolved = true;
+			self.resolve(module.exports);
 		});
-		return module.promise.then(() => module.exports);
+		return self.promise;
 	}
 
 	const code = factory +'';
@@ -273,11 +275,11 @@ function define(/* id, deps, factory */) {
 	.catch(error => { console.error(`Definition of ${ id } failed:`, error); throw error; })
 	.then(exports => {
 		exports != null && (module.exports = exports);
-		module._resolved = true;
-		module.promise.resolve(module);
+		self.resolved = true;
+		self.resolve(module.exports);
 	})
-	.catch(module.promise.reject);
-	return module.promise;
+	.catch(self.reject);
+	return self.promise;
 }
 define.amd = {
 	destructuring: true,
@@ -287,16 +289,17 @@ define.amd = {
 
 class Module {
 	constructor(parent, url, id) {
+		const _this = { }; Self.set(this, _this);
 		this.id = id;
 		this.url = url ? new URL(url) : id ? new URL(resolveUrl(id) +'.js') : '';
 		this.parent = parent;
 		this.factory = null;
 		this.exports = { };
-		this.promise = new PromiseCapability();
 		this.isShim = false;
-		this._children = new Set;
-		this._loaded = false;
-		this._resolved = false;
+		_this.promise = Object.freeze(new Promise((y, n) => ((_this.resolve = y), (_this.reject = n))));
+		_this.children = new Set;
+		_this.loaded = false;
+		_this.resolved = false;
 	}
 
 	get require() {
@@ -318,9 +321,10 @@ class Module {
 		return require;
 	}
 
-	get children  () { return Array.from(this._children); }
-	get loaded    () { return this._loaded; }
-	get resolved  () { return this._resolved; }
+	get children  () { return Array.from(Self.get(this).children); }
+	get ready     () { return Self.get(this).promise; }
+	get loaded    () { return Self.get(this).loaded; }
+	get resolved  () { return Self.get(this).resolved; }
 	config() { return moduleConfig[this.id]; }
 }
 
@@ -331,7 +335,7 @@ const Private = {
 			if ((split = name.indexOf('!')) >= 0) { // get the plugin
 				const pluginId = resolveId(this.id, name.slice(0, split));
 				const plugin = Modules[pluginId];
-				if (!plugin || !plugin._resolved) {
+				if (!plugin || !plugin.resolved) {
 					throw new Error(`The plugin "${ pluginId }" is not defined (yet)`);
 				}
 				id = pluginId +'!'+ resolveByPlugin(plugin, this.id, name.slice(split + 1));
@@ -339,10 +343,10 @@ const Private = {
 				id = resolveId(this.id, name);
 			}
 			const module = Modules[id];
-			if (!module || !module._resolved) {
+			if (!module || !module.resolved) {
 				throw new Error(`The module "${ id }" is not defined (yet)`);
 			}
-			this._children.add(module);
+			Self.get(this).children.add(module);
 			return module.exports;
 		}
 		const [ names, done, failed, ] = arguments;
@@ -363,7 +367,7 @@ const Private = {
 		} else if ((split = name.indexOf('!')) >= 0) { // get the plugin
 			const pluginId = resolveId(this.id, name.slice(0, split));
 			const resName = name.slice(split + 1);
-			if (fast && (plugin = Modules[pluginId]) && plugin._resolved) {
+			if (fast && (plugin = Modules[pluginId]) && plugin.resolved) {
 				id = resolveByPlugin(plugin, this.id, resName);
 			} else {
 				return Private.requireAsync.call(this, pluginId)
@@ -376,68 +380,61 @@ const Private = {
 			id = resolveId(this.id, name);
 		}
 
-		let module = Modules[id]; if (module) {
-			this._children.add(module);
-			if (module._resolved) {
+		const _this = Self.get(this);
+		let module = Modules[id], self; if (module) { self = Self.get(module);
+			_this.children.add(module);
+			if (self.resolved) {
 				if (fast) { return module.exports; }
-				return Promise.resolve(module.exports);
+				return self.promise;
 			}
 			if (hasPendingPath(module, this)) {
-				console.warn(`Found cyclic dependency to "${ id }", passing it's unfinished exports to "${ this.id }"`);
-				this._children.delete(module);
 				if (fast) {
-					this.promise.then(() => this._children.add(module));
+					console.warn(`Found cyclic dependency to "${ id }", passing it's unfinished exports to "${ this.id }"`);
+					_this.promise.then(() => _this.children.add(module));
 					return module.exports;
 				}
-				return Promise.reject(Error(`Asynchronously requiring "${ name }" from "${ this.id }" would create a cyclic waiting condition`));
+				return Promise.reject(Error(`Asynchronously requiring "${ name }" from "${ this.id }" before either of them is resolved would create a cyclic waiting condition`));
 			}
-			return module.promise.then(() => module.exports);
+			return self.promise;
 		}
 
 		if (plugin) {
 			const fullId = plugin.id +'!'+ id;
-			module = new Module(this, 'plugin:'+ fullId, fullId);
-			!plugin.exports.dynamic && (Modules[fullId] = module) && this._children.add(module);
-			plugin.exports.load(id, this.require, module.promise.resolve, { cancel: module.promise.reject, });
-			return module.promise.then(exports => {
+			module = new Module(this, 'plugin:'+ fullId, fullId); self = Self.get(module);
+			!plugin.exports.dynamic && (Modules[fullId] = module) && _this.children.add(module);
+			plugin.exports.load(id, this.require, self.resolve, { cancel: self.reject, });
+			return self.promise.then(exports => {
 				module.exports = exports;
-				module._loaded = module._resolved = true;
+				self.loaded = self.resolved = true;
 				return exports;
 			});
 		}
 
 		const url = resolveUrl(id) +'.js';
-		module = Modules[id] = Loading[url] = new Module(this, url, id);
-		this._children.add(module);
+		module = Modules[id] = Loading[url] = new Module(this, url, id); self = Self.get(module);
+		_this.children.add(module);
 
 		loadScript(url)
 		.then(() => {
-			if (module._loaded) { return; }
+			if (self.loaded) { return; }
 			if (this.isShim) {
-				module._loaded = module._resolved = module.isShim = true;
-				module.promise.resolve(module.exports);
+				self.loaded = self.resolved = module.isShim = true;
+				self.resolve(module.exports);
 				return void console.info(`The shim dependency "${ url }" of "${ this.id }" didn't call define`);
 			}
 			const message = `The script at "${ url }" did not call define with the expected id`;
-			console.error(message); module.promise.reject(new Error(message));
+			console.error(message); self.reject(new Error(message));
 		})
 		.catch(error => {
 			const message = `Failed to load script "${ url }" first requested from "${ this.url }"`;
-			console.error(message +', due to:', error); module.promise.reject(new Error(message));
+			console.error(message +', due to:', error); self.reject(new Error(message));
 		});
-		return module.promise.then(() => module.exports);
+		return self.promise;
 	},
 };
 
 const globalModule = new Module(null, '', '');
 const require = globalModule.require;
-
-function PromiseCapability() {
-	let y, n; const promise = new Promise((_y, _n) => ((y = _y), (n = _n)));
-	promise.resolve = y;
-	promise.reject = n;
-	return promise;
-}
 
 function resolveId(from, to) {
 	let id = to +'';
@@ -601,7 +598,7 @@ function config(options) {
 					const message = `Failed to load script "${ url }" for shim`;
 					console.error(message); throw new Error(message);
 				}));
-				Modules[id]._loaded = true;
+				Self.get(module).loaded = true;
 				const exports = globalPath.reduce((object, key) => object != null && object[key], global);
 				if (!exports) {
 					const message = `The script at "${ url }" did not set the global variable "${ globalPath.join('.') }" for shim`;
@@ -610,8 +607,9 @@ function config(options) {
 				const result = init && (yield init.apply(global, arguments));
 				return result !== undefined ? result : globalPath.length ? exports : undefined;
 			});
-			Modules[id]._loaded = false;
-			Modules[id].isShim = true;
+			const module = Modules[id];
+			Self.get(module).loaded = false;
+			module.isShim = true;
 		});
 	}
 

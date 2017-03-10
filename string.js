@@ -57,7 +57,7 @@ exports.Guid = Guid; function Guid() {
  * @return {string}      the time part of new Date(time * 1000).toUTCString(), hurs only if !== 0
  */
 exports.secondsToHhMmSs = secondsToHhMmSs; function secondsToHhMmSs(time) {
-	time = +time;
+	time = +time +.5<<0;
 	const hours = Math.floor(time / 3600); time = time % 3600;
 	const ret = Math.floor(time / 60) +':'+ (time % 60 < 10 ? ('0' + time % 60) : (time % 60));
 	if (hours) { return hours + (ret.length > 4 ? ':' : ':0') +ret; }

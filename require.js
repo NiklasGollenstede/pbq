@@ -1,6 +1,6 @@
 (function(global) { 'use strict'; /* globals URL, location, */ // This Source Code Form is subject to the terms of the Mozilla Public License, v. 2.0. If a copy of the MPL was not distributed with this file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
-if (typeof global.define === 'function' && define.amd) { console.warn('Existing AMD loader detected, will overwrite'); }
+if (typeof global.define === 'function' && define.amd) { console.warn('Existing AMD loader will be overwritten'); }
 
 const document = typeof window !== 'undefined' && global.navigator && global.document;
 const importScripts = typeof window === 'undefined' && typeof navigator === 'object' && typeof global.importScripts === 'function';
@@ -266,7 +266,7 @@ function define(/* id, deps, factory */) {
 		case 'require': return module.require;
 		case 'exports': return module.exports;
 		case 'module': return module;
-		default: return Private.requireAsync.call(module, dep +'', true);
+		default: return Private.requireAsync.call(module, dep +'', true, null, false);
 	} })))
 	.then(modules => {
 		const result = special ? factory(makeObject(deps, modules)) : factory(...modules);
@@ -304,7 +304,7 @@ class Module {
 
 	get require() {
 		const require = Private.require.bind(this);
-		require.async = Private.requireAsync.bind(this);
+		require.async = id => Private.requireAsync.call(this, id, false, null, false);
 		require.toUrl = id => resolveUrl(resolveId(this.id, id));
 		require.resolve = resolveId.bind(null, this.id);
 		require.cache = Modules;
@@ -351,7 +351,7 @@ const Private = {
 		}
 		const [ names, done, failed, ] = arguments;
 		if (Array.isArray(names) && typeof done === 'function') {
-			Promise.all(names.map(name => Private.requireAsync.call(this, name, true)))
+			Promise.all(names.map(name => Private.requireAsync.call(this, name, true, null, true)))
 			.then(result => done(...result))
 			.catch(typeof failed === 'function' ? failed : (error => console.error(`Failed to require([ ${ names }, ], ...):`, error)));
 		} else {
@@ -360,7 +360,7 @@ const Private = {
 		return null;
 	},
 
-	requireAsync(name, fast, plugin) {
+	requireAsync(name, fast, plugin, allowCyclic) {
 		let split = 0, id = '';
 		if (plugin) {
 			id = name;
@@ -370,10 +370,10 @@ const Private = {
 			if (fast && (plugin = Modules[pluginId]) && plugin.resolved) {
 				id = resolveByPlugin(plugin, this.id, resName);
 			} else {
-				return Private.requireAsync.call(this, pluginId)
+				return Private.requireAsync.call(this, pluginId, false, null, false)
 				.then(() => {
 					const plugin = Modules[pluginId];
-					return Private.requireAsync.call(this, resolveByPlugin(plugin, this.id, resName), true, plugin);
+					return Private.requireAsync.call(this, resolveByPlugin(plugin, this.id, resName), true, plugin, false);
 				});
 			}
 		} else {
@@ -382,20 +382,17 @@ const Private = {
 
 		const _this = Self.get(this);
 		let module = Modules[id], self; if (module) { self = Self.get(module);
-			_this.children.add(module);
-			if (self.resolved) {
-				if (fast) { return module.exports; }
-				return self.promise;
-			}
-			if (hasPendingPath(module, this)) {
-				if (fast) {
-					console.warn(`Found cyclic dependency to "${ id }", passing it's unfinished exports to "${ this.id }"`);
-					_this.promise.then(() => _this.children.add(module));
-					return module.exports;
+			if (!self.resolved && hasPendingPath(module, this)) {
+				if (!fast) { // require.async('...')
+					return Promise.reject(Error(`Asynchronously requiring "${ name }" from "${ this.id }" before either of them is resolved would create a cyclic waiting condition`));
 				}
-				return Promise.reject(Error(`Asynchronously requiring "${ name }" from "${ this.id }" before either of them is resolved would create a cyclic waiting condition`));
+				_this.promise.then(() => _this.children.add(module)); // must add delayed to avoid unresolved cycles
+				if (allowCyclic) { return self.promise; } // require(['...'], ...)
+				console.warn(`Found cyclic dependency to "${ id }", passing it's unfinished exports to "${ this.id }"`);
+				return module.exports; // define(['...'], ...)
 			}
-			return self.promise;
+			_this.children.add(module);
+			return fast && self.resolved ? module.exports : self.promise;
 		}
 
 		if (plugin) {

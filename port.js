@@ -20,7 +20,7 @@ const Port = class Port {
 	 *                            or any other class that implements the PortAdapter interface.
 	 * @return {Port}             The new Port instance.
 	 */
-	constructor(port, Adapter = Port.web_Port) { // default Adapter will be removed
+	constructor(port, Adapter) {
 		new _Port(this, port, Adapter);
 	}
 
@@ -39,6 +39,7 @@ const Port = class Port {
 	 */
 	addHandler(/*name, handler, thisArg*/) {
 		const self = Self.get(this);
+		if (!self) { throw new Error(`Can't use disconnected Port`); }
 		self.addHandler(...arguments);
 		return this;
 	}
@@ -53,6 +54,7 @@ const Port = class Port {
 	 */
 	addHandlers(/*prefix, handlers, thisArg*/) {
 		const self = Self.get(this);
+		if (!self) { throw new Error(`Can't use disconnected Port`); }
 		self.addHandlers(...arguments);
 		return this;
 	}
@@ -64,6 +66,7 @@ const Port = class Port {
 	 */
 	removeHandler(name) {
 		const self = Self.get(this);
+		if (!self) { throw new Error(`Can't use disconnected Port`); }
 		self.removeHandler(name);
 		return this;
 	}
@@ -75,6 +78,7 @@ const Port = class Port {
 	 */
 	hasHandler(name) {
 		const self = Self.get(this);
+		if (!self) { throw new Error(`Can't use disconnected Port`); }
 		return self.hasHandler(name);
 	}
 
@@ -88,6 +92,7 @@ const Port = class Port {
 	 */
 	request(/*name, ...args*/) {
 		const self = Self.get(this);
+		if (!self) { throw new Error(`Can't use disconnected Port`); }
 		return self.request(...arguments);
 	}
 
@@ -99,6 +104,7 @@ const Port = class Port {
 	 */
 	post(/*name, ...args*/) {
 		const self = Self.get(this);
+		if (!self) { throw new Error(`Can't use disconnected Port`); }
 		return self.post(...arguments);
 	}
 
@@ -107,7 +113,7 @@ const Port = class Port {
 	 */
 	get ended() {
 		const self = Self.get(this);
-		return self.ended;
+		return self ? self.ended : Promise.resolve();
 	}
 
 	/**
@@ -117,6 +123,7 @@ const Port = class Port {
 	 */
 	isRequest() {
 		const self = Self.get(this);
+		if (!self) { throw new Error(`Can't use disconnected Port`); }
 		return self.isRequest();
 	}
 
@@ -534,4 +541,3 @@ typeof console !== 'object' ? () => 0
 return Port;
 
 }; if (typeof define === 'function' && define.amd) { define([ 'exports', ], factory); } else { const exp = { }, result = factory(exp) || exp; if (typeof exports === 'object' && typeof module === 'object') { module.exports = result; } else { global[factory.name] = result; if (typeof QueryInterface === 'function') { global.exports = result; global.EXPORTED_SYMBOLS = [ 'exports', ]; } } } })((function() { return this; })()); // eslint-disable-line
-

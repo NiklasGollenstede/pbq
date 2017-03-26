@@ -1,6 +1,7 @@
 (function(global) { 'use strict'; /* globals URL, location, */ // This Source Code Form is subject to the terms of the Mozilla Public License, v. 2.0. If a copy of the MPL was not distributed with this file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
 if (typeof global.define === 'function' && define.amd) { console.warn('Existing AMD loader will be overwritten'); }
+/* global URLSearchParams, clearTimeout, setTimeout, */
 
 const document = typeof window !== 'undefined' && global.navigator && global.document;
 const importScripts = typeof window === 'undefined' && typeof navigator === 'object' && typeof global.importScripts === 'function';
@@ -12,19 +13,20 @@ const isContentScript = webExt && !document.currentScript;
 const isGenerator = code => (/^function\s*\*/).test(code);
 const resolved = Promise.resolve();
 
-const Modules = { }; // id ==> Module
-const Loading = { }; // url ==> Module (with .loading === true)
+const Modules = Object.create(null); // id ==> Module
+const Loading = Object.create(null); // url ==> Module (with .loading === true)
 const Self = new WeakMap/*<Module, object>*/;
 
-const moduleConfig = { }; // moduleId ==> module.config()
+const moduleConfig = Object.create(null); // moduleId ==> module.config()
 let   mainModule = null;
 let   baseUrl = '';
 let   hiddenBaseUrl = null; // scripts attached with tabs.executeScript can incorrectly have this file url prefix. replacing hiddenBaseUrl with baseUrl fixes that
-const prefixMap = { }; // url prefix map (idPrefix ==> urlPrefix), instead of baseUrl
+const prefixMap = Object.create(null); // url prefix map (idPrefix ==> urlPrefix), instead of baseUrl
 let   modIdMap = null; // id prefix maps by id of requesting module (requestinModuleId ==> idPrefix ==> idPrefix)
 let   defIdMap = null; // id prefix map for '*' (idPrefix ==> idPrefix)
 let   loadScript; setScriptLoader(null);
 let   scriptTimeout = 7000; // ms after which a script load is assumed to have failed
+const shims = Object.create(null); // moduleId ==> { deps, exports, init, }
 let   urlQuery = null;
 
 { // set default baseUrl
@@ -77,8 +79,10 @@ function parseDepsDestr(factory, name, code) {
 	}
 
 	index = (/^\s*(?:async\s*)?(?:function\s*)?(?:\*\s*)?(?:\(\s*)?/).exec(code)[0].length; // skip ' async function * ( '
-	if (code[index] === ')') { return null; } // argument list closes immediately
-	if (code[index] !== '{') { return null; } // no destructuring assignment
+	if (code[index] === ')') { return [ ]; } // argument list closes immediately
+	if (code[index] !== '{') { // no destructuring assignment
+		return (/^require\b/).test(code.slice(index, 'require'.length + 1)) ? null : [ ]; // if the first argument is literally named require, allow to scan the body
+	}
 	const deps = [ ];
 
 	loop: do { // eslint-disable-line
@@ -135,14 +139,14 @@ function parseDepsBody(factory, name, code) {
 				# so they are (currently) ignored
 			| \` (?:[^\\]|\\[^\\]|(?:\\\\)*)*? \`
 		)
-        |   \/\/ .*? $ # line comments
-        |   \/\* .*? \*\/ # block comments
-        |     \/ (?:[^\\]|\\[^\\]|(?:\\\\)*)*? \/ # RegExp literals
+		|   \/\/ .*? $      # line comments
+		|   \/\* .*? \*\/   # block comments
+		|     \/ (?:[^\\]|\\[^\\]|(?:\\\\)*)*? \/   # RegExp literals
 	`;
 	and the expression between the quotes is: RegExpX`
 		(?:
-			  [^\\]   # something that's not a backslash
-			| \\ [^\\]   # a backslash followed by something that's not, so this consumes escaped closing quotes
+			  [^\\]         # something that's not a backslash
+			| \\ [^\\]      # a backslash followed by something that's not, so this consumes escaped closing quotes
 			| (?: \\\\ )*   # an even number of backslashes
 		)*?
 	`;
@@ -250,17 +254,14 @@ function define(/* id, deps, factory */) {
 	module.factory = factory;
 
 	// get deps
-	let special = false;
-	if (!deps) {
-		if (
-			factory.length === 1
-			&& (deps = parseDepsDestr(factory, id, code))
-		) {
-			special = true;
-		} else {
-			deps = parseDepsBody(factory, id, code);
-		}
-	}
+	let special = false; if (!deps) { if (
+		factory.length === 1
+		&& (deps = parseDepsDestr(factory, id, code))
+	) {
+		special = true;
+	} else {
+		deps = parseDepsBody(factory, id, code);
+	} }
 
 	resolved.then(() => Promise.all(deps.map(dep => { switch (dep.name || dep) {
 		case 'require': return module.require;
@@ -269,7 +270,7 @@ function define(/* id, deps, factory */) {
 		default: return Private.requireAsync.call(module, dep +'', true, null, false);
 	} })))
 	.then(modules => {
-		const result = special ? factory(makeObject(deps, modules)) : factory(...modules);
+		const result = special ? factory(makeObject(deps, modules)) : factory.apply(null, modules);
 		return isGenerator(code) ? spawn(result) : result;
 	})
 	.catch(error => { console.error(`Definition of ${ id } failed:`, error); throw error; })
@@ -291,7 +292,7 @@ class Module {
 	constructor(parent, url, id) {
 		const _this = { }; Self.set(this, _this);
 		this.id = id;
-		this.url = url ? new URL(url) : id ? new URL(resolveUrl(id) +'.js') : '';
+		// this.url = url ? new URL(url) : id ? new URL(resolveUrl(id) +'.js') : '';
 		this.parent = parent;
 		this.factory = null;
 		this.exports = { };
@@ -305,10 +306,10 @@ class Module {
 	get require() {
 		const require = Private.require.bind(this);
 		require.async = id => Private.requireAsync.call(this, id, false, null, false);
-		require.toUrl = id => resolveUrl(resolveId(this.id, id));
+		require.toUrl = id => resolveUrl(resolveId(this.id, id, true));
 		require.resolve = resolveId.bind(null, this.id);
 		require.cache = Modules;
-		require.config = config;
+		require.config = conf => config(this, conf);
 		Object.defineProperty(require, 'main', {
 			get() { return mainModule; },
 			set(module) {
@@ -330,7 +331,7 @@ class Module {
 
 const Private = {
 	require(name) {
-		if (typeof name === 'string') {
+		if (typeof name === 'string') { if (arguments.length === 1) {
 			let split = 0, id = '';
 			if ((split = name.indexOf('!')) >= 0) { // get the plugin
 				const pluginId = resolveId(this.id, name.slice(0, split));
@@ -348,11 +349,13 @@ const Private = {
 			}
 			Self.get(this).children.add(module);
 			return module.exports;
-		}
+		} else {
+			arguments[0] = [ name, ];
+		} }
 		const [ names, done, failed, ] = arguments;
 		if (Array.isArray(names) && typeof done === 'function') {
 			Promise.all(names.map(name => Private.requireAsync.call(this, name, true, null, true)))
-			.then(result => done(...result))
+			.then(result => done.apply(null, result))
 			.catch(typeof failed === 'function' ? failed : (error => console.error(`Failed to require([ ${ names }, ], ...):`, error)));
 		} else {
 			throw new Error(`require must be called with (string) or (Array<string>, function, function?)`);
@@ -369,6 +372,8 @@ const Private = {
 			const resName = name.slice(split + 1);
 			if (fast && (plugin = Modules[pluginId]) && plugin.resolved) {
 				id = resolveByPlugin(plugin, this.id, resName);
+			} else if (fast && !Modules[pluginId] && (plugin = defaultPlugins[pluginId])) {
+				return plugin(this, resName);
 			} else {
 				return Private.requireAsync.call(this, pluginId, false, null, false)
 				.then(() => {
@@ -383,9 +388,9 @@ const Private = {
 		const _this = Self.get(this);
 		let module = Modules[id], self; if (module) { self = Self.get(module);
 			if (!self.resolved && hasPendingPath(module, this)) {
-				if (!fast) { // require.async('...')
-					return Promise.reject(Error(`Asynchronously requiring "${ name }" from "${ this.id }" before either of them is resolved would create a cyclic waiting condition`));
-				}
+				if (!fast) { return Promise.reject(Error( // require.async('...')
+					`Asynchronously requiring "${ name }" from "${ this.id }" before either of them is resolved would create a cyclic waiting condition`
+				)); }
 				_this.promise.then(() => _this.children.add(module)); // must add delayed to avoid unresolved cycles
 				if (allowCyclic) { return self.promise; } // require(['...'], ...)
 				console.warn(`Found cyclic dependency to "${ id }", passing it's unfinished exports to "${ this.id }"`);
@@ -411,6 +416,26 @@ const Private = {
 		module = Modules[id] = Loading[url] = new Module(this, url, id); self = Self.get(module);
 		_this.children.add(module);
 
+		if (id in shims) {
+			const shim = shims[id]; delete shims[id];
+			module.isShim = true;
+
+			return define(id, shim.deps, function*() {
+				(yield loadScript(url).catch(() => {
+					const message = `Failed to load script "${ url }" for shim`;
+					console.error(message); throw new Error(message);
+				}));
+				self.loaded = true; delete Loading[url];
+				const exports = shim.exports.reduce((object, key) => object != null && object[key], global);
+				if (exports === undefined) {
+					const message = `The script at "${ url }" did not set the global variable "${ shim.exports.join('.') }" for shim`;
+					console.error(message); throw new Error(message);
+				}
+				const result = shim.init && (yield shim.init.apply(global, arguments));
+				return result !== undefined ? result : shim.exports.length ? exports : undefined;
+			});
+		}
+
 		loadScript(url)
 		.then(() => {
 			if (self.loaded) { return; }
@@ -423,7 +448,7 @@ const Private = {
 			console.error(message); self.reject(new Error(message));
 		})
 		.catch(error => {
-			const message = `Failed to load script "${ url }" first requested from "${ this.url }"`;
+			const message = `Failed to load script "${ url }" first requested from "${ this.id }"`;
 			console.error(message +', due to:', error); self.reject(new Error(message));
 		});
 		return self.promise;
@@ -433,24 +458,18 @@ const Private = {
 const globalModule = new Module(null, '', '');
 const require = globalModule.require;
 
-function resolveId(from, to) {
+function resolveId(from, to, noAppend) {
 	let id = to +'';
 	if (id.startsWith('.')) {
 		if (!from) { throw new Error(`Can't resolve relative module id from global require, use the one passed into the define callback instead`); }
-		const url = new URL(id, typeof from === 'string' ? baseUrl + from : from);
-		id = url.href.slice(0, url.href.length - url.hash.length - url.search.length);
-		if (id.startsWith(baseUrl)) {
-			id = id.slice(baseUrl.length);
-		} else if (id.startsWith('/')) {
-			id = id.slice(1);
-		}
+		id = new URL(id, typeof from === 'string' ? baseUrl + from : from).href;
+		id.startsWith(baseUrl) && (id = id.slice(baseUrl.length));
 	} else if (id.startsWith('/')) {
 		id = id.slice(1);
 	}
-	if (id.endsWith('/')) {
-		id += 'index';
-	}
+	!noAppend && id.endsWith('/') && (id += 'index');
 	if (!modIdMap && !defIdMap || typeof from !== 'string') { return id; }
+
 	const maps = Object.keys(modIdMap || { })
 	.filter(prefix => isIdPrefix(from, prefix))
 	.sort((a, b) => b.length - a.length)
@@ -476,13 +495,8 @@ function resolveUrl(id) {
 }
 
 function isIdPrefix(id, prefix) {
-	return (
-		id === prefix
-		|| id.length > prefix.length && id.startsWith(prefix) && (
-			prefix.endsWith('/') || id[prefix.length] === '/'
-			|| (/^\.[^\\\/]+$/).test(id.slice(prefix.length))
-		)
-	);
+	return (id === prefix || id.length > prefix.length && id.startsWith(prefix) && id[prefix.length] === '/');
+	// || (/^\.[^\\\/]+$/).test(id.slice(prefix.length))
 }
 
 function resolveByPlugin(plugin, from, id) {
@@ -521,7 +535,7 @@ function workerLoder(url) {
 
 function setScriptLoader(loader) {
 	if (typeof loader !== 'function') {
-		loadScript = document ? domLoader : importScripts ? workerLoder
+		loadScript = document && !isContentScript ? domLoader : importScripts ? workerLoder
 		: url => { throw new Error(`No JavaScript loader available to load "${ url }"`); };
 	} else {
 		loadScript = loader;
@@ -535,78 +549,68 @@ function spawn(iterator) {
 	return resolved.then(next);
 }
 
-function config(options) {
+const defaultPlugins = {
+	shim(parent, string) {
+		const [ , before, arrow, exports, ] = (/^(.*)(?:^|\/|( ==?> ))(.*)$/).exec(string), id = arrow ? before : string;
+		config(parent, { shim: { [id]: { exports, }, }, });
+		return Private.requireAsync.call(parent, id, false, null, false);
+	},
+};
+
+function config(module, options) {
 	if (options == null || typeof options !== 'object') { return; }
+	const baseId = module.id || (document && !isContentScript && location) || '';
 
 	if ('baseUrl' in options) {
-		const url = new URL(options.baseUrl.replace(/^"(.*)"$/g, '$1'), location);
-		baseUrl = url.href.slice(0, url.href.length - url.hash.length - url.search.length);
+		baseUrl = resolveUrl(resolveId(baseId, options.baseUrl, true));
 	}
 
-	if ('config' in options) {
-		Object.assign(moduleConfig, options.config);
+	if (options.config) {
+		Object.keys(options.config).forEach(id => {
+			moduleConfig[resolveId(baseId, id)] = options.config[id];
+		});
 	}
 
 	if ('paths' in options) {
 		const paths = options.paths;
 		Object.keys(paths).forEach(prefix => {
-			const url = new URL(paths[prefix], baseUrl);
-			prefixMap[prefix] = url.href.slice(0, url.href.length - url.hash.length - url.search.length);
+			prefixMap[resolveId(baseId, prefix)] = resolveUrl(resolveId(baseId, paths[prefix], true));
 		});
 	}
 
 	if ('map' in options) {
-		const map = options.map;
-		Object.keys(map).forEach(id => {
-			const idMap = Object.assign(map[id]);
-			if (typeof idMap !== 'object') { return; }
-			if (id === '*') {
-				defIdMap = idMap;
+		Object.keys(options.map).forEach(key => {
+			let target; if (key === '*') {
+				target = defIdMap || (defIdMap = Object.create(null));
 			} else {
-				modIdMap = modIdMap || { };
-				modIdMap[id] = idMap;
+				modIdMap || (modIdMap = Object.create(null));
+				const id = resolveId(baseId, id, true);
+				target = modIdMap[id] || (modIdMap[id] = Object.create(null));
 			}
+			const map = options.map[key]; Object.keys(map).forEach(from => {
+				target[resolveId(baseId, from)] = resolveId(baseId, map[from]);
+			});
 		});
 	}
 
 	/// Set an id to be the main module. Loads the module if needed.
 	if ('main' in options) {
-		const id = resolveId(location, options.main.replace(/^"(.*)"$/g, '$1'));
+		const id = resolveId(baseId, options.main);
 		require.async(id);
 		const main = require.main = require.cache[id];
 		main.parent = null;
 	}
 
 	if ('shim' in options) {
-		const shims = options.shim;
-		Object.keys(shims).forEach(id => {
-			const shim = shims[id];
+		Object.keys(options.shim).forEach(id => {
+			const shim = options.shim[id];
 			if (!shim || typeof shim !== 'object') { return; }
 			const isArray = Array.isArray(shim);
-			const deps = ((isArray ? shim : shim.deps) || [ ]).slice();
-			const globalPath = !isArray && typeof shim.exports === 'string' && shim.exports.split('.') || [ ];
-			const init = !isArray && typeof shim.init === 'function' ? shim.init : shim.exports === 'function' ? shim.exports : undefined;
-
-			id = resolveId('', id);
-			const url = resolveUrl(id) +'.js';
-
-			define(id, deps, function*() {
-				(yield loadScript(url).catch(() => {
-					const message = `Failed to load script "${ url }" for shim`;
-					console.error(message); throw new Error(message);
-				}));
-				Self.get(module).loaded = true;
-				const exports = globalPath.reduce((object, key) => object != null && object[key], global);
-				if (!exports) {
-					const message = `The script at "${ url }" did not set the global variable "${ globalPath.join('.') }" for shim`;
-					console.error(message); throw new Error(message);
-				}
-				const result = init && (yield init.apply(global, arguments));
-				return result !== undefined ? result : globalPath.length ? exports : undefined;
-			});
-			const module = Modules[id];
-			Self.get(module).loaded = false;
-			module.isShim = true;
+			shims[resolveId(baseId, id)] = {
+				deps: ((isArray ? shim : shim.deps) || [ ]).slice(),
+				exports: !isArray && typeof shim.exports === 'string' && shim.exports.split('.') || [ ],
+				init: !isArray && typeof shim.init === 'function' ? shim.init : shim.exports === 'function' ? shim.exports : undefined,
+			};
 		});
 	}
 
@@ -619,11 +623,11 @@ function config(options) {
 	}
 
 	if ('deps' in options) {
-		options.deps.forEach(require);
+		options.deps.forEach(module.require);
 	}
 
 	if ('callback' in options || 'errback' in options) {
-		Promise.all(globalModule.children.map(_=>_.promise)).then(options.callback, options.errback);
+		Promise.all(module.children.map(_=>_.promise)).then(options.callback, options.errback);
 	}
 }
 

@@ -523,6 +523,13 @@ function workerLoder(url) {
 	);
 }
 
+function xhr(url, type) { return new Promise((resolve, reject) => {
+	const xhr = new global.XMLHttpRequest(); xhr.responseType = type || '';
+	xhr.onerror = reject; xhr.onload = () => resolve(xhr.response);
+	xhr.open('GET', url, true); xhr.send(null);
+	scriptTimeout && setTimeout(() => xhr.readyState !== 4 && reject(new Error(`Load of resource at "${ url }" timed out`)), scriptTimeout);
+}); }
+
 function setScriptLoader(loader) {
 	if (typeof loader !== 'function') {
 		loadScript = document && !isContentScript ? domLoader : importScripts ? workerLoder
@@ -541,8 +548,13 @@ function spawn(iterator) {
 
 const defaultPlugins = {
 	shim(parent, string) {
-		const [ , before, arrow, exports, ] = (/^(.*)(?:^|\/|( ==?> ))(.*)$/).exec(string), id = arrow ? before : string;
-		config(parent, { shim: { [id]: { exports, }, }, });
+		const [ relative, exports, ] = string.split(/:(?!.*:)/), id = resolveId(parent.id, relative);
+		!Modules[id] && config(parent, { shim: { [id]: { exports, }, }, });
+		return Private.requireAsync.call(parent, id, false, null, false);
+	},
+	xhr(parent, string) {
+		const [ relative, type, ] = string.split(/:(?!.*:)/), id = resolveId(parent.id, relative);
+		!Modules[id] && define(id, [ ], () => xhr(resolveUrl(id), type));
 		return Private.requireAsync.call(parent, id, false, null, false);
 	},
 };

@@ -273,7 +273,7 @@ function define(/* id, deps, factory */) {
 		const result = special ? factory(makeObject(deps, modules)) : factory.apply(null, modules);
 		return isGenerator(code) ? spawn(result) : result;
 	})
-	.catch(error => { console.error(`Definition of ${ id } failed:`, error); throw error; })
+	// .catch(error => { console.error(`Definition of ${ id } failed:`, error); throw error; })
 	.then(exports => {
 		exports != null && (module.exports = exports);
 		self.resolved = true;
@@ -323,7 +323,7 @@ class Module {
 	}
 
 	get children  () { return Array.from(Self.get(this).children); }
-	get ready     () { return Self.get(this).promise; }
+	get ready     () { return Self.get(this).promise; } // ==> .exports
 	get loaded    () { return Self.get(this).loaded; }
 	get resolved  () { return Self.get(this).resolved; }
 	config() { return moduleConfig[this.id]; }
@@ -345,7 +345,7 @@ const Private = {
 			}
 			const module = Modules[id];
 			if (!module || !module.resolved) {
-				throw new Error(`The module "${ id }" is not defined (yet)`);
+				throw new Error(`The module ${ id } is not defined (yet)`);
 			}
 			Self.get(this).children.add(module);
 			return module.exports;
@@ -372,7 +372,7 @@ const Private = {
 			const resName = name.slice(split + 1);
 			if (fast && (plugin = Modules[pluginId]) && plugin.resolved) {
 				id = resolveByPlugin(plugin, this.id, resName);
-			} else if (fast && !Modules[pluginId] && (plugin = defaultPlugins[pluginId])) {
+			} else if (!Modules[pluginId] && (plugin = defaultPlugins[pluginId])) {
 				return plugin(this, resName);
 			} else {
 				return Private.requireAsync.call(this, pluginId, false, null, false)
@@ -421,16 +421,10 @@ const Private = {
 			module.isShim = true;
 
 			return define(id, shim.deps, function*() {
-				(yield loadScript(url).catch(() => {
-					const message = `Failed to load script "${ url }" for shim`;
-					console.error(message); throw new Error(message);
-				}));
+				(yield loadScript(url).catch(() => { throw new Error(`Failed to load script "${ url }" for shim`); }));
 				self.loaded = true; delete Loading[url];
 				const exports = shim.exports.reduce((object, key) => object != null && object[key], global);
-				if (exports === undefined) {
-					const message = `The script at "${ url }" did not set the global variable "${ shim.exports.join('.') }" for shim`;
-					console.error(message); throw new Error(message);
-				}
+				if (exports === undefined) { throw new Error(`The script at "${ url }" did not set the global variable "${ shim.exports.join('.') }" for shim`); }
 				const result = shim.init && (yield shim.init.apply(global, arguments));
 				return result !== undefined ? result : shim.exports.length ? exports : undefined;
 			});
@@ -442,15 +436,11 @@ const Private = {
 			if (this.isShim) {
 				self.loaded = self.resolved = module.isShim = true;
 				self.resolve(module.exports);
-				return void console.info(`The shim dependency "${ url }" of "${ this.id }" didn't call define`);
+				return void console.info(`The shim dependency "${ url }" of ${ this.id } didn't call define`);
 			}
-			const message = `The script at "${ url }" did not call define with the expected id`;
-			console.error(message); self.reject(new Error(message));
+			self.reject(new Error(`The script at "${ url }" did not call define with the expected id`));
 		})
-		.catch(error => {
-			const message = `Failed to load script "${ url }" first requested from "${ this.id }"`;
-			console.error(message +', due to:', error); self.reject(new Error(message));
-		});
+		.catch(() => self.reject(new Error(`Failed to load script "${ url }" first requested from ${ this.id }`)));
 		return self.promise;
 	},
 };
@@ -596,7 +586,8 @@ function config(module, options) {
 	/// Set an id to be the main module. Loads the module if needed.
 	if ('main' in options) {
 		const id = resolveId(baseId, options.main);
-		require.async(id);
+		module.require.async(id)
+		.catch('errback' in options ? null : error => console.error(`Failed to load main module ${ id }:`, error));
 		const main = require.main = require.cache[id];
 		main.parent = null;
 	}

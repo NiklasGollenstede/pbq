@@ -61,11 +61,8 @@ if (global.process && global.process.versions && global.process.versions.node) {
 	try { XMLHttpRequest = require('xhr'+'2'); ProgressEvent = XMLHttpRequest.ProgressEvent; } catch(_) { } /* global require */
 } else {
 	XMLHttpRequest = global.XMLHttpRequest || (() => { try { return require('sdk/net'+'/xhr').XMLHttpRequest; } catch(_) { return null; } })();
-	try { /* global ProgressEvent */
-		new global.ProgressEvent(''); ProgressEvent = global.ProgressEvent;
-	} catch (error) {
-		ProgressEvent = function(reason) { const error = global.document.createEvent('ProgressEvent'); error.initEvent(reason, false, false); return error; };
-	}
+	try { new global.ProgressEvent(''); ProgressEvent = global.ProgressEvent; }
+	catch (error) { ProgressEvent = function(reason) { const error = global.document.createEvent('ProgressEvent'); error.initEvent(reason, false, false); return error; }; }
 }
 HttpRequest.available = !!XMLHttpRequest;
 

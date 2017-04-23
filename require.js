@@ -436,11 +436,11 @@ const Private = {
 			if (this.isShim) {
 				self.loaded = self.resolved = module.isShim = true;
 				self.resolve(module.exports);
-				return void console.info(`The shim dependency "${ url }" of ${ this.id } didn't call define`);
+				return void console.info(`The shim dependency "${ url }" of ${ this.id } didn't call define. Prefix it with "shim!" to suppress this warning.`);
 			}
 			self.reject(new Error(`The script at "${ url }" did not call define with the expected id`));
 		})
-		.catch(() => self.reject(new Error(`Failed to load script "${ url }" first requested from ${ this.id }`)));
+		.catch(() => self.reject(new Error(`Failed to load script "${ url }" first requested from ${ this.id || '[global]' }`)));
 		return self.promise;
 	},
 };
@@ -523,13 +523,6 @@ function workerLoder(url) {
 	);
 }
 
-function xhr(url, type) { return new Promise((resolve, reject) => {
-	const xhr = new global.XMLHttpRequest(); xhr.responseType = type || '';
-	xhr.onerror = reject; xhr.onload = () => resolve(xhr.response);
-	xhr.open('GET', url, true); xhr.send(null);
-	scriptTimeout && setTimeout(() => xhr.readyState !== 4 && reject(new Error(`Load of resource at "${ url }" timed out`)), scriptTimeout);
-}); }
-
 function setScriptLoader(loader) {
 	if (typeof loader !== 'function') {
 		loadScript = document && !isContentScript ? domLoader : importScripts ? workerLoder
@@ -552,9 +545,9 @@ const defaultPlugins = {
 		!Modules[id] && config(parent, { shim: { [id]: { exports, }, }, });
 		return Private.requireAsync.call(parent, id, false, null, false);
 	},
-	xhr(parent, string) {
+	fetch(parent, string) {
 		const [ relative, type, ] = string.split(/:(?!.*:)/), id = resolveId(parent.id, relative);
-		!Modules[id] && define(id, [ ], () => xhr(resolveUrl(id), type));
+		!Modules[id] && define(id, [ ], () => global.fetch(resolveUrl(id)).then(_=>_[type || 'text']()));
 		return Private.requireAsync.call(parent, id, false, null, false);
 	},
 };

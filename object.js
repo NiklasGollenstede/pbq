@@ -211,6 +211,16 @@ const MultiMapOf = MapType => class extends MapType {
 		}
 		return +set.delete(value);
 	}
+
+	/**
+	 * @return {natural}  The number of unique key-value pairs in this.
+	 */
+	get size() {
+		if (typeof this.forEach !== 'function') { return undefined; }
+		let count = 0;
+		this.forEach(range => (count += range.size));
+		return count; // eslint-disable-line consistent-return
+	}
 };
 exports.MultiMap = MultiMapOf(Map);
 exports.WeakMultiMap = MultiMapOf(WeakMap);

@@ -38,9 +38,7 @@ const Port = class Port {
 	 * @throws {Error}              If there is already a handler registered for `name`.
 	 */
 	addHandler(/*name, handler, thisArg*/) {
-		const self = Self.get(this);
-		if (!self) { throw new Error(`Can't use disconnected Port`); }
-		self.addHandler(...arguments);
+		getPrivate(this).addHandler(...arguments);
 		return this;
 	}
 
@@ -53,9 +51,7 @@ const Port = class Port {
 	 * @throws {Error}                   If there is already a handler registered for any `prefix` + handler.name; no handlers have been added.
 	 */
 	addHandlers(/*prefix, handlers, thisArg*/) {
-		const self = Self.get(this);
-		if (!self) { throw new Error(`Can't use disconnected Port`); }
-		self.addHandlers(...arguments);
+		getPrivate(this).addHandlers(...arguments);
 		return this;
 	}
 
@@ -65,9 +61,7 @@ const Port = class Port {
 	 * @return {MessageHandler}        Self reference for chaining.
 	 */
 	removeHandler(name) {
-		const self = Self.get(this);
-		if (!self) { throw new Error(`Can't use disconnected Port`); }
-		self.removeHandler(name);
+		getPrivate(this).removeHandler(name);
 		return this;
 	}
 
@@ -77,9 +71,7 @@ const Port = class Port {
 	 * @return {bool}                 true iff a handler is listening on this port.
 	 */
 	hasHandler(name) {
-		const self = Self.get(this);
-		if (!self) { throw new Error(`Can't use disconnected Port`); }
-		return self.hasHandler(name);
+		return getPrivate(this).hasHandler(name);
 	}
 
 	/**
@@ -91,9 +83,7 @@ const Port = class Port {
 	 *                            and otherwise resolves to the handlers return value.
 	 */
 	request(/*name, ...args*/) {
-		const self = Self.get(this);
-		if (!self) { throw new Error(`Can't use disconnected Port`); }
-		return self.request(...arguments);
+		return getPrivate(this).request(...arguments);
 	}
 
 	/**
@@ -103,9 +93,7 @@ const Port = class Port {
 	 * @param  {...any}  args     Additional arguments whose JSON-clones are passed to the remote handler.
 	 */
 	post(/*name, ...args*/) {
-		const self = Self.get(this);
-		if (!self) { throw new Error(`Can't use disconnected Port`); }
-		return self.post(...arguments);
+		return getPrivate(this).post(...arguments);
 	}
 
 	/**
@@ -122,9 +110,12 @@ const Port = class Port {
 	 * @throws {Error}    If this Port is not currently in a synchronous call to a handler.
 	 */
 	isRequest() {
-		const self = Self.get(this);
-		if (!self) { throw new Error(`Can't use disconnected Port`); }
-		return self.isRequest();
+		return getPrivate(this).isRequest();
+	}
+
+	releaseCallback(func) {
+		getPrivate(this).releaseCallback(func);
+		return this;
 	}
 
 	/**
@@ -313,7 +304,7 @@ Port.web_ext_Port = class web_ext_Port {
 Port.web_ext_Runtime = class web_ext_Runtime {
 
 	constructor(api, onData) {
-		this.api = api;
+		this.api = api; this.onData = onData;
 		this.onMessage = (data, sender, reply) => onData(data[0], data[1], data[2], sender, (...args) => reply(args), true);
 		this.sendMessage = api.runtime.sendMessage;
 		this.sendMessageTab = api.tabs ? api.tabs.sendMessage : () => { throw new Error(`Can't send messages to tabs (from within a tab)`); };
@@ -329,16 +320,23 @@ Port.web_ext_Runtime = class web_ext_Runtime {
 			promise = this.sendMessage([ name, id, args, ]);
 		}
 		if (id === 0) { return; } // is post
-		return promise.then(handleReply); // eslint-disable-line consistent-return
+		promise.then(value => this.onData('', id, value), error => this.onData('', -id, error));
 	}
 
 	destroy() {
 		this.api.runtime.onMessage.removeListener(this.onMessage);
+		this.api = this.onData = null;
 	}
 };
 
 // holds references between public interface and private implementation
-const Self = new WeakMap;
+const Self = new WeakMap/*<Port, _Port>*/;
+
+function getPrivate(other) {
+	const self = Self.get(other);
+	if (self) { return self; }
+	throw new Error(`Can't use disconnected Port`);
+}
 
 // private implementation class
 class _Port {
@@ -348,9 +346,11 @@ class _Port {
 		this.handlers = new Map; // name ==> [ function, thisArg, ]
 		this.wildcards = new Map; // RegExp ==> [ function, thisArg, ]
 		this.lastId = 1; // `1` will never be used
+		this.cb2id = new WeakMap/*<function, id*/;
+		this.id2cb = new Map/*<id, function>*/;
 		this.ended = Object.freeze(new Promise(end => (this.onEnd = end)));
 		this._isRequest = 0; // -1: false; 0: throw; 1: true;
-		Self.set(this, self);
+		this.public = self;
 		Self.set(self, this);
 	}
 	nextId() { return ++this.lastId; }
@@ -400,8 +400,8 @@ class _Port {
 		}
 		if (typeof name !== 'string') { throw new TypeError(`The request name must be a string`); }
 		const id = this.nextId();
-		const promise = this.port.send(name, id, args, options);
-		if (promise !== undefined) { return promise; }
+		const value = this.port.send(name, id, args.map(this.mapValue, this), options);
+		if (value !== undefined) { return value; }
 		const request = new PromiseCapability;
 		this.requests.set(id, request);
 		return request.promise;
@@ -412,7 +412,37 @@ class _Port {
 			options = name; name = args.shift();
 		}
 		if (typeof name !== 'string') { throw new TypeError(`The request name must be a string`); }
-		this.port.send(name, 0, args, options);
+		this.port.send(name, 0, args.map(this.mapValue, this), options);
+	}
+	mapValue(value) {
+		const isObject = typeof value === 'object' && value !== null;
+		if (isObject && ('' in value) && Object.getOwnPropertyDescriptor(value, '')) {
+			value = { '': 0, raw: value, };
+		} else if (typeof value === 'function') {
+			const id = this.cb2id.get(value) || this.nextId();
+			this.id2cb.set(id, value); this.cb2id.set(value, id);
+			value = { '': 1, cb: id, };
+		} else if (isObject && value.constructor && (/Error$/).test(value.constructor.name)) {
+			value = { '': 2, name: value.name+'', message: value.message+'', stack: value.stack+'', fileName: value.fileName, lineNumber: value.lineNumber, columnNumber: value.columnNumber,  };
+		}
+		return value;
+	}
+	unmapValue(value) {
+		if (typeof value !== 'object' || value === null || !('' in value)) { return value; }
+		switch (value['']) {
+			case 0: return value.raw;
+			case 1: return (...args) => {
+				if (!this.public) { throw new Error(`Remote callback connection is closed`); }
+				const id = this.nextId();
+				const promise = this.port.send('', 0, [ id, 0, value.cb, args.map(this.mapValue, this), ], null);
+				if (promise !== undefined) { return promise; }
+				const request = new PromiseCapability;
+				this.requests.set(id, request);
+				return request.promise;
+			};
+			case 2: return delete value[''] && Object.assign(Object.create((typeof global[value.name] === 'function' ? global[value.name] : Error)).prototype, value);
+			default: throw new TypeError(`Can't unmap argument`);
+		}
 	}
 	isRequest() {
 		switch (this._isRequest << 0) {
@@ -421,37 +451,54 @@ class _Port {
 		}
 		throw new Error(`Port.isRequest() may only be called while the port is in a synchronous handler`);
 	}
+	releaseCallback(cb) {
+		const id = this.cb2id.get(cb); if (!id) { return; }
+		this.id2cb.delete(id); this.cb2id.delete(cb);
+	}
 	destroy() {
-		const self = Self.get(this);
-		if (!self) { return; }
-		const destroyed = new Error('The Port this request is waiting on was destroyed');
-		this.requests.forEach(_=>_.reject(destroyed));
+		if (!this.public) { return; }
+		this.requests.forEach(_=>_.reject(new Error('The Port this request is waiting on was destroyed')));
 		this.requests.clear();
 		this.handlers.clear();
+		this.id2cb.clear();
 		this.onEnd();
-		this.port.destroy();
-		Self.delete(self);
-		Self.delete(this);
+		try { this.port.destroy(); } catch (error) { console.error(error); }
+		Self.delete(this.public);
+		this.public = null;
 	}
 
 	onData(name, id, args, altThis, reply, optional) {
-		if (name) { try { // handle request
-			let handler, thisArg;
-			if (this.handlers.has(name)) {
-				[ handler, thisArg, ] = this.handlers.get(name);
-			} else {
-				for (const [ filter, pair, ] of this.wildcards) {
-					if (filter.test(name)) { [ handler, thisArg, ] = pair; break; }
+		let value;
+		if (name || id === 0) { try { // handle request
+			if (!name && id === 0) { // special request
+				id = args[0];
+				switch (args[1]) {
+					case 0: { // callback call
+						const callback = this.id2cb.get(args[2]);
+						if (!callback) { throw new Error(`Remote callback has been destroyed`); }
+						value = callback.apply(null, args[3].map(this.unmapValue, this));
+					} break;
+					default: throw new Error(`Bad request`);
 				}
-				args.unshift(name);
+			} else {
+				args = args.map(this.unmapValue, this);
+				let handler, thisArg;
+				if (this.handlers.has(name)) {
+					[ handler, thisArg, ] = this.handlers.get(name);
+				} else {
+					for (const [ filter, pair, ] of this.wildcards) {
+						if (filter.test(name)) { [ handler, thisArg, ] = pair; break; }
+					}
+					args.unshift(name);
+				}
+				if (!handler) { if (!optional) { throw new Error(`No such handler "${ name }"`); } else { return false; } }
+				try {
+					this._isRequest = id === 0 ? -1 : 1;
+					value = handler.apply(thisArg !== undefined ? thisArg : altThis, args);
+				} finally { this._isRequest = 0; }
 			}
-			if (!handler) { if (!optional) { throw new Error(`No such handler "${ name }"`); } else { return false; } }
-			let value; try {
-				this._isRequest = id === 0 ? -1 : 1;
-				value = handler.apply(thisArg != null ? thisArg : altThis, args);
-			} finally { this._isRequest = 0; }
 			if (!isPromise(value)) {
-				if (id !== 0) { reply ? reply('', +id, [ value, ]) : this.port.send('', +id, [ value, ]); }
+				if (id !== 0) { reply ? reply('', +id, [ this.mapValue(value), ]) : this.port.send('', +id, [ this.mapValue(value), ]); }
 				return false;
 			} else {
 				if (id === 0) {
@@ -459,27 +506,26 @@ class _Port {
 					return false;
 				}
 				value.then(
-					value => reply ? reply('', +id, [ value, ]) : this.port.send('', +id, [ value, ]),
-					error => reply ? reply('', -id, [ toJson(error), ]) : this.port.send('', -id, [ toJson(error), ])
+					value => reply ? reply('', +id, [ this.mapValue(value), ]) : this.port.send('', +id, [ this.mapValue(value), ]),
+					error => reply ? reply('', -id, [ this.mapValue(error), ]) : this.port.send('', -id, [ this.mapValue(error), ])
 				);
 				return true;
 			}
 		} catch (error) {
 			if (id) {
-				reply ? reply('', -id, [ toJson(error), ]) : this.port.send('', -id, [ toJson(error), ]);
+				reply ? reply('', -id, [ this.mapValue(error), ]) : this.port.send('', -id, [ this.mapValue(error), ]);
 			} else {
 				reportError('Uncaught error in handler (post)', error);
 			}
 			return false;
 		} } else { try { // resolve reply
-			if (!id) { throw new Error(`Bad request`); }
 			const threw = id < 0; threw && (id = -id);
 			const request = this.requests.get(id); this.requests.delete(id);
 			if (!request) { throw new Error(`Bad or duplicate response id`); }
 			if (threw) {
-				request.reject(fromJson(args[0]));
+				request.reject(this.unmapValue(args[0]));
 			} else {
-				request.resolve(args[0]);
+				request.resolve(this.unmapValue(args[0]));
 			}
 			return false;
 		} catch (error) {
@@ -488,16 +534,6 @@ class _Port {
 		} }
 	}
 }
-
-function handleReply(reply) {
-	if (!Array.isArray(reply)) { throw new Error('Unhandled request'); }
-	if (reply[1] < 0) {
-		throw fromJson(reply[2][0]);
-	} else {
-		return reply[2][0];
-	}
-}
-
 
 function PromiseCapability() {
 	this.promise = new Promise((resolve, reject) => { this.resolve = resolve; this.reject = reject; });
@@ -513,26 +549,6 @@ function isPromise(value) { try {
 	return is;
 } catch (_) { return false; } }
 const PromiseCtors = new WeakMap;
-
-// TODO: document the use of these functions:
-function toJson(value) {
-	return JSON.stringify(value, (key, value) => {
-		if (!value || typeof value !== 'object') { return value; }
-		if (value instanceof Error) { return '$_ERROR_$'+ JSON.stringify({ name: value.name, message: value.message, stack: value.stack, }); }
-		return value;
-	});
-}
-function fromJson(string) {
-	if (typeof string !== 'string') { return string; }
-	return JSON.parse(string, (key, value) => {
-		if (!value || typeof value !== 'string' || !value.startsWith('$_ERROR_$')) { return value; }
-		const object = JSON.parse(value.slice(9));
-		const Constructor = typeof object.name === 'string' && typeof global[object.name] === 'function' ? global[object.name] : Error;
-		const error = Object.create(Constructor.prototype);
-		Object.assign(error, object);
-		return error;
-	});
-}
 
 const reportError =
 typeof console !== 'object' ? () => 0

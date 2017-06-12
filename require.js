@@ -46,7 +46,7 @@ function getCallingScript(offset = 0) {
 	if (src) { return src; }
 	const stack = (new Error).stack.split(/$/m);
 	const line = stack[(/^Error/).test(stack[0]) + 1 + offset];
-	const parts = line.split(/(?:\@|\(|\ )/g);
+	const parts = line.split(/\@(?![^\/]*?\.xpi)|\(|\ /g);
 	const url = parts[parts.length - 1].replace(/\:\d+(?:\:\d+)?\)?$/, '');
 	if (hiddenBaseUrl !== null && url.startsWith(hiddenBaseUrl)) { return url.replace(hiddenBaseUrl, baseUrl); }
 	return url;

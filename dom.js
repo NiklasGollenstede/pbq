@@ -171,7 +171,7 @@ exports.readBlob = readBlob; function readBlob(blob, type) {
 /**
  * Attempts to write data to the users clipboard.
  * @param  {string|object}  data  Ether a plain string or an object of multiple pairs { [mimeType]: data, } to write.
- * @param  {natural}        time  Maximum runtime of this asynchronous operation after which it will be canceled and rejected.
+ * @param  {natural}        time  Optional. Maximum runtime of this asynchronous operation after which it will be canceled and rejected.
  * @return {Promise}              Promise that rejects if the timeout or an error occurred. If it resolves the operation should have succeeded.
  */
 exports.writeToClipboard = writeToClipboard; function writeToClipboard(data, time) { return new Promise(function(resolve, reject) {
@@ -196,6 +196,35 @@ exports.writeToClipboard = writeToClipboard; function writeToClipboard(data, tim
 	}, time || 1000);
 	document.addEventListener('copy', onCopy);
 	document.execCommand('copy', false, null);
+}); }
+
+/**
+ * Attempts to read data from the users clipboard.
+ * @param  {string|[string]|null}   types  An optional (Array of) mime types to read.
+ * @param  {natural}                time   Optional. Maximum runtime of this asynchronous operation after which it will be canceled and rejected.
+ * @return {Promise<string|object>}        Promise to the current clipboard data as string. If types was an array, it returns an object of { [mimeType]: data, } pairs.
+ */
+exports.readFromClipboard = readFromClipboard; function readFromClipboard(types, time) { return new Promise(function(resolve, reject) {
+	const document = (this || global).window.document; let done = false;
+	function onPaste(event) { try {
+		if (done) { return; } done = true;
+		document.removeEventListener('paste', onPaste);
+		const transfer = event.clipboardData;
+		transfer.clearData();
+		if (typeof types === 'string' || !types) {
+			resolve(transfer.getData(types || 'text/plain'));
+		} else {
+			resolve(types.reduce((data, mimeType) => ((data[mimeType] = transfer.getData(mimeType)), data), { }));
+		}
+		event.preventDefault();
+	} catch (error) { reject(error); } }
+	global.setTimeout(() => {
+		if (done) { return; } done = true;
+		document.removeEventListener('paste', onPaste);
+		reject(new Error('Timeout after '+ (time || 1000) +'ms'));
+	}, time || 1000);
+	document.addEventListener('paste', onPaste);
+	document.execCommand('paste', false, null);
 }); }
 
 /**

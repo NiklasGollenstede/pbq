@@ -81,7 +81,7 @@ function parseDepsDestr(factory, name, code) {
 	index = (/^\s*(?:async\s*)?(?:function\s*)?(?:\*\s*)?(?:\(\s*)?/).exec(code)[0].length; // skip ' async function * ( '
 	if (code[index] === ')') { return [ ]; } // argument list closes immediately
 	if (code[index] !== '{') { // no destructuring assignment
-		return (/^require\b/).test(code.slice(index, 'require'.length + 1)) ? null : [ ]; // if the first argument is literally named require, allow to scan the body
+		return (/^require\b/).test(code.slice(index, index + 8)) ? null : [ ]; // if the first argument is literally named require, allow to scan the body
 	}
 	const deps = [ ];
 
@@ -152,7 +152,13 @@ function parseDepsBody(factory, name, code) {
 	`;
 	*/
 
-	code = code.replace(stringsAndComments, (_, s) => (s && !(/["'`\\]/).test(s) && (s = s.slice(1, -1)) && !require.test(s) ? '"'+ s +'"' : '')); // avoid recursive matchings of the require RegExp
+	// remove all comments and strings. Put only "simple" strings back
+	code = code.replace(stringsAndComments, (_, string) => {
+		if (!string) { return ''; }
+		string = string.slice(1, -1);
+		if ((/["'`\\\r\n]/).test(string)) { return ''; }
+		return '"'+ string +'"';
+	}); // s && (s = s.slice(1, -1) && !(/["'`\\\r\n]/).test(s) && !require.test(s) ? '"'+ s +'"' : '')); // avoid recursive matchings of the require RegExp
 
 	require.lastIndex = 0;
 	while ((match = require.exec(code))) {
@@ -557,7 +563,7 @@ function config(module, options) {
 	const baseId = module.id || (document && !isContentScript && location) || '';
 
 	if ('baseUrl' in options) {
-		baseUrl = resolveUrl(resolveId(baseId, options.baseUrl, true));
+		baseUrl = new URL((options.baseUrl.startsWith('/') ? '/' : '') + resolveId(baseId, options.baseUrl, true), baseUrl).href;
 	}
 
 	if (options.config) {
@@ -579,7 +585,7 @@ function config(module, options) {
 				target = defIdMap || (defIdMap = Object.create(null));
 			} else {
 				modIdMap || (modIdMap = Object.create(null));
-				const id = resolveId(baseId, id, true);
+				const id = resolveId(baseId, key, true);
 				target = modIdMap[id] || (modIdMap[id] = Object.create(null));
 			}
 			const map = options.map[key]; Object.keys(map).forEach(from => {

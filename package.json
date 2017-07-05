@@ -1,26 +1,23 @@
 {
-	"name": "es6lib",
-	"description": "lib",
+	"name": "pbq",
+	"description": "Promise-based require (asynchronous module definition) implementation",
 	"version": "0.0.1",
 	"author": "Niklas Gollenstede",
-	"license": "MPL-2.0",
+	"license": "MIT",
 	"repository": {
 		"type": "git",
-		"url": "https://github.com/NiklasGollenstede/es6lib"
+		"url": "https://github.com/NiklasGollenstede/pbq"
 	},
-	"dependencies": {
-	},
+	"dependencies": {},
 	"devDependencies": {
-		"chai": "^3.3.0",
-		"chai-as-promised": "^5.1.0",
-		"mocha": "^2.3.3",
-		"eslintrc": "NiklasGollenstede/eslintrc"
+		"babel-eslint": "7.1.1",
+		"eslint": "3.14.1",
+		"eslintrc": "NiklasGollenstede/eslintrc#c36e3e8"
 	},
 	"scripts": {
-		"test": "mocha --require test/node",
-		"test-debug": "node-debug _mocha --debug --require test/node"
+		"lint": "eslint --ignore-path .gitignore ."
 	},
 	"eslintConfig": {
-		"extends": "./node_modules/eslintrc/web-ext.js"
+		"extends": "./node_modules/eslintrc/browser.js"
 	}
 }

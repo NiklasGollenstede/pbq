@@ -1,15 +1,27 @@
-(function(global) { 'use strict'; /* globals URL, location, */ // This Source Code Form is subject to the terms of the Mozilla Public License, v. 2.0. If a copy of the MPL was not distributed with this file, You can obtain one at http://mozilla.org/MPL/2.0/.
-
-if (typeof global.define === 'function' && define.amd) { console.warn('Existing AMD loader will be overwritten'); }
-/* global URLSearchParams, clearTimeout, setTimeout, */
+(function(global) { 'use strict'; /* globals URL, location, URLSearchParams, clearTimeout, setTimeout, */ // licanse: MIT
 
 const document = typeof window !== 'undefined' && global.navigator && global.document;
+let baseUrl = '', hiddenBaseUrl = null, loadConfig = { }; { // set default baseUrl
+	let url = getCallingScript(0), urlQuery;
+	[ , url, urlQuery, ] = (/^(.*?)(?:\?|\#|$)(.*)$/).exec(url);
+	const fromNM = (/\/node_modules\/[^\/]+\/require\.js$/).test(url);
+	baseUrl = url.split('/').slice(0, fromNM ? -3 : -1).join('/') +'/';
+	loadConfig = parseQuery(urlQuery); /// set the config specified in the url query params
+}
+if (document && document.currentScript) { /// set the config specified in the script tag via < data-...="..." >
+	Object.assign(loadConfig, parseDataset(document.currentScript.dataset));
+}
+
+if (typeof global.define === 'function' && define.amd) { switch (loadConfig.ifExisting) {
+	case 'replace': break;
+	case 'warn': console.warn('Existing AMD loader will be overwritten'); break;
+	case 'throw': throw new Error(`An AMD loader already exists`);
+	default: return;
+} }
+
 const importScripts = typeof window === 'undefined' && typeof navigator === 'object' && typeof global.importScripts === 'function';
-const webExt = document && !importScripts && (() => {
-	const api = (global.browser || global.chrome);
-	return api && api.extension && typeof api.extension.getURL === 'function' && api;
-})();
-const isContentScript = webExt && !document.currentScript;
+const isContentScript = document && !document.currentScript && !importScripts
+&& (api => api && api.extension && typeof api.extension.getURL === 'function' || false)(global.browser || global.chrome);
 const isGenerator = code => (/^function\s*\*/).test(code);
 const resolved = Promise.resolve();
 
@@ -19,31 +31,15 @@ const Self = new WeakMap/*<Module, object>*/;
 
 const moduleConfig = Object.create(null); // moduleId ==> module.config()
 let   mainModule = null;
-let   baseUrl = '';
-let   hiddenBaseUrl = null; // scripts attached with tabs.executeScript can incorrectly have this file url prefix. replacing hiddenBaseUrl with baseUrl fixes that
 const prefixMap = Object.create(null); // url prefix map (idPrefix ==> urlPrefix), instead of baseUrl
 let   modIdMap = null; // id prefix maps by id of requesting module (requestinModuleId ==> idPrefix ==> idPrefix)
 let   defIdMap = null; // id prefix map for '*' (idPrefix ==> idPrefix)
 let   loadScript; setScriptLoader(null);
 let   scriptTimeout = 7000; // ms after which a script load is assumed to have failed
 const shims = Object.create(null); // moduleId ==> { deps, exports, init, }
-let   urlQuery = null;
 
-{ // set default baseUrl
-	let url = getCallingScript(0);
-	[ , url, urlQuery, ] = (/^(.*?)(?:\?|\#|$)(.*)$/).exec(url);
-	const fromNM = (/\/node_modules\/[^\/]+\/require\.js$/).test(url);
-	baseUrl = url.split('/').slice(0, fromNM ? -3 : -1).join('/') +'/';
-}
-if (webExt) {
-	const actualBaseUrl = webExt.extension.getURL('');
-	if (baseUrl !== actualBaseUrl) { hiddenBaseUrl = baseUrl; }
-	baseUrl = actualBaseUrl;
-}
 
 function getCallingScript(offset = 0) {
-	const src = document && document.currentScript && document.currentScript.src;
-	if (src) { return src; }
 	const stack = (new Error).stack.split(/$/m);
 	const line = stack[(/^Error/).test(stack[0]) + 1 + offset];
 	const parts = line.split(/\@(?![^\/]*?\.xpi)|\(|\ /g);
@@ -217,22 +213,9 @@ function define(/* id, deps, factory */) {
 	if (id === undefined) {
 		src = getCallingScript(1);
 		const url = new URL(src);
+		src = url.href.slice(0, url.href.length - url.search.length - url.hash.length);
+		id = url2id(src.replace(/\.js$/, ''));
 		const query = url.search + url.hash;
-		src = url.href.slice(0, url.href.length - url.hash.length - url.search.length);
-		id = src.replace(/\.js$/, '');
-		if (id.startsWith(baseUrl)) {
-			id = id.slice(baseUrl.length);
-		} else if (id.startsWith('/')) {
-			id = id.slice(1);
-		} else if (isContentScript && hiddenBaseUrl === null && (/^(?:jar:)?file:\/\/|^!/).test(url)) {
-			// require.js was loaded via `conent_script` and has the correct url, but the current module is loaded by `tabs.executeScript` probably with an incorrect url
-			for (const module of Object.values(Loading)) { if (id.endsWith('/'+ module.id)) {
-				hiddenBaseUrl = id.slice(0, -module.id.length);
-				console.warn(`Loaded file "${ url }" in a content script, will replace "${ hiddenBaseUrl }" with "${ baseUrl }" from now on`);
-				id = module.id; src = src.replace(hiddenBaseUrl, baseUrl);
-				break;
-			} }
-		}
 		if (query) { moduleConfig[id] = parseQuery(query); }
 	}
 	if (typeof id !== 'string') { badArg(); }
@@ -290,7 +273,6 @@ function define(/* id, deps, factory */) {
 }
 define.amd = {
 	destructuring: true,
-	generator: true,
 	promise: true,
 };
 
@@ -298,7 +280,7 @@ class Module {
 	constructor(parent, url, id) {
 		const _this = { }; Self.set(this, _this);
 		this.id = id;
-		// this.url = url ? new URL(url) : id ? new URL(resolveUrl(id) +'.js') : '';
+		// this.url = url ? new URL(url) : id ? new URL(id2url(id) +'.js') : '';
 		this.parent = parent;
 		this.factory = null;
 		this.exports = { };
@@ -312,7 +294,7 @@ class Module {
 	get require() {
 		const require = Private.require.bind(this);
 		require.async = id => Private.requireAsync.call(this, id, false, null, false);
-		require.toUrl = id => resolveUrl(resolveId(this.id, id, true));
+		require.toUrl = id => id2url(resolveId(this.id, id, true));
 		require.resolve = resolveId.bind(null, this.id);
 		require.cache = Modules;
 		require.config = conf => config(this, conf);
@@ -418,7 +400,7 @@ const Private = {
 			});
 		}
 
-		const url = resolveUrl(id) +'.js';
+		const url = id2url(id) +'.js';
 		module = Modules[id] = Loading[url] = new Module(this, url, id); self = Self.get(module);
 		_this.children.add(module);
 
@@ -482,12 +464,21 @@ function resolveId(from, to, noAppend) {
 	return id;
 }
 
-function resolveUrl(id) {
-	const prefix = Object.keys(prefixMap)
-	.filter(prefix => isIdPrefix(id, prefix))
+function id2url(id) {
+	const idPrefix = Object.keys(prefixMap)
+	.filter(idPrefix => isIdPrefix(id, idPrefix))
 	.reduce((a, b) => a.length > b.length ? a : b, '');
-	if (!prefix) { return baseUrl + id; }
-	return prefixMap[prefix] + id.slice(prefix.length);
+	if (!idPrefix) { return baseUrl + id; }
+	return prefixMap[idPrefix] + id.slice(idPrefix.length);
+}
+
+function url2id(url) {
+	const urlPrefix = Object.keys(prefixMap)
+	.filter(urlPrefix => isIdPrefix(url, prefixMap[urlPrefix]))
+	.reduce((a, b) => a.length > b.length ? a : b, '');
+	if (!urlPrefix) { return url.startsWith(baseUrl) ? url.slice(baseUrl.length) : url.replace(/^\//, ''); }
+	const idPrefix = Object.keys(prefixMap).find(idPrefix => prefixMap[idPrefix] === urlPrefix);
+	return idPrefix + url.slice(urlPrefix.length);
 }
 
 function isIdPrefix(id, prefix) {
@@ -503,12 +494,19 @@ function resolveByPlugin(plugin, from, id) {
 }
 
 function parseQuery(query) {
-	const search = new URLSearchParams(query.replace(/[?#]+/, '&')), config = { };
-	for (const [ key, value, ] of search) {
-		try { config[key] = JSON.parse(value); } catch(_) { config[key] = value; }
-	}
-	return config;
+	return parseJsonIterator(new URLSearchParams(query.replace(/[?#]+/, '&')));
 }
+
+function parseDataset(dataset) {
+	return parseJsonIterator(Object.entries(dataset));
+}
+
+function parseJsonIterator(it) {
+	const config = { }; for (const [ key, value, ] of it) {
+		try { config[key] = JSON.parse(value); } catch(_) { config[key] = value; }
+	} return config;
+}
+
 
 function domLoader(url) { return new Promise((resolve, reject) => {
 	const script = document.createElement('script');
@@ -553,17 +551,21 @@ const defaultPlugins = {
 	},
 	fetch(parent, string) {
 		const [ relative, type, ] = string.split(/:(?!.*:)/), id = resolveId(parent.id, relative);
-		!Modules[id] && define(id, [ ], () => global.fetch(resolveUrl(id)).then(_=>_[type || 'text']()));
+		!Modules[id] && define(id, [ ], () => global.fetch(id2url(id)).then(_=>_[type || 'text']()));
 		return Private.requireAsync.call(parent, id, false, null, false);
 	},
 };
 
 function config(module, options) {
 	if (options == null || typeof options !== 'object') { return; }
-	const baseId = module.id || (document && !isContentScript && location) || '';
+	const baseId = module.id;
 
 	if ('baseUrl' in options) {
 		baseUrl = new URL((options.baseUrl.startsWith('/') ? '/' : '') + resolveId(baseId, options.baseUrl, true), baseUrl).href;
+	}
+
+	if ('hiddenBaseUrl' in options) {
+		hiddenBaseUrl = options.hiddenBaseUrl;
 	}
 
 	if (options.config) {
@@ -575,7 +577,7 @@ function config(module, options) {
 	if ('paths' in options) {
 		const paths = options.paths;
 		Object.keys(paths).forEach(prefix => {
-			prefixMap[resolveId(baseId, prefix)] = resolveUrl(resolveId(baseId, paths[prefix], true));
+			prefixMap[resolveId(baseId, prefix)] = id2url(resolveId(baseId, paths[prefix], true));
 		});
 	}
 
@@ -633,15 +635,7 @@ function config(module, options) {
 	}
 }
 
-/// set the config specified in the script tag via < data-...="..." >
-if (document.currentScript) {
-	const data = document.currentScript.dataset, config = { };
-	Object.keys(data).forEach(key => {
-		try { config[key] = JSON.parse(data[key]); } catch(_) { config[key] = data[key]; }
-	});
-	require.config(config);
-} else if (urlQuery) { require.config(parseQuery(urlQuery)); }
-
+require.config(loadConfig); loadConfig = null;
 if (typeof global.require === 'object') { require.config(global.require); }
 
 global.define = define;

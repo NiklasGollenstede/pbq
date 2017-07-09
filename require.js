@@ -507,7 +507,6 @@ function parseJsonIterator(it) {
 	} return config;
 }
 
-
 function domLoader(url) { return new Promise((resolve, reject) => {
 	const script = document.createElement('script');
 	script.addEventListener('load', () => { resolve(); clearTimeout(timer); script.remove(); });

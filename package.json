@@ -1,13 +1,14 @@
 {
 	"name": "pbq",
 	"description": "Promise-based require (asynchronous module definition) implementation",
-	"version": "0.2.0",
+	"version": "0.3.0",
 	"author": "Niklas Gollenstede",
 	"license": "MIT",
 	"repository": {
 		"type": "git",
 		"url": "https://github.com/NiklasGollenstede/pbq"
 	},
+	"main": "node.js",
 	"dependencies": {},
 	"devDependencies": {
 		"amdjs_test_server": "github:amdjs/amdjs-tests#1f50309",

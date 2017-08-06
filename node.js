@@ -4,7 +4,7 @@ const FS = require('fs'), Path = require('path'), { URL, URLSearchParams, } = re
 const path = Path.resolve(__dirname, './require.js');
 const readFile = (path, enc) => new Promise((resolve, reject) => FS.readFile(path, enc, (error, data) => error ? reject(error) : resolve(data)));
 const code = FS.readFileSync(path, 'utf-8').replace(/;$/, '');
-const { require: requireAsync, parseDepsBody, parseDepsDestr, defaultGetCallingScript, } = makeInstance();
+const { require: requireAsync, parseDepsBody, parseDepsDestr, simplyfyCode, defaultGetCallingScript, } = makeInstance();
 
 const rFileUrlPrefix = /(?:file:\/\/)?(?:\/(?=[A-Za-z]+:[\/\\]))?/;
 
@@ -37,7 +37,7 @@ function parseDependenciesFromFile(file, id) {
 	const ignore = [ 'require', 'exports', 'module', ];
 
 	const deps = [ ]; function found(from, to) {
-	let id = to +'';
+		let id = to +'';
 		if (ignore.includes(id)) { return; }
 		if ((/^\.\.?\//).test(id)) {
 			if (!from) { throw new Error(`Can't resolve relative module id from global require, use the one passed into the define callback instead`); }
@@ -55,8 +55,9 @@ function parseDependenciesFromFile(file, id) {
 		deps.push(id);
 	}
 
-	let mDefine = null;
-	while ((mDefine = rDefine.exec(file))) {
+	file = simplyfyCode(file);
+
+	for (let mDefine = null; (mDefine = rDefine.exec(file)); void 0) {
 		const defineAt = mDefine.index;
 		const dotAt = file.lastIndexOf('.', defineAt);
 		rWhitespace.lastIndex = dotAt;

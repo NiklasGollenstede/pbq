@@ -116,6 +116,22 @@ function parseDepsBody(code, id, length) {
 	const deps = [ 'require', 'exports', 'module', ];
 	if (!found) { return deps.slice(0, length); } // there was no literal `require("string")` call ==> just return the mandatory deps
 
+	code = simplyfyCode(code);
+
+	require.lastIndex = 0;
+	while ((match = require.exec(code))) {
+		const requireAt = match.index;
+		const dotAt = code.lastIndexOf('.', requireAt);
+		whitespace.lastIndex = dotAt;
+		if (dotAt >= 0 && dotAt + whitespace.exec(code)[0].length === requireAt) { continue; } // require was used as a method
+		deps.push(match[1]);
+	}
+
+	return deps.length === 3 ? deps.slice(0, length) : deps;
+}
+
+function simplyfyCode(code) {
+
 	// this thing looks huge, but it is quite precise and very efficient
 	const stringsAndComments = (/(\'(?:[^\\]|\\[^\\]|(?:\\\\)*)*?\'|\"(?:[^\\]|\\[^\\]|(?:\\\\)*)*?\"|\`(?:[^\\]|\\[^\\]|(?:\\\\)*)*?\`)|\/\/[^]*?$|\/\*[^]*?\*\/|\/(?:[^\\]|\\[^\\]|(?:\\\\)*)*?\//gm);
 	/* which (using the 'regexpx' module) is: RegExpX('gmsX')`
@@ -143,23 +159,12 @@ function parseDepsBody(code, id, length) {
 	*/
 
 	// remove all comments and strings. Put only "simple" strings back
-	code = code.replace(stringsAndComments, (_, string) => {
+	return code.replace(stringsAndComments, (_, string) => {
 		if (!string) { return ''; }
 		string = string.slice(1, -1);
 		if ((/["'`\\\r\n]/).test(string)) { return ''; }
 		return '"'+ string +'"';
 	});
-
-	require.lastIndex = 0;
-	while ((match = require.exec(code))) {
-		const requireAt = match.index;
-		const dotAt = code.lastIndexOf('.', requireAt);
-		whitespace.lastIndex = dotAt;
-		if (dotAt >= 0 && dotAt + whitespace.exec(code)[0].length === requireAt) { continue; } // require was used as a method
-		deps.push(match[1]);
-	}
-
-	return deps.length === 3 ? deps.slice(0, length) : deps;
 }
 
 function makeObject(names, values) { // TODO: use a Proxy to directly throw for undefined properties?
@@ -219,7 +224,7 @@ function define(/* id, deps, factory */) {
 			self.resolved = true;
 			self.resolve(module.exports);
 		});
-		return self.promise;
+		return module;
 	}
 
 	const code = factory +'';
@@ -247,7 +252,7 @@ function define(/* id, deps, factory */) {
 		self.resolve(exports == null ? module.exports : (module.exports = exports));
 	})
 	.catch(self.reject);
-	return self.promise;
+	return module;
 }
 define.amd = {
 	destructuring: true,
@@ -353,7 +358,7 @@ const Private = {
 
 		const _this = Self.get(this);
 		let module = Modules[id], self; if (module) { self = Self.get(module);
-			if (!self.resolved && hasPendingPath(self, _this)) {
+			if (!_this.resolved && !self.resolved && hasPendingPath(self, _this)) {
 				if (!fast) { return Promise.reject(Error( // require.async('...')
 					`Asynchronously requiring "${ name }" from "${ this.id }" before either of them is resolved would create a cyclic waiting condition`
 				)); }
@@ -412,12 +417,14 @@ const Private = {
 };
 
 const globalModule = new Module(null, '', '');
+{ const gm = Self.get(globalModule); gm.loaded = gm.resolved = true; gm.resolve({ }); }
 const require = globalModule.require;
 
 function hasPendingPath(from, to) { // both private
 	const { children, } = from;
 	if (children.size === 0) { return false; }
-	for (const child of children) {
+	for (const _child of children) {
+		const child = Self.get(_child);
 		if (child.resolved) { continue; }
 		if (child === to) { return true; }
 		// the .children relation spans a directed acyclic graph
@@ -633,7 +640,8 @@ if (typeof global.require === 'object') { require.config(global.require); }
 if (loadingInNode) {
 	return { // eslint-disable-line consistent-return
 		require, define,
-		parseDepsBody, parseDepsDestr, defaultGetCallingScript,
+		parseDepsBody, parseDepsDestr, simplyfyCode,
+		defaultGetCallingScript,
 	};
 } else {
 	global.define = define;

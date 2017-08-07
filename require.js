@@ -391,14 +391,15 @@ const Private = {
 			const shim = shims[id]; delete shims[id];
 			module.isShim = true;
 
-			return define(id, shim.deps, function*() {
-				(yield loadScript(url).catch(() => { throw new Error(`Failed to load script "${ url }" for shim`); }));
+			return define(id, shim.deps, function(/*arguments*/) { return loadScript(url).catch(
+				() => { throw new Error(`Failed to load script "${ url }" for shim`); }
+			).then(() => {
 				self.loaded = true; delete Loading[url];
 				const exports = shim.exports.reduce((object, key) => object != null && object[key], global);
 				if (exports === undefined) { throw new Error(`The script at "${ url }" did not set the global variable "${ shim.exports.join('.') }" for shim`); }
-				const result = shim.init && (yield shim.init.apply(global, arguments));
-				return result !== undefined ? result : shim.exports.length ? exports : undefined;
-			});
+				return Promise.resolve(shim.init && shim.init.apply(global, arguments))
+				.then(result => result !== undefined ? result : shim.exports.length ? exports : undefined);
+			}); }).ready;
 		}
 
 		loadScript(url)
@@ -439,11 +440,16 @@ function resolveId(from, to, noAppend) {
 		if (!from) { throw new Error(`Can't resolve relative module id from global require, use the one passed into the define callback instead`); }
 		const prefix = from.split('/'); prefix.pop();
 		while (true) {
-			if (id.startsWith('../')) { id = id.slice(3); /* TODO: throw if prefix empty */ prefix.pop(); continue; }
-			if (id.startsWith('./'))  { id = id.slice(2); continue; }
-			break;
+			if (id.startsWith('../')) {
+				if (!prefix.length) { throw new Error(`Can't resolve relative id "${ to }" past the root of "${ from }"`); }
+				prefix.pop();
+				id = id.slice(3);
+			} else if (id.startsWith('./')) {
+				id = id.slice(2);
+			} else { break; }
 		}
-		id = prefix.join('/') +'/'+ id;
+		prefix.push(id);
+		id = prefix.join('/');
 	} else if (id.startsWith('/')) {
 		id = id.slice(1);
 	}
@@ -557,7 +563,7 @@ const defaultPlugins = {
 function config(module, options) { options !== null && typeof options === 'object' && Object.keys(options).forEach(key => { const value = options[key]; switch (key) {
 
 	case 'baseUrl': {
-		baseUrl = new URL((value.startsWith('/') ? '/' : '') + resolveId(module.id, value, true), baseUrl).href;
+		baseUrl = new URL(value, module.require.toUrl('')).href;
 	} break;
 
 	case 'callingScriptResolver': {
@@ -572,7 +578,7 @@ function config(module, options) { options !== null && typeof options === 'objec
 
 	case 'paths': {
 		value && Object.keys(value).forEach(prefix => {
-			prefixMap[resolveId(module.id, prefix)] = new URL((value[prefix].startsWith('/') ? '/' : '') + resolveId(module.id, value[prefix], true), baseUrl).href;
+			prefixMap[resolveId(module.id, prefix)] = new URL(value[prefix], module.require.toUrl('')).href;
 		});
 	} break;
 
@@ -586,7 +592,7 @@ function config(module, options) { options !== null && typeof options === 'objec
 				target = modIdMap[id] || (modIdMap[id] = Object.create(null));
 			}
 			const map = value[key]; Object.keys(map).forEach(from => {
-				target[resolveId(module.id, from)] = resolveId(module.id, map[from]);
+				target[from] = resolveId(module.id, map[from]);
 			});
 		});
 	} break;

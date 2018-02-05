@@ -68,19 +68,21 @@ function parseDepsDestr(code, id, length) { void length;
 	}
 	const deps = [ ];
 
+	++index; next(/(?=\S)/g); // skip to first thing
 	loop: do { // eslint-disable-line
-		next(line);
 		switch (code[index]) {
 			case '}': break loop; // exit
-			case '/': {
-				code[index + 1] !== '/' && unexpected();
+			case '/': switch (code[index + 1]) {
+				case '*': index += 2; next(/\*\/\s*/g); break;
+				case '/': next(line); break;
+				default: unexpected();
 			} break;
 			case '[': case "'": case '"': case '`': {
-				deps.push(next(string).slice(1, -1));
+				deps.push(next(string).slice(1, -1)); next(line);
 			} break;
 			default: {
 				!(/[a-zA-Z_]/).test(code[index]) && unexpected();
-				deps.push(local(next(word)));
+				deps.push(local(next(word))); next(/,\s*/g);
 			}
 		}
 	} while (true);
@@ -550,12 +552,12 @@ const defaultPlugins = {
 		return Private.requireAsync.call(parent, id, false, null, false);
 	},
 	fetch(parent, string) {
-		const [ relative, type, ] = string.split(/:(?!.*:)/), id = resolveId(parent.id, relative);
-		!Modules[id] && define(id, [ ], !loadingInNode
-			? global.fetch(id2url(id)).then(_=>_[type || 'text']())
-			: readFile(id2url(id).replace(/(?:file:\/\/)(?:\/(?=[A-Za-z]+:[\/\\]))?/, ''), type === 'blob' ? null : 'utf-8') /* global readFile, */
+		const [ relative, type, ] = string.split(/:(?!.*:)/), id = resolveId(parent.id, relative), url = id2url(id);
+		!Modules[id] && define(id, [ ], (!loadingInNode
+			? global.fetch(url).then(_=>_[type === 'css' ? 'text' : type || 'text']())
+			: readFile(url.replace(/(?:file:\/\/)(?:\/(?=[A-Za-z]+:[\/\\]))?/, ''), type === 'blob' ? null : 'utf-8') /* global readFile, */
 			.then(data => type === 'json' ? JSON.parse(data) : data)
-		);
+		).then(css => type === 'css' ? css +`\n/*# sourceURL=${url} */` : css));
 		return Private.requireAsync.call(parent, id, false, null, false);
 	},
 };

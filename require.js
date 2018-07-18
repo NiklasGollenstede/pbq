@@ -33,6 +33,7 @@ const Self = new WeakMap/*<Module, object>*/;
 const moduleConfig = Object.create(null); // moduleId ==> module.config()
 let   mainModule = null;
 const prefixMap = Object.create(null); // url prefix map (idPrefix ==> urlPrefix), instead of baseUrl
+let   getUrlArgs = null;
 let   modIdMap = null; // id prefix maps by id of requesting module (requestinModuleId ==> idPrefix ==> idPrefix)
 let   defIdMap = null; // id prefix map for '*' (idPrefix ==> idPrefix)
 let   loadScript; setScriptLoader(null);
@@ -222,11 +223,8 @@ function define(/* id, deps, factory */) {
 
 	if (typeof factory !== 'function') {
 		resolved.then(() => {
-			module.exports = factory;
-			self.resolved = true;
-			self.resolve(module.exports);
-		});
-		return module;
+			self.resolved = true; self.resolve(module.exports = factory);
+		}); return module;
 	}
 
 	const code = factory +'';
@@ -265,7 +263,7 @@ class Module {
 	constructor(parent, url, id) {
 		const _this = { }; Self.set(this, _this);
 		this.id = id;
-		// this.url = url ? new URL(url) : id ? new URL(id2url(id) +'.js') : '';
+		// this.url = url ? new URL(url) : id ? new URL(id2url(id, 'js')) : '';
 		this.parent = parent;
 		this.factory = null;
 		this.exports = { };
@@ -279,7 +277,7 @@ class Module {
 	get require() {
 		const require = Private.require.bind(this);
 		require.async = id => Private.requireAsync.call(this, id, false, null, false);
-		require.toUrl = id => id2url(resolveId(this.id, id, true));
+		require.toUrl = id => id2url(resolveId(this.id, id, true), null);
 		require.resolve = resolveId.bind(null, this.id);
 		require.cache = Modules;
 		require.config = conf => config(this, conf);
@@ -385,7 +383,7 @@ const Private = {
 			});
 		}
 
-		const url = id2url(id) +'.js';
+		const url = id2url(id, 'js');
 		module = Modules[id] = Loading[url] = new Module(this, url, id); self = Self.get(module);
 		_this.children.add(module);
 
@@ -424,9 +422,8 @@ const globalModule = new Module(null, '', '');
 const require = globalModule.require;
 
 function hasPendingPath(from, to) { // both private
-	const { children, } = from;
-	if (children.size === 0) { return false; }
-	for (const _child of children) {
+	if (from.children.size === 0) { return false; }
+	for (const _child of from.children) {
 		const child = Self.get(_child);
 		if (child.resolved) { continue; }
 		if (child === to) { return true; }
@@ -474,12 +471,18 @@ function resolveId(from, to, noAppend) {
 	return id;
 }
 
-function id2url(id) {
+function id2url(id, ext) {
 	const idPrefix = Object.keys(prefixMap)
 	.filter(idPrefix => isIdPrefix(id, idPrefix))
 	.reduce((a, b) => a.length > b.length ? a : b, { length: -1, });
-	if (typeof idPrefix !== 'string') { return baseUrl + id; }
-	return prefixMap[idPrefix] + id.slice(idPrefix.length);
+	let url = typeof idPrefix !== 'string' ? baseUrl + id
+	: prefixMap[idPrefix] + id.slice(idPrefix.length);
+	if (ext) { url += '.'+ ext; }
+	switch (typeof getUrlArgs) {
+		case 'string': return url +'?'+ getUrlArgs;
+		case 'function': return url + getUrlArgs(id, url);
+		default: return (getUrlArgs && typeof getUrlArgs[id] === 'string' ? url +'?'+ getUrlArgs[id] : url);
+	}
 }
 
 function url2id(url) {
@@ -539,7 +542,7 @@ function workerLoder(url) {
 function setScriptLoader(loader) {
 	if (typeof loader !== 'function') {
 		loadScript = document ? domLoader : importScripts ? workerLoder
-		: url => { throw new Error(`No JavaScript loader available to load "${ url }"`); };
+		: url => { throw new Error(`No JavaScript loader available to load "${url}"`); };
 	} else {
 		loadScript = loader;
 	}
@@ -552,7 +555,7 @@ const defaultPlugins = {
 		return Private.requireAsync.call(parent, id, false, null, false);
 	},
 	fetch(parent, string) {
-		const [ relative, type, ] = string.split(/:(?!.*:)/), id = resolveId(parent.id, relative), url = id2url(id);
+		const [ relative, type, ] = string.split(/:(?!.*:)/), id = resolveId(parent.id, relative), url = id2url(id, null);
 		!Modules[id] && define(id, [ ], (!loadingInNode
 			? global.fetch(url).then(_=>_[type === 'css' ? 'text' : type || 'text']())
 			: readFile(url.replace(/(?:file:\/\/)(?:\/(?=[A-Za-z]+:[\/\\]))?/, ''), type === 'blob' ? null : 'utf-8') /* global readFile, */
@@ -582,6 +585,10 @@ function config(module, options) { options !== null && typeof options === 'objec
 		value && Object.keys(value).forEach(prefix => {
 			prefixMap[resolveId(module.id, prefix)] = new URL(value[prefix], module.require.toUrl('')).href;
 		});
+	} break;
+
+	case 'urlArgs': {
+		if (typeof value === 'string' || typeof value === 'object' || typeof value === 'function') { getUrlArgs = value; }
 	} break;
 
 	case 'map': {

@@ -83,7 +83,8 @@ function parseDepsDestr(code, id, length) { void length;
 			} break;
 			default: {
 				!(/[a-zA-Z_]/).test(code[index]) && unexpected();
-				deps.push(local(next(word))); next(/,\s*/g);
+				deps.push(local(next(word)));
+				code[index] === ',' ? next(/,\s*/g) : next(line);
 			}
 		}
 	} while (true);

@@ -6,7 +6,7 @@ const readFile = (path, enc) => new Promise((resolve, reject) => FS.readFile(pat
 const code = FS.readFileSync(path, 'utf-8').replace(/;$/, '');
 const { require: requireAsync, parseDepsBody, parseDepsDestr, simplyfyCode, defaultGetCallingScript, } = makeInstance();
 
-const rFileUrlPrefix = /(?:file:\/\/)?(?:\/(?=[A-Za-z]+:[\/\\]))?/;
+const rFileUrlPrefix = /(?:file:\/\/)?(?:\/(?=[A-Za-z]+:[/\\]))?/;
 
 function makeInstance({ globals = { }, } = { }) {
 
@@ -20,7 +20,7 @@ function makeInstance({ globals = { }, } = { }) {
 			return defaultGetCallingScript(offset + 1).replace(rFileUrlPrefix, 'file:///');
 		},
 		async defaultLoader(path) {
-			if (!path.startsWith('file:\/\/')) { throw new Error(`Can only load 'file://'-URLs`); }
+			if (!path.startsWith('file://')) { throw new Error(`Can only load 'file://'-URLs`); }
 			path = path.replace(rFileUrlPrefix, '');
 			const code = (await readFile(path, 'utf-8'));
 			evaluator(code, path);

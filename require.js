@@ -1,12 +1,12 @@
-(function(global) { 'use strict'; /* globals URL, location, URLSearchParams, clearTimeout, setTimeout, */ // license: MIT
+(function(global) { 'use strict'; /* globals URL, URLSearchParams, clearTimeout, setTimeout, */ // license: MIT
 
 const loadingInNode = typeof __export_only__ !== 'undefined' && !('__export_only__' in global);
 const document = typeof window !== 'undefined' && global.navigator && global.document;
 let getCallingScript = defaultGetCallingScript;
 let baseUrl = '', loadConfig = { }; if (!loadingInNode) { // set default baseUrl
 	let url = getCallingScript(0), urlQuery;
-	[ , url, urlQuery, ] = (/^(.*?)(?:\?|\#|$)(.*)$/).exec(url);
-	const fromNM = (/\/node_modules\/[^\/]+\/require\.js$/).test(url);
+	[ , url, urlQuery, ] = (/^(.*?)(?:\?|#|$)(.*)$/).exec(url);
+	const fromNM = (/\/node_modules\/[^/]+\/require\.js$/).test(url);
 	baseUrl = new URL(url.split('/').slice(0, fromNM ? -3 : -1).join('/') +'/').href;
 	loadConfig = parseQuery(urlQuery); /// set the config specified in the url query params
 } else {
@@ -43,8 +43,8 @@ const shims = Object.create(null); // moduleId ==> { deps, exports, init, }
 function defaultGetCallingScript(offset = 0) {
 	const stack = (new Error).stack.split(/$/m);
 	const line = stack[(/^Error/).test(stack[0]) + 1 + offset];
-	const parts = line.split(/\@(?![^\/]*?\.xpi)|\(|\ /g);
-	return parts[parts.length - 1].replace(/\:\d+(?:\:\d+)?\)?$/, '');
+	const parts = line.split(/@(?![^/]*?\.xpi)|\(| /g);
+	return parts[parts.length - 1].replace(/:\d+(?::\d+)?\)?$/, '');
 }
 
 const line = (/(?:\r?\n|\r)\s*/g);
@@ -137,7 +137,7 @@ function parseDepsBody(code, id, length) {
 function simplyfyCode(code) {
 
 	// this thing looks huge, but it is quite precise and very efficient
-	const stringsAndComments = (/(\'(?:[^\\]|\\[^\\]|(?:\\\\)*)*?\'|\"(?:[^\\]|\\[^\\]|(?:\\\\)*)*?\"|\`(?:[^\\]|\\[^\\]|(?:\\\\)*)*?\`)|\/\/[^]*?$|\/\*[^]*?\*\/|\/(?:[^\\]|\\[^\\]|(?:\\\\)*)*?\//gm);
+	const stringsAndComments = (/('(?:[^\\]|\\[^\\]|(?:\\\\)*)*?'|"(?:[^\\]|\\[^\\]|(?:\\\\)*)*?"|`(?:[^\\]|\\[^\\]|(?:\\\\)*)*?`)|\/\/[^]*?$|\/\*[^]*?\*\/|\/(?:[^\\]|\\[^\\]|(?:\\\\)*)*?\//gm);
 	/* which (using the 'regexpx' module) is: RegExpX('gmsX')`
 		(		# strings, allow multiple lines
 				# these need to be put back if they are 'simple'
@@ -171,18 +171,24 @@ function simplyfyCode(code) {
 	});
 }
 
-function makeObject(names, values) { // TODO: use a Proxy to directly throw for undefined properties?
-	const object = { };
-	for (let i = 0; i < names.length; ++i) {
+const makeObject = typeof Proxy === 'function' ? (names, values) => {
+	const keys = names.map(_=>_.name || _); let last = -1;
+	return new Proxy({ }, { get(_, key) { // proxy allows to throw on unexpected reads
+		// the destructuring assignment reads the properties in the same order as they were parsed
+		if (keys[++last] === key) { return values[last]; } // so this is very likely and fast
+		last = keys.indexOf(key); if (last >= 0) { return values[last]; } // and this should almost never happen
+		throw new Error(`Attempt to read dependency "${key}" that was not recognized when parsing.`);
+	}, });
+} : (names, values) => {
+	const object = { }; for (let i = 0; i < names.length; ++i) {
 		object[names[i].name || names[i]] = values[i];
-	}
-	return object;
-}
+	} return object;
+};
 
 function define(/* id, deps, factory */) {
 	// parse arguments
-	let id, deps, factory;
-	switch (arguments.length) {
+	function badArg () { throw new TypeError('Bad signature, should be `define(id?: string, dependencies?: Array<string>, factory: function|any)`'); }
+	let id, deps, factory; switch (arguments.length) {
 		case 3: {
 			[ id, deps, factory, ] = arguments;
 			if (!Array.isArray(deps)) { badArg(); }
@@ -195,10 +201,9 @@ function define(/* id, deps, factory */) {
 		case 1: {
 			factory = arguments[0];
 		} break;
-		default: {
-			badArg();
-		}
+		default: badArg();
 	}
+	if (id !== undefined && typeof id !== 'string') { badArg(); }
 
 	// get id
 	let src = '';
@@ -210,11 +215,7 @@ function define(/* id, deps, factory */) {
 		const query = url.search + url.hash;
 		if (query) { moduleConfig[id] = parseQuery(query); }
 	}
-	if (typeof id !== 'string') { badArg(); }
-	if ((/^[\.\\\/]/).test(id)) { throw new Error('The module id must be an absolute path'); }
-	function badArg () {
-		throw new TypeError('Bad signature, should be define(id?: string, dependencies?: Array<string>, factory: function|any)');
-	}
+	if ((/^[.\\/]/).test(id)) { throw new Error('The module id must be an absolute path'); }
 
 	// get/create Module
 	const module = src && Loading[src] || Modules[id] || (Modules[id] = new Module(null, null, id)), self = Self.get(module);
@@ -262,17 +263,15 @@ define.amd = {
 
 class Module {
 	constructor(parent, url, id) {
-		const _this = { }; Self.set(this, _this);
-		this.id = id;
+		this.id = id; this.parent = parent;
 		// this.url = url ? new URL(url) : id ? new URL(id2url(id, 'js')) : '';
-		this.parent = parent;
-		this.factory = null;
-		this.exports = { };
+		this.factory = null; this.exports = { };
 		this.isShim = false;
+		const _this = {
+			children: new Set, loaded: false, resolved: false,
+			promise: null, resolve: null, reject: null,
+		}; Self.set(this, _this);
 		_this.promise = Object.freeze(new Promise((y, n) => ((_this.resolve = y), (_this.reject = n))));
-		_this.children = new Set;
-		_this.loaded = false;
-		_this.resolved = false;
 	}
 
 	get require() {
@@ -407,9 +406,8 @@ const Private = {
 		.then(() => {
 			if (self.loaded) { return; }
 			if (this.isShim) {
-				self.loaded = self.resolved = module.isShim = true;
-				self.resolve(module.exports);
-				return void console.info(`The shim dependency "${ url }" of ${ this.id } didn't call define. Prefix it with "shim!" to suppress this warning.`);
+				console.info(`The shim dependency "${ url }" of ${ this.id } didn't call define. Prefix it with "shim!" to suppress this warning.`);
+				self.loaded = self.resolved = module.isShim = true; self.resolve(module.exports); return;
 			}
 			self.reject(new Error(`The script at "${ url }" did not call define with the expected id`));
 		})
@@ -556,12 +554,13 @@ const defaultPlugins = {
 		return Private.requireAsync.call(parent, id, false, null, false);
 	},
 	fetch(parent, string) {
-		const [ relative, type, ] = string.split(/:(?!.*:)/), id = resolveId(parent.id, relative), url = id2url(id, null);
+		let [ id, type, ] = string.split(/:(?!.*:)/); id = resolveId(parent.id, id); const url = id2url(id, null);
+		const optional = type && type.endsWith('?'), _catch = optional ? () => null : null; optional && (type = type.slice(0, -1));
 		!Modules[id] && define(id, [ ], (!loadingInNode
-			? global.fetch(url).then(_=>_[type === 'css' ? 'text' : type || 'text']())
-			: readFile(url.replace(/(?:file:\/\/)(?:\/(?=[A-Za-z]+:[\/\\]))?/, ''), type === 'blob' ? null : 'utf-8') /* global readFile, */
+			? global.fetch(url).catch(_catch).then(_=>_&&(_[type === 'css' ? 'text' : type || 'text']()))
+			: readFile(url.replace(/(?:file:\/\/)(?:\/(?=[A-Za-z]+:[/\\]))?/, ''), type === 'blob' ? null : 'utf-8').catch(_catch) /* global readFile, */
 			.then(data => type === 'json' ? JSON.parse(data) : data)
-		).then(css => type === 'css' ? css +`\n/*# sourceURL=${url} */` : css));
+		).then(css => css !== null && type === 'css' ? css +`\n/*# sourceURL=${url} */` : css));
 		return Private.requireAsync.call(parent, id, false, null, false);
 	},
 };

@@ -224,8 +224,8 @@ function define(/* id, deps, factory */) {
 	delete Loading[src];
 
 	if (typeof factory !== 'function') {
-		resolved.then(() => {
-			self.resolved = true; self.resolve(module.exports = factory);
+		Promise.resolve(factory).then(exports => {
+			self.resolved = true; self.resolve(module.exports = exports);
 		}); return module;
 	}
 
@@ -362,7 +362,7 @@ const Private = {
 				if (!fast) { return Promise.reject(Error( // require.async('...')
 					`Asynchronously requiring "${ name }" from "${ this.id }" before either of them is resolved would create a cyclic waiting condition`
 				)); }
-				_this.promise.then(() => _this.children.add(module)); // must add delayed to avoid unresolved cycles
+				_this.promise.then(() => _this.children.add(module)); // must delay adding to avoid unresolved cycles
 				if (allowCyclic) { return self.promise; } // require(['...'], ...)
 				console.warn(`Found cyclic dependency to "${ id }", passing it's unfinished exports to "${ this.id }"`);
 				return module.exports; // define(['...'], ...)
@@ -549,19 +549,21 @@ function setScriptLoader(loader) {
 
 const defaultPlugins = {
 	shim(parent, string) {
-		const [ relative, exports, ] = string.split(/:(?!.*:)/), id = resolveId(parent.id, relative);
+		const [ relative, exports, ] = string.split(/:(?!.*:)/), id = 'shim!'+ resolveId(parent.id, relative);
 		!Modules[id] && config(parent, { shim: { [id]: { exports, }, }, });
-		return Private.requireAsync.call(parent, id, false, null, false);
+		return Private.requireAsync.call(parent, id, false, 'fake-plugin', false);
 	},
 	fetch(parent, string) {
-		let [ id, type, ] = string.split(/:(?!.*:)/); id = resolveId(parent.id, id); const url = id2url(id, null);
-		const optional = type && type.endsWith('?'), _catch = optional ? () => null : null; optional && (type = type.slice(0, -1));
-		!Modules[id] && define(id, [ ], (!loadingInNode
-			? global.fetch(url).catch(_catch).then(_=>_&&(_[type === 'css' ? 'text' : type || 'text']()))
-			: readFile(url.replace(/(?:file:\/\/)(?:\/(?=[A-Za-z]+:[/\\]))?/, ''), type === 'blob' ? null : 'utf-8').catch(_catch) /* global readFile, */
+		let [ id, type, ] = string.split(/:(?!.*:)/); id = resolveId(parent.id, id); const url = id2url(id, null); id = 'fetch!'+ id +':'+ (type || '');
+		const optional = type && type.endsWith('?'); optional && (type = type.slice(0, -1));
+		!Modules[id] && (define(id, [ ], (!loadingInNode
+			? global.fetch(url).then(_=>_&&(_[type === 'css' ? 'text' : type || 'text']()))
+			: readFile(url.replace(/(?:file:\/\/)(?:\/(?=[A-Za-z]+:[/\\]))?/, ''), type === 'blob' ? null : 'utf-8') /* global readFile, */
 			.then(data => type === 'json' ? JSON.parse(data) : data)
-		).then(css => css !== null && type === 'css' ? css +`\n/*# sourceURL=${url} */` : css));
-		return Private.requireAsync.call(parent, id, false, null, false);
+		).then(
+			css => css !== null && type === 'css' ? css +`\n/*# sourceURL=${url} */` : css
+		).catch(optional ? () => null : null)).parent = parent);
+		return Private.requireAsync.call(parent, id, false, 'fake-plugin', false);
 	},
 };
 

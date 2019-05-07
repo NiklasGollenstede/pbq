@@ -28,6 +28,7 @@ let   scriptTimeout = 7000; // ms after which a script load is assumed to have f
 const shims = Object.create(null); // moduleId ==> { deps, exports, init, }
 let   baseUrl = '';
 let   loadConfig = { }; // this is only set before this script returns
+let   dryRun = false; // iff `true`, won't call into factory functions and will collect some additional dependency information
 
 
 /**
@@ -65,7 +66,7 @@ function defaultGetCallingScript(offset = 0) {
 	return parts[parts.length - 1].replace(/:\d+(?::\d+)?\)?$/, '');
 }
 
-const line = (/(?:\r?\n|\r)\s*/g);
+const line = (/.*?(?:\r?\n|\r)\s*/g);
 const whitespace = (/\s*/g);
 const word = (/[a-zA-Z_]\w*/g);
 const string = (/(?:'.*?'|".*?"|`.*?`)/g);
@@ -86,6 +87,12 @@ function parseDepsDestr(code, id, length) { void length;
 		return (/^require\b/).test(code.slice(index, index + 8)) ? null : [ ]; // if the first argument is literally named require, return null to indicate that the body should be scanned
 	}
 	const deps = [ ];
+	const setUse = !dryRun ? _=>_ : line => {
+		const dep = deps[deps.length - 1];
+		line = line.trim().replace(/^]\s*/, '');
+		if (line[0] !== ':') { line = ': '+ dep.name +' '+ line; }
+		dep.use = line;
+	};
 
 	++index; next(/(?=\S)/g); // skip to first thing
 	loop: do { // eslint-disable-line
@@ -97,24 +104,26 @@ function parseDepsDestr(code, id, length) { void length;
 				default: unexpected();
 			} break;
 			case '[': case "'": case '"': case '`': {
-				deps.push(next(string).slice(1, -1)); next(line);
+				deps.push({ id: next(string).slice(1, -1), }); setUse(next(line));
 			} break;
 			default: {
 				!(/[a-zA-Z_]/).test(code[index]) && unexpected();
 				deps.push(local(next(word)));
-				code[index] === ',' ? next(/,\s*/g) : next(line);
+				code[index] === ',' ? next(/,\s*/g) : setUse(next(line));
 			}
 		}
 	} while (true);
 
+	if (dryRun) { deps.lastIndex = index; }
+
 	return deps;
 
 	function local(name) {
-		const string = './'+ name.split('').map((c, i) => {
+		const id = './'+ name.split('').map((c, i) => {
 			const l = c.toLowerCase();
 			return l === c ? c : i === 0 ? l : '-'+ l;
 		}).join('');
-		return { name, toString: () => string, };
+		return { name, id, };
 	}
 
 	function unexpected() {
@@ -190,7 +199,7 @@ function simplyfyCode(code) {
 }
 
 const makeObject = typeof Proxy === 'function' ? (names, values) => {
-	const keys = names.map(_=>_.name || _); let last = -1;
+	const keys = names.map(_ => _.name || _.id); let last = -1;
 	return new Proxy({ }, { get(_, key) { // proxy allows to throw on unexpected reads
 		// the destructuring assignment reads the properties in the same order as they were parsed
 		if (keys[++last] === key) { return values[last]; } // so this is very likely and fast
@@ -243,13 +252,12 @@ function define(/* id, deps, factory */) {
 	// get/create Module
 	const module = src && Loading[src] || Modules[id] || (Modules[id] = new Module(null, url, id)), self = Self.get(module);
 	if (self.loaded) { throw new Error(`Duplicate definition of module "${id}"`); }
-	self.loaded = true;
-	delete Loading[src];
+	self.loaded = true; delete Loading[src];
 
 	if (typeof factory !== 'function') {
 		Promise.resolve(factory).then(exports => {
 			self.resolved = true; self.resolve(module.exports = exports);
-		}); return module;
+		}).catch(error => self.reject(error)); return module;
 	}
 
 	const code = factory +'';
@@ -265,11 +273,15 @@ function define(/* id, deps, factory */) {
 		deps = parseDepsBody(code, id, factory.length);
 	} }
 
-	resolved.then(() => Promise.all(deps.map(dep => { switch (dep.name || dep) {
+	if (dryRun) { factory = () => null; module.exports = null; module._deps = deps; if (special) { module._special = true; special = false; } }
+
+	resolved.then(() => Promise.all(deps.map(dep => { {
+		if (typeof dep === 'object') { dep = dep.id; }
+	} switch (dep) {
 		case 'require': return module.require;
 		case 'exports': return module.exports;
 		case 'module': return module;
-		default: return Private.requireAsync.call(module, dep +'', true, null, false);
+		default: return Private.requireAsync.call(module, dep, true, null, false);
 	} })))
 	.then(modules => special ? factory(makeObject(deps, modules)) : factory.apply(null, modules))
 	.then(exports => {
@@ -679,8 +691,20 @@ function config(module, options) { options !== null && typeof options === 'objec
 		Promise.all(Array.from(Self.get(module).children, _=>_.promise)).catch(value);
 	} break;
 
+	case 'dryRun': {
+		dryRun = !!value;
+	} break;
+
 } }); }
 
+function getConfig() { return {
+	baseUrl, urlArgs: getUrlArgs || undefined, paths: prefixMap, main: mainModule && mainModule.id || undefined,
+	shim: shims, config: moduleConfig, waitSeconds: scriptTimeout,
+	map: (() => {
+		if(!modIdMap && !defIdMap) { return undefined; } const map = { ...modIdMap, };
+		if (defIdMap) { map['*'] = defIdMap; } return map;
+	})(),
+}; }
 
 /**
  * initialization and exports
@@ -695,9 +719,11 @@ function config(module, options) { options !== null && typeof options === 'objec
 
 	if (loadingInNode) {
 		return { // eslint-disable-line consistent-return
-			require, define, module,
-			parseDepsBody, parseDepsDestr, simplyfyCode,
-			defaultGetCallingScript,
+			require, define, module, Module, config: require.config,
+			_utils: {
+				parseDepsBody, parseDepsDestr, simplyfyCode,
+				defaultGetCallingScript, getConfig,
+			},
 		};
 	} else {
 		global.define = define;

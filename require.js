@@ -1,12 +1,11 @@
 (function(global) { 'use strict'; /* globals URL, URLSearchParams, clearTimeout, setTimeout, */ // license: MIT
 
 /**
- * variables
+ * script wide variables
  */
 
 /// utils
-const loadingInNode = typeof __export_only__ !== 'undefined' && !('__export_only__' in global);
-const document = !loadingInNode && typeof window !== 'undefined' && global.navigator && global.document;
+const document = typeof window !== 'undefined' && typeof navigator === 'object' && typeof global.document === 'object' && global.document;
 const importScripts = typeof window === 'undefined' && typeof navigator === 'object' && typeof global.importScripts === 'function' && global.importScripts;
 const resolved = Promise.resolve();
 
@@ -16,43 +15,19 @@ const Loading = Object.create(null); // url ==> Module (with .loading === true)
 const Self = new WeakMap/*<Module, object>*/;
 
 /// configuration
-const moduleConfig = Object.create(null); // moduleId ==> module.config()
-let   mainModule = null;
-const prefixMap = Object.create(null); // url prefix map (idPrefix ==> urlPrefix), instead of baseUrl
-let   getUrlArgs = null; // `urlArgs` config value, as set by user
-let   modIdMap = null; // id prefix maps by id of requesting module (requestinModuleId ==> idPrefix ==> idPrefix)
-let   defIdMap = null; // id prefix map for '*' (idPrefix ==> idPrefix)
-let   getCallingScript = defaultGetCallingScript; // function(depth:number) => (url: string)
-let   loadScript; setScriptLoader(null); // async function(url) that fetches and evals scripts
-let   scriptTimeout = 7000; // ms after which a script load is assumed to have failed
-const shims = Object.create(null); // moduleId ==> { deps, exports, init, }
-let   baseUrl = '';
-let   loadConfig = { }; // this is only set before this script returns
-let   dryRun = false; // iff `true`, won't call into factory functions and will collect some additional dependency information
-
-
-/**
- * preparation
- */
-
-/// Load the config specified in the url query params and `<script data-${key}="${value:JSON|string}" ... >` and set the initial `baseUrl`.
-if (loadingInNode) { baseUrl = 'file:///'; } else {
-	let url = getCallingScript(0), urlQuery;
-	[ , url, urlQuery, ] = (/^(.*?)(?:\?|#|$)(.*)$/).exec(url);
-	const fromNM = (/\/node_modules\/[^/]+\/require\.js$/).test(url); // this should be the standard, but is hardly the `baseUrl`, so step out of it
-	baseUrl = new URL(url.split('/').slice(0, fromNM ? -3 : -1).join('/') +'/').href;
-	const fromDataset = document && document.currentScript && parseDataset(document.currentScript.dataset);
-	loadConfig = Object.assign(parseQuery(urlQuery), fromDataset || null); // use fromDataset with higher priority
-}
-
-// decide what to do if there is already an AMD loader present, based on the config passed via the url params and the scripts dataset
-if (typeof global.define === 'function' && define.amd) { switch (loadConfig.ifExisting) {
-	case 'replace': break;
-	case 'warn': console.warn('Existing AMD loader will be overwritten'); break;
-	case 'throw': throw new Error(`An AMD loader already exists`);
-	default: return;
-} }
-// the other values in `loadConfig` will be interpreted later
+const moduleConfig = Object.create(null); /// maps moduleId ==> `module.config()` value
+let   mainModule = null; /// `Module` set as `require.main`
+let   baseUrl = ''; /// default URL to prepend to the ids to get script/resource URLs
+const prefixMap = Object.create(null); /// url prefix map (idPrefix ==> urlPrefix), instead of `baseUrl`
+let   getUrlArgs = null; /// `urlArgs` config value, set by user as `string|object|function(id, url)|null`
+let   modIdMap = null; /// id prefix maps by id of requesting module (requestingModuleId ==> oldIdPrefix ==> newIdPrefix)
+let   defIdMap = null; /// id prefix map for '*' (oldIdPrefix ==> newIdPrefix)
+let   getCallingScript = defaultGetCallingScript; /// `function(depth: number) => (url: string)` returning the url of the current script
+let   loadScript; setScriptLoader(null); /// async `function(url)` that fetches and evals scripts
+let   scriptTimeout = 7000; /// Time in ms after which a script load is assumed to have failed. Only relevant for the default `loadScript` function in browser environments.
+const shims = Object.create(null); /// map moduleId ==> { deps, exports, init, }
+let   dryRun = false; /// iff `true`, won't call into factory functions and will collect some additional dependency information
+const defaultScriptTimeout = scriptTimeout;
 
 
 /**
@@ -246,7 +221,7 @@ function define(/* id, deps, factory */) {
 		id = url2id(src.replace(/\.js$/, ''));
 		const query = url.search + url.hash;
 		if (query) { moduleConfig[id] = parseQuery(query); }
-	}
+	} else { url = id2url(id, 'js'); }
 	if ((/^[.\\/]/).test(id)) { throw new Error('The module id must be an absolute path'); }
 
 	// get/create Module
@@ -275,13 +250,13 @@ function define(/* id, deps, factory */) {
 
 	if (dryRun) { factory = () => null; module.exports = null; module._deps = deps; if (special) { module._special = true; special = false; } }
 
-	resolved.then(() => Promise.all(deps.map(dep => { {
-		if (typeof dep === 'object') { dep = dep.id; }
-	} switch (dep) {
-		case 'require': return module.require;
-		case 'exports': return module.exports;
-		case 'module': return module;
-		default: return Private.requireAsync.call(module, dep, true, null, false);
+	resolved.then(() => Promise.all(deps.map(dep => { switch (typeof dep === 'object' ? dep.name || dep.id : dep) {
+		case 'require': return module.require; case 'exports': return module.exports; case 'module': return module;
+		default: { const id = typeof dep === 'object' ? dep.id : dep; if (id[id.length - 1] !== '?') {
+			return Private.requireAsync.call(module, id, true, null, false);
+		} else { // allow the loading of the module to fail silently
+			return Private.requireAsync.call(module, id.slice(0, -1), true, null, false).catch(() => undefined);
+		} }
 	} })))
 	.then(modules => special ? factory(makeObject(deps, modules)) : factory.apply(null, modules))
 	.then(exports => {
@@ -298,8 +273,7 @@ define.amd = {
 
 class Module {
 	constructor(parent, url, id) {
-		this.id = id; this.parent = parent;
-		// this.url = url ? new URL(url) : id ? new URL(id2url(id, 'js')) : '';
+		this.parent = parent; this.url = url; this.id = id;
 		this.factory = null; this.exports = { };
 		this.isShim = false;
 		const _this = {
@@ -454,7 +428,7 @@ const Private = {
 
 
 /**
- * helpers
+ * helper functions
  */
 
 // The edges (u, v) with v child of u and v.resolved === false must form an acyclic graph,
@@ -494,7 +468,7 @@ function resolveId(from, to, noAppend) {
 		id = id.slice(1);
 	}
 	!noAppend && id.endsWith('/') && (id += 'index');
-	if (!modIdMap && !defIdMap) { return id; }
+	if (!(modIdMap || defIdMap)) { return id; }
 
 	const maps = Object.keys(modIdMap || { })
 	.filter(prefix => isIdPrefix(from, prefix))
@@ -549,7 +523,7 @@ function resolveByPlugin(plugin, from, id) {
 }
 
 function parseQuery(query) {
-	return parseJsonIterator(new URLSearchParams(query.replace(/[?#]+/, '&')));
+	return parseJsonIterator(new URLSearchParams(query.replace(/[?#]+/g, '&')));
 }
 
 function parseDataset(dataset) {
@@ -572,14 +546,13 @@ function domLoader(url) { return new Promise((resolve, reject) => {
 	const timer = scriptTimeout && setTimeout(() => reject(new Error(`Load of script at "${url}" timed out`)), scriptTimeout);
 }); }
 
-const requestedUrls = [ ];
 function workerLoder(url) {
 	requestedUrls.push(url);
 	return resolved.then(
 		() => requestedUrls.length
 		&& importScripts(requestedUrls.splice(0, Infinity))
 	);
-}
+} const requestedUrls = [ ];
 
 function setScriptLoader(loader) {
 	if (typeof loader !== 'function') {
@@ -592,21 +565,24 @@ function setScriptLoader(loader) {
 
 const defaultPlugins = {
 	shim(parent, string) {
-		const [ relative, exports, ] = string.split(/:(?!.*:)/), id = 'shim!'+ resolveId(parent.id, relative);
+		const [ path, exports, ] = string.split(/:(?!.*:)/), id = 'shim!'+ resolveId(parent.id, path);
 		!Modules[id] && (shims[id] = { id: id.slice(5), exports: exports.split('.'), deps: [ ], });
 		return Private.requireAsync.call(parent, id, false, 'fake-plugin', false);
 	},
 	fetch(parent, string) {
-		let [ id, type, ] = string.split(/:(?!.*:)/); id = resolveId(parent.id, id); const url = id2url(id, null); id = 'fetch!'+ id +':'+ (type || 'text');
-		const optional = type && type.endsWith('?'); optional && (type = type.slice(0, -1));
-		!Modules[id] && (define(id, [ ], (!loadingInNode
-			? global.fetch(url).then(_=>_&&(_[type === 'css' ? 'text' : type || 'text']()))
-			: readFile(url.replace(/(?:file:\/\/)(?:\/(?=[A-Za-z]+:[/\\]))?/, ''), type === 'blob' ? null : 'utf-8') /* global readFile, */
-			.then(data => type === 'json' ? JSON.parse(data) : data)
-		).then(
-			css => css !== null && type === 'css' ? css +`\n/*# sourceURL=${url} */` : css
-		).catch(optional ? () => null : null)).parent = parent);
+		let [ path, type, ] = string.split(/:(?!.*:)/); path = resolveId(parent.id, path, true); type || (type = 'text');
+		const url = id2url(path, null); const id = 'fetch!'+ path +':'+ type;
+		let map; switch (type) {
+			case 'css': type = 'text'; map = css => css +`\n/*# sourceURL=${url} */`; break;
+		}
+		if (!Modules[id]) { const module = define(id, [ ], (
+			/* global fetch */ // don't do `global.fetch` to accept a shimmed fetch as well
+			fetch(url).then(_=>_[type]()).then(map)
+		)); module.parent = parent; module.url = url; module.exports = undefined; }
 		return Private.requireAsync.call(parent, id, false, 'fake-plugin', false);
+	},
+	lazy(parent, path) {
+		return dryRun ? Private.requireAsync.call(parent, path, false, null, false) : null;
 	},
 };
 
@@ -651,13 +627,6 @@ function config(module, options) { options !== null && typeof options === 'objec
 		});
 	} break;
 
-	case 'main': { /// Set an id to be the main module. Loads the module if needed.
-		const id = resolveId(module.id, value);
-		module.require.async(id)
-		.catch('errback' in options ? null : error => console.error(`Failed to load main module ${id}:`, error));
-		(mainModule = Modules[id]).parent = null;
-	} break;
-
 	case 'shim': {
 		Object.keys(value).forEach(id => {
 			const shim = value[id];
@@ -672,23 +641,38 @@ function config(module, options) { options !== null && typeof options === 'objec
 	} break;
 
 	case 'waitSeconds': {
-		scriptTimeout = value * 1000 << 0;
+		scriptTimeout = value ? value * 1000 << 0 : defaultScriptTimeout;
 	} break;
 
 	case 'defaultLoader': {
 		setScriptLoader(value);
 	} break;
 
+	case 'modules': {
+		if (Array.isArray(value)) {
+			value.forEach(id => define.apply(null, value[id]));
+		} else if (value && typeof value === 'object') {
+			Object.keys(value).forEach(id => define(resolveId(module.id, id), value[id]));
+		}
+	} break;
+
 	case 'deps': {
-		value && value.forEach(module.require);
+		Array.isArray(value) && module.require(value, () => null, 'errback' in options ? () => null : null);
+	} break;
+
+	case 'main': { /// Set an id to be the main module. Loads the module if needed.
+		const id = resolveId(module.id, value);
+		module.require.async(id)
+		.catch('errback' in options ? null : error => console.error(`Failed to load main module ${id}:`, error));
+		(mainModule = Modules[id]).parent = null;
 	} break;
 
 	case 'callback': {
-		Promise.all(Array.from(Self.get(module).children, _=>_.promise)).then(value);
+		Promise.all(Array.from(Self.get(module).children, child => Self.get(child).promise)).then(value);
 	} break;
 
 	case 'errback': {
-		Promise.all(Array.from(Self.get(module).children, _=>_.promise)).catch(value);
+		Promise.all(Array.from(Self.get(module).children, child => Self.get(child).promise)).catch(value);
 	} break;
 
 	case 'dryRun': {
@@ -697,38 +681,58 @@ function config(module, options) { options !== null && typeof options === 'objec
 
 } }); }
 
-function getConfig() { return {
+function getConfig() { return JSON.parse(JSON.stringify({
 	baseUrl, urlArgs: getUrlArgs || undefined, paths: prefixMap, main: mainModule && mainModule.id || undefined,
-	shim: shims, config: moduleConfig, waitSeconds: scriptTimeout,
-	map: (() => {
-		if(!modIdMap && !defIdMap) { return undefined; } const map = { ...modIdMap, };
-		if (defIdMap) { map['*'] = defIdMap; } return map;
-	})(),
-}; }
+	shim: shims, config: moduleConfig, waitSeconds: scriptTimeout !== defaultScriptTimeout ? scriptTimeout : undefined,
+	map: Object.assign({ }, modIdMap, { '*': defIdMap, }),
+}, (k, v) => v !== null && (typeof v !== 'object' || Object.keys(v).length) ? v : undefined)); }
 
 /**
  * initialization and exports
  */
 {
 	const module = new Module(null, '', ''), _module = Self.get(module);
-	_module.loaded = _module.resolved = true; _module.resolve({ });
+	_module.loaded = _module.resolved = true; _module.resolve(_module.exports = { });
 	const require = module.require;
 
-	require.config(loadConfig); loadConfig = null;
-	if (typeof global.require === 'object') { require.config(global.require); }
+	const exports = hideProps({
+		require, define, module, Module, config: require.config,
+		_utils: {
+			parseDepsBody, parseDepsDestr, simplyfyCode,
+			defaultGetCallingScript, getConfig,
+		},
+	}); // use only non-enumerable properties so the structured clone is an empty object
+	function hideProps(o) { Object.keys(o).forEach(k => Object.defineProperty(o, k, { enumerable: false, })); return o; }
 
-	if (loadingInNode) {
-		return { // eslint-disable-line consistent-return
-			require, define, module, Module, config: require.config,
-			_utils: {
-				parseDepsBody, parseDepsDestr, simplyfyCode,
-				defaultGetCallingScript, getConfig,
-			},
-		};
-	} else {
-		global.define = define;
-		global.require = require;
+	{ // Load the config and set global variables.
+		let url = getCallingScript(0), urlQuery;
+		[ , url, urlQuery, ] = (/^(.*?)(?:\?|#|$)(.*)$/).exec(url);
+		const fromNM = (/\/node_modules\/[^/]+\/require\.js$/).test(url); // this should be the standard, but is hardly the `baseUrl`, so step out of it
+		baseUrl = new URL(url.split('/').slice(0, fromNM ? -3 : -1).join('/') +'/', 'file:///').href;
+
+		const fromQuery = parseQuery(urlQuery);
+		const fromDataset = document && document.currentScript && parseDataset(document.currentScript.dataset) || { }; // format: `<script data-${key}="${value:JSON|string}" ... >`
+
+		let beGlobal = true; // decide what to do if there is already an AMD loader present
+		if (typeof global.define === 'function' && define.amd) { switch (fromDataset.ifExisting || fromQuery.ifExisting) {
+			case 'replace': case 'continue': case 'ignore': break;
+			case 'warn': case 'warn-replace': console.warn('Existing AMD loader will be overwritten'); break;
+			case 'throw': throw new Error(`An AMD loader already exists`);
+			case 'warn-abort': console.warn('An AMD loader already exists'); beGlobal = false; break;
+			case 'abort': default: beGlobal = false; break;
+		} }
+		// the other values in `loadConfig` will be interpreted later
+
+		let fromGlobal; if (beGlobal) {
+			fromGlobal = global.require; global.define = define; global.require = require;
+		} else { // using these (with the default script loaders) would mess with the global scope as well
+			delete fromQuery.main; delete fromDataset.main;
+			delete fromQuery.deps; delete fromDataset.deps;
+		}
+		require.config(fromQuery); require.config(fromDataset); require.config(fromGlobal);
 	}
+
+	return exports;
 }
 
 })(this);

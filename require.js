@@ -501,12 +501,11 @@ function id2url(id, ext) {
 }
 
 function url2id(url) {
-	const urlPrefix = Object.keys(prefixMap)
-	.filter(urlPrefix => isIdPrefix(url, prefixMap[urlPrefix]))
+	const idPrefix = Object.keys(prefixMap)
+	.filter(idPrefix => isIdPrefix(url, prefixMap[idPrefix]))
 	.reduce((a, b) => a.length > b.length ? a : b, '');
-	if (!urlPrefix) { return url.startsWith(baseUrl) ? url.slice(baseUrl.length) : url.replace(/^\//, ''); }
-	const idPrefix = Object.keys(prefixMap).find(idPrefix => prefixMap[idPrefix] === urlPrefix);
-	return idPrefix + url.slice(urlPrefix.length);
+	if (!idPrefix) { return url.startsWith(baseUrl) ? url.slice(baseUrl.length) : url.replace(/^\//, ''); }
+	return idPrefix + url.slice(prefixMap[idPrefix].length);
 }
 
 function isIdPrefix(id, prefix) {

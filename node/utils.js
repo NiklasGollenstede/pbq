@@ -11,7 +11,7 @@ function getDefineArgs({ id, factory, exports, _deps: deps, _special: special, }
 		(/^.*?[(]/).exec(factory +'') + nl +'\t'+
 		deps.map(({ name, use, }) => use ? use.replace(/^:\s*/, '') : name +',')
 		.join(nl +'\t') + nl + factory.slice(deps.lastIndex + 1);
-		deps = deps.map(_=>_.id);
+		deps = deps.map(({ name, id, }) => name === 'require' || name === 'exports' || name === 'module' ? name : id);
 	}
 	return [ id, deps, factory, ];
 }

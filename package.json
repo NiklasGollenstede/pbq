@@ -13,7 +13,7 @@
 	"devDependencies": {
 		"amdjs_test_server": "github:amdjs/amdjs-tests#1f50309",
 		"express": "^3.11.0",
-		"npm": "^3.10.10",
+		"npm": "^6.13.4",
 		"eslintrc": "github:NiklasGollenstede/eslintrc#5837452",
 		"ghooks": "^2.0.4"
 	},

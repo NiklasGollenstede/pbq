@@ -1,32 +1,32 @@
 {
-	"name": "pbq",
-	"description": "Promise-based require (asynchronous module definition) implementation",
-	"version": "0.4.1",
-	"author": "Niklas Gollenstede",
-	"license": "MIT",
-	"repository": {
-		"type": "git",
-		"url": "https://github.com/NiklasGollenstede/pbq"
-	},
-	"main": "node.js",
-	"dependencies": {},
-	"devDependencies": {
-		"amdjs_test_server": "github:amdjs/amdjs-tests#1f50309",
-		"express": "^3.11.0",
-		"npm": "^3.10.10",
-		"eslintrc": "github:NiklasGollenstede/eslintrc#5837452",
-		"ghooks": "^2.0.4"
-	},
-	"scripts": {
-		"test": "node test/server",
-		"lint": "eslintrc --ignore-path .gitignore ."
-	},
-	"config": {
-		"ghooks": {
-			"pre-commit": "npm run lint --silent -- --color"
-		}
-	},
-	"eslintConfig": {
-		"extends": "./node_modules/eslintrc/base.js"
-	}
+  "name": "pbq",
+  "description": "Promise-based require (asynchronous module definition) implementation",
+  "version": "0.5.0",
+  "author": "Niklas Gollenstede",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/NiklasGollenstede/pbq"
+  },
+  "main": "node.js",
+  "dependencies": {},
+  "devDependencies": {
+    "amdjs_test_server": "github:amdjs/amdjs-tests#1f50309",
+    "express": "^3.11.0",
+    "npm": "^3.10.10",
+    "eslintrc": "github:NiklasGollenstede/eslintrc#5837452",
+    "ghooks": "^2.0.4"
+  },
+  "scripts": {
+    "test": "node test/server",
+    "lint": "eslintrc --ignore-path .gitignore ."
+  },
+  "config": {
+    "ghooks": {
+      "pre-commit": "npm run lint --silent -- --color"
+    }
+  },
+  "eslintConfig": {
+    "extends": "./node_modules/eslintrc/base.js"
+  }
 }

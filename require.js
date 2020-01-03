@@ -197,7 +197,7 @@ function define(/* id, deps, factory */) {
 	function badArg () { throw new TypeError('Bad signature, should be `define(id?: string, dependencies?: Array<string>, factory: function|any)`'); }
 	let id, deps, factory; switch (arguments.length) {
 		case 3: {
-			[ id, deps, factory, ] = arguments;
+			({ 0: id, 1: deps, 2: factory, } = arguments);
 			if (!Array.isArray(deps)) { badArg(); }
 		} break;
 		case 2: {
@@ -248,7 +248,7 @@ function define(/* id, deps, factory */) {
 		deps = parseDepsBody(code, id, factory.length);
 	} }
 
-	if (dryRun) { factory = () => null; module.exports = null; module._deps = deps; if (special) { module._special = true; special = false; } }
+	if (dryRun) { factory = () => null; module.exports = null; module._deps = deps; module._special = special; special = false; }
 
 	resolved.then(() => Promise.all(deps.map(dep => { switch (typeof dep === 'object' ? dep.name || dep.id : dep) {
 		case 'require': return module.require; case 'exports': return module.exports; case 'module': return module;
@@ -334,7 +334,7 @@ const Private = {
 		} else {
 			arguments[0] = [ name, ];
 		} }
-		const [ names, done, failed, ] = arguments;
+		const { 0: names, 1: done, 2: failed, } = arguments;
 		if (Array.isArray(names) && typeof done === 'function') {
 			Promise.all(names.map(name => Private.requireAsync.call(this, name, true, null, true)))
 			.then(result => done.apply(null, result))
@@ -419,7 +419,7 @@ const Private = {
 				console.info(`The shim dependency "${url}" of ${this.id} didn't call define. Prefix it with "shim!" to suppress this warning.`);
 				_module.loaded = _module.resolved = module.isShim = true; _module.resolve(module.exports); return;
 			}
-			_module.reject(new Error(`The script at "${url}" did not call define with the expected id`));
+			_module.reject(new Error(`The script at "${url}", first requested from ${ this.id || '[global]' }, did not call define with the expected id`));
 		} })
 		.catch(() => _module.reject(new Error(`Failed to load script "${url}" first requested from ${ this.id || '[global]' }`)));
 		return _module.promise;
@@ -431,9 +431,9 @@ const Private = {
  * helper functions
  */
 
-// The edges (u, v) with v child of u and v.resolved === false must form an acyclic graph,
+// The edges `(u, v)` with `u.children.has(v)` and `v.resolved === false` must form an acyclic graph,
 // otherwise there would be cycles of modules that wait on each other to resolve.
-// This function checks that inserting (from, to) wouldn't create a cycle.
+// This function checks that inserting `(from, to)` (through `from.children.add(to)`) wouldn't create a cycle.
 // This test should be fairly fast because only pending children need to be checked and there are no cycles.
 // NOTE: Even in situations where cyclic dependencies are acceptable, the child link mustn't be inserted before either of the modules is resolved.
 function hasPendingPath(from, to) { // both private
@@ -564,12 +564,12 @@ function setScriptLoader(loader) {
 
 const defaultPlugins = {
 	shim(parent, string) {
-		const [ path, exports, ] = string.split(/:(?!.*:)/), id = 'shim!'+ resolveId(parent.id, path);
-		!Modules[id] && (shims[id] = { id: id.slice(5), exports: exports.split('.'), deps: [ ], });
+		const { 0: path, 1: property, } = string.split(/:(?!.*:)/), id = 'shim!'+ resolveId(parent.id, path);
+		!Modules[id] && (shims[id] = { id: id.slice(5), exports: property.split('.'), deps: [ ], });
 		return Private.requireAsync.call(parent, id, false, 'fake-plugin', false);
 	},
 	fetch(parent, string) {
-		let [ path, type, ] = string.split(/:(?!.*:)/); path = resolveId(parent.id, path, true); type || (type = 'text');
+		let { 0: path, 1: type, } = string.split(/:(?!.*:)/); path = resolveId(parent.id, path, true); type || (type = 'text');
 		const url = id2url(path, null); const id = 'fetch!'+ path +':'+ type;
 		let map; switch (type) {
 			case 'css': type = 'text'; map = css => css +`\n/*# sourceURL=${url} */`; break;
@@ -581,7 +581,7 @@ const defaultPlugins = {
 		return Private.requireAsync.call(parent, id, false, 'fake-plugin', false);
 	},
 	lazy(parent, path) {
-		return dryRun ? Private.requireAsync.call(parent, path, false, null, false) : null;
+		return dryRun ? Private.requireAsync.call(parent, path, false, null, false) : resolved;
 	},
 };
 
@@ -649,9 +649,9 @@ function config(module, options) { options !== null && typeof options === 'objec
 
 	case 'modules': {
 		if (Array.isArray(value)) {
-			value.forEach(id => define.apply(null, value[id]));
+			value.forEach(args => (define.apply(null, args).isShim = true));
 		} else if (value && typeof value === 'object') {
-			Object.keys(value).forEach(id => define(resolveId(module.id, id), value[id]));
+			Object.keys(value).forEach(id => (define(resolveId(module.id, id), value[id]).isShim = true));
 		}
 	} break;
 
@@ -705,7 +705,7 @@ function getConfig() { return JSON.parse(JSON.stringify({
 
 	{ // Load the config and set global variables.
 		let url = getCallingScript(0), urlQuery;
-		[ , url, urlQuery, ] = (/^(.*?)(?:\?|#|$)(.*)$/).exec(url);
+		({ 1: url, 2: urlQuery, } = (/^(.*?)(?:\?|#|$)(.*)$/).exec(url));
 		const fromNM = (/\/node_modules\/[^/]+\/require\.js$/).test(url); // this should be the standard, but is hardly the `baseUrl`, so step out of it
 		baseUrl = new URL(url.split('/').slice(0, fromNM ? -3 : -1).join('/') +'/', 'file:///').href;
 

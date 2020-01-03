@@ -11,14 +11,14 @@
  * The only prototype method is the constructor:
  * @param  {object?}    globals      Plain object of variables that will be copied to the new realm's global scope.
  *                                   Note that none of the browser specific global variables will be defined by default.
- * @param  {function?}  fetch        Async function `(path: string, type: enum) => string|json|ArrayBuffer`
+ * @param  {string?}    pathPrefix   Used as described below. Defaults to the dirname of the calling script.
+ * @param  {string?}    urlPrefix    Initial `baseUrl` config value. Defaults to `'file://'+ .pathPrefix`.
+ * @param  {function?}  fetch        Async function `(path: string, type: enum) => string|ArrayBuffer`
  *                                   that loads code or resources when `require()`d.
  *                                   `type` will be `'code'` when loading JavaScript code to be executed,
  *                                   or `'text'`, `'json'` or `'arrayBuffer'` for non-code resources.
- *                                   The default function requires that the `url` starts with `.urlPrefix`,
+ *                                   The default function requires that the `url` starts with the `.urlPrefix` parameter,
  *                                   which it replaces with `.pathPrefix` before loading the file (without further restriction).
- * @param  {string?}    pathPrefix   For default `.fetch`. Defaults to the dirname of the calling script.
- * @param  {string?}    urlPrefix    For default `.fetch`. Defaults to `'file://'+ .pathPrefix`.
  * @param  {string?}    requirePath  Path to the `require.js` script to use as the module loader. Defaults to this module's script.
  * @param  {string?}    requireCode  Code of the `require.js` script to use as the module loader. Defaults to loading `requirePath`.
  *
@@ -31,12 +31,11 @@
 class Sandbox { constructor({
 	globals = { },
 	pathPrefix = null, urlPrefix = null,
-	fetch = async (url, type, ctx) => {
+	fetch = async (url, type, ctx) => { void ctx;
 		if (!url.startsWith(urlPrefix)) { throw new Error(`URL does not start with the correct prefix`); }
 		const path = pathPrefix + url.slice(urlPrefix.length); switch (type) {
-			case 'code': case 'text': return readFile(path, 'utf-8');
-			case 'json': return ctx.JSON.parse((await readFile(path, 'utf-8')));
-			case 'arrayBuffer': return new ctx.ArrayBuffer((await readFile(path)).buffer);
+			case 'code': case 'text': case 'json': return readFile(path, 'utf-8');
+			case 'arrayBuffer': return readFile(path);
 			default: throw new TypeError;
 		}
 	},
@@ -49,15 +48,17 @@ class Sandbox { constructor({
 	function exec(code, path) {
 		return new VM.Script(code, { filename: path, }).runInContext(ctx, { breakOnSigint: true, });
 	}
-	function execWith(code, path, closure) {
+	function execWith(code, path, closure) { // evaluates and returns only the first expression of `code`
 		code = `(function (${ Object.keys(closure) }) { return ${ code }; });`;
 		return exec(code, path).apply(ctx, Object.values(closure));
 	}
 
 	function fetchShim(url) { return { then: _=>_({
-		arrayBuffer() { return global.Promise.resolve(fetch(url, 'arrayBuffer', global)); },
-		json() { return global.Promise.resolve(fetch(url, 'json', global)); },
-		text() { return global.Promise.resolve(fetch(url, 'text', global)); },
+		arrayBuffer() { return global.Promise.resolve(fetch(url, 'arrayBuffer', global).then(
+			data => new global.ArrayBuffer((data.buffer ? data : Buffer.from(data)).buffer))
+		); },
+		json() { return global.Promise.resolve(fetch(url, 'json', global).then(global.JSON.parse)); },
+		text() { return global.Promise.resolve(fetch(url, 'text', global).then(_=>_ +'')); },
 	}), }; }
 
 	const exports = execWith(requireCode, requirePath, {

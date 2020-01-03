@@ -16,9 +16,9 @@ function getDefineArgs({ id, factory, exports, _deps: deps, _special: special, }
 	return [ id, deps, factory, ];
 }
 
-/// Calls `getDefineArgs` and serializes the result as the code calling `define`.
+/// Calls `getDefineArgs` and serializes the result as code string of the full `define` expression.
 function getDefineCall(module) {
-	const [ id, deps, factory, ] = getDefineArgs(module);
+	const { 0: id, 1: deps, 2: factory, } = getDefineArgs(module);
 	return `define(${ JSON.stringify(id) }, ${
 		JSON.stringify(deps, null, '\t').replace(/(\s]$)/, ',$1')
 	}, ${ factory })`;

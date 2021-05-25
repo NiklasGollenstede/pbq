@@ -1,4 +1,4 @@
-/*eslint strict: ['error', 'global'], no-implicit-globals: 'off'*/ 'use strict'; /* globals require, */ // license: MPL-2.0
+/*eslint strict: ['error', 'global'], no-implicit-globals: 'off'*/ 'use strict'; /* globals require, URL, */ // license: MPL-2.0
 
 const { readFileSync: read, writeFileSync: write, mkdirSync: mkdir, } = require('fs');
 const { name, version, } =  require('../package.json');

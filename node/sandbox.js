@@ -1,4 +1,4 @@
-/*eslint strict: ['error', 'global'], no-implicit-globals: 'off'*/ 'use strict'; /* globals global, require, module, __dirname, */ // license: MIT
+/*eslint strict: ['error', 'global'], no-implicit-globals: 'off'*/ 'use strict'; /* globals require, module, __dirname, Buffer, */ // license: MIT
 
 /**
  * Creates a `Sandbox` that can load AMD browser JavaScript modules.
@@ -62,7 +62,7 @@ class Sandbox { constructor({
 	}), }; }
 
 	const exports = execWith(requireCode, requirePath, {
-		URL, URLSearchParams, fetch: Object.hasOwnProperty.call(globals, 'fetch') ? globals.fetch : fetchShim,
+		URL, URLSearchParams, fetch: Object.hasOwnProperty.call(globals, 'fetch') ? /**@type{any}*/(globals).fetch : fetchShim,
 	});
 	const { defaultGetCallingScript, } = exports._utils;
 
@@ -74,7 +74,8 @@ class Sandbox { constructor({
 			return defaultGetCallingScript(offset + 1);
 		},
 		async defaultLoader(path) {
-			void exec((await fetch(path, 'code', global)), path);
+			try { void exec((await fetch(path, 'code', global)), path); }
+			catch (error) { console.warn(`failed to load script ${path}:`, error); throw error; } // browsers would (only) print network or syntax errors
 		},
 		baseUrl: urlPrefix,
 	});

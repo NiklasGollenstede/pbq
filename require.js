@@ -1,4 +1,4 @@
-(function(global) { 'use strict'; /* globals URL, URLSearchParams, clearTimeout, setTimeout, */ // license: MIT
+(function(/**@type{Window & typeof globalThis}*/global) { 'use strict'; /* globals URL, URLSearchParams, clearTimeout, setTimeout, */ // license: MIT
 
 /**
  * script wide variables
@@ -33,10 +33,12 @@ const defaultScriptTimeout = scriptTimeout;
 /**
  * string parsers
  */
+/*!start:parsers*/
 
 function defaultGetCallingScript(offset = 0) {
 	const stack = (new Error).stack.split(/$/m);
-	const line = stack[(/^Error/).test(stack[0]) + 1 + offset];
+	const line = stack[(/^Error/).test(stack[0]) + 1 + offset]
+	.replace(/ line \d+ > srcScript:\d+:\d+$/, ''); // this happens in FF88
 	const parts = line.split(/@(?![^/]*?\.xpi)|\(|\s+/g);
 	return parts[parts.length - 1].replace(/:\d+(?::\d+)?\)?$/, '');
 }
@@ -56,7 +58,7 @@ function parseDepsDestr(code, id, length) { void length;
 		return match;
 	}
 
-	index = (/^\s*(?:async\s*)?(?:function\s*)?(?:\*\s*)?(?:\(\s*)?/).exec(code)[0].length; // skip ' async function * ( '
+	index = (/^\s*(?:async\s*)?(?:function\s*)?(?:[*]\s*)?(?:[(]\s*)?/).exec(code)[0].length; // skip ' async function * ( '
 	if (code[index] === ')') { return [ ]; } // argument list closes immediately
 	if (code[index] !== '{') { // no destructuring assignment
 		return (/^require\b/).test(code.slice(index, index + 8)) ? null : [ ]; // if the first argument is literally named require, return null to indicate that the body should be scanned
@@ -122,7 +124,7 @@ function parseDepsBody(code, id, length) {
 	const deps = [ 'require', 'exports', 'module', ];
 	if (!found) { return deps.slice(0, length); } // there was no literal `require("string")` call ==> just return the mandatory deps
 
-	code = simplyfyCode(code);
+	code = simplifyCode(code);
 
 	require.lastIndex = 0;
 	while ((match = require.exec(code))) {
@@ -136,7 +138,7 @@ function parseDepsBody(code, id, length) {
 	return deps.length === 3 ? deps.slice(0, length) : deps;
 }
 
-function simplyfyCode(code) {
+function simplifyCode(code) {
 
 	// this thing looks huge, but it is quite precise and very efficient
 	const stringsAndComments = (/('(?:[^\\]|\\[^\\]|(?:\\\\)*)*?'|"(?:[^\\]|\\[^\\]|(?:\\\\)*)*?"|`(?:[^\\]|\\[^\\]|(?:\\\\)*)*?`)|\/\/[^]*?$|\/\*[^]*?\*\/|\/(?:[^\\]|\\[^\\]|(?:\\\\)*)*?\//gm);
@@ -186,7 +188,7 @@ const makeObject = typeof Proxy === 'function' ? (names, values) => {
 		object[names[i].name || names[i]] = values[i];
 	} return object;
 };
-
+/*!end:parsers*/
 
 /**
  * define, Module and require
@@ -327,7 +329,7 @@ const Private = {
 			}
 			const module = Modules[id];
 			if (!module || !module.resolved) {
-				throw new Error(`The module ${id} is not defined (yet)`);
+				throw new Error(`The module ${id} is not \`define()\`d for synchronous \`require()\` (yet)`);
 			}
 			Self.get(this).children.add(module);
 			return module.exports;
@@ -580,6 +582,21 @@ const defaultPlugins = {
 		)); module.parent = parent; module.url = url; module.exports = undefined; }
 		return Private.requireAsync.call(parent, id, false, 'fake-plugin', false);
 	},
+	module(parent, path) {
+		path = resolveId(parent.id, path); const id = 'module!'+ path, url = id2url(path, 'esm.js');
+		if (dryRun) { return fetch(url).then(_=>_.text()).then(() => null); }
+		if (!Modules[id]) { const module = define(id, [ ], (
+			import(url).catch(error => {
+				if (error.message !== 'error loading dynamically imported module') { throw error; }
+				throw new Error(`Can't load file "${url}" (or one of its imports)`); // unhelpful error in FF
+			}).then(exports => {
+				if (exports == null || typeof exports !== 'object') { return exports; }
+				const keys = Object.keys(exports); if (keys.length !== 1 || keys[0] !== 'default') { return exports; }
+				return exports.default;
+			})
+		)); module.parent = parent; module.url = url; }
+		return Private.requireAsync.call(parent, id, false, 'fake-plugin', false);
+	},
 	lazy(parent, path) {
 		return dryRun ? Private.requireAsync.call(parent, path, false, null, false) : resolved;
 	},
@@ -601,8 +618,15 @@ function config(module, options) { options !== null && typeof options === 'objec
 		});
 	} break;
 
+	/// @param  {object?}  .paths  Mapping `{ [idPrefix]: urlPrefix, }`. When translating fully resolved IDs to URLs to fetch the resources,
+	/// the longest matching `idPrefix` gets substituted for its defined `urlPrefix`. Only if none matches, `baseUrl` is prepended.
+	/// Before saving the mapping pairs, the `idPrefix`es are resolved as ID from the context `module.require.config()` was called on,
+	/// and `urlPrefix`es are resolved as URLs relative to `module.require.toUrl('')`.
+	/// The `idPrefix`es should not start with, and usually also not and with, a slash, the `urlPrefix`es may be absolute URLs, but usually shouldn't end with a a slash either.
+	/// If `.config()` was called on the global `require`, then the `module`will be the global module.
 	case 'paths': {
 		value && Object.keys(value).forEach(prefix => {
+			if (value[prefix] == null) { delete prefixMap[resolveId(module.id, prefix)]; return; }
 			prefixMap[resolveId(module.id, prefix)] = new URL(value[prefix], module.require.toUrl('')).href;
 		});
 	} break;
@@ -697,7 +721,7 @@ function getConfig() { return JSON.parse(JSON.stringify({
 	const exports = hideProps({
 		require, define, module, Module, config: require.config,
 		_utils: {
-			parseDepsBody, parseDepsDestr, simplyfyCode,
+			parseDepsBody, parseDepsDestr, simplyfyCode: simplifyCode, simplifyCode,
 			defaultGetCallingScript, getConfig,
 		},
 	}); // use only non-enumerable properties so the structured clone is an empty object

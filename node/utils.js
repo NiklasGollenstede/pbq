@@ -1,4 +1,4 @@
-/*eslint strict: ['error', 'global'], no-implicit-globals: 'off'*/ 'use strict'; /* globals global, require, module, __dirname, */ // license: MIT
+/*eslint strict: ['error', 'global'], no-implicit-globals: 'off'*/ 'use strict'; /* globals require, module, */ // license: MIT
 
 /// Given a module required while `dryRun === true`, returns the `arguments` that can be used to `define` the module.
 /// If the module has a factory, its closures won't be captured; if it doesn't, the `exports` are assumed to be JSON.

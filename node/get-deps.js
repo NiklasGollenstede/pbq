@@ -32,7 +32,7 @@ function getDeps({ code, path, }) {
 //	console.log('parseDepsDestr', match[1]);
 	const deps = parseDepsDestr(match[1]);
 	return deps.filter(({ name, id, }) => ![ 'require', 'module', 'exports', ].includes(name || id))
-	.map(({ id, }) => { map: do {
+	.map(({ id, }) => { const raw = id; map: do {
 		id.endsWith('?') && (id = id.slice(0, -1)); const split = id.indexOf('!');
 		const plugin = split >= 0 ? id.slice(0, split) : null; plugin != null && (id = id.slice(split + 1));
 		let lang = 'js', module = 'amd', ext = 'js'; const extra = { }; switch (plugin) {
@@ -48,7 +48,7 @@ function getDeps({ code, path, }) {
 			case 'lazy': { continue map; }
 			default: if (plugin) { extra.plugin = plugin; lang = module = ext = undefined; }
 		}
-		return { id, lang, module, ext, ...extra, };
+		return { raw, id, lang, module, ext, ...extra, };
 	} while (true); });
 }
 getDeps.fromFactory = parseDepsDestr;

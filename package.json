@@ -1,7 +1,7 @@
 {
   "name": "pbq",
   "description": "Promise-based require (asynchronous module definition) implementation",
-  "version": "0.6.0",
+  "version": "0.6.1",
   "author": "Niklas Gollenstede",
   "license": "MIT",
   "repository": {
